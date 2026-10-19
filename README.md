@@ -10,21 +10,56 @@ Asistente de escritorio local, monousuario y en tiempo real para League of Legen
 
 ---
 
-## Comandos de Desarrollo
+## Comandos de Desarrollo y Empaquetado
 
+### 1. Abrir la App en Modo Desarrollo
+Inicia el servidor Vite con recarga en caliente (HMR) y levanta la ventana de Electron automáticamente:
 ```bash
-# Instalar dependencias
-npm install
-
-# Ejecutar suite de pruebas unitarias
-npm test
-
-# Modo desarrollo con recarga en vivo (HMR)
 npm run dev
-
-# Compilar para producción
-npm run build
 ```
+
+### 2. Generar el Ejecutable Portable (.exe) para Windows
+Compila el frontend y el backend y empaqueta el binario standalone sin dependencias:
+```bash
+npm run dist:portable
+```
+- **¿Dónde queda el ejecutable?**
+  El archivo `.exe` se genera dentro del directorio `release/` en la raíz del proyecto:
+  ```text
+  release/Itero Local 1.0.0.exe
+  ```
+  *(Nota: También puedes generar tanto el instalador NSIS como el portable ejecutando `npm run dist`).*
+
+### 3. Ejecutar la Suite de Pruebas
+```bash
+npm test
+```
+
+---
+
+## Primera Configuración (API Keys y Cuentas)
+
+La aplicación es **100% local**: no tiene servidores intermedios y almacena todas tus credenciales y datos en una base de datos local SQLite cifrada con **AES-256-GCM**.
+
+### 1. ¿Qué API Keys necesitas?
+Para aprovechar todas las funcionalidades inteligentes de Itero Local necesitas dos claves gratuitas:
+
+1. **Riot Games Developer API Key (Gratis):**
+   - **Para qué sirve:** Descargar tu historial de partidas (Match-V5), estadísticas de ranked (League-V4), maestrías de campeones y verificar el estado de los servidores.
+   - **Cómo obtenerla:** Inicia sesión con tu cuenta de Riot Games en [Riot Developer Portal](https://developer.riotgames.com/) y copia la *Development API Key*.
+   - **Importante:** Las claves de desarrollo de Riot expiran cada **24 horas**. La aplicación monitorea el estado de la clave en tiempo real y te mostrará un aviso visual destacado si tu clave ha caducado.
+
+2. **Google Gemini API Key (Gratis):**
+   - **Para qué sirve:** Motor de inteligencia artificial para el análisis táctico en vivo de matchups (dificultad 1-10, plan de early game, amenazas de la composición enemiga), cálculo óptimo de árboles de runas y sugerencias de builds iniciales, core y situacionales.
+   - **Cómo obtenerla:** Genera tu clave en el nivel gratuito de [Google AI Studio](https://aistudio.google.com/).
+   - **Control de Cuota:** La app implementa un limitador Token Bucket local (15 peticiones/min y 1,500/día) con caché en SQLite para evitar agotar tu cuota.
+
+### 2. ¿Dónde poner las Keys en la Aplicación?
+1. Abre la aplicación con `npm run dev` (o ejecuta el `.exe`).
+2. En la barra de navegación lateral izquierda, haz clic en **"Ajustes & Keys"** (icono de engranaje).
+3. Introduce tu **Riot API Key** y tu **Gemini API Key** en sus respectivos campos.
+4. Haz clic en **"Guardar Ajustes"**. Las claves se cifran inmediatamente en disco con una clave simétrica local de 32 bytes (`itero.key`).
+5. En la misma pantalla o en la pestaña **"Mi Perfil"**, puedes ingresar tu **Riot ID** (`Nombre#Tag`) y tu región (por ejemplo `americas` / `la1`) y pulsar **"Sincronizar Cuenta"** para descargar tu historial y maestrías.
 
 ---
 
@@ -56,5 +91,6 @@ Si se desea utilizar `better-sqlite3`:
 - [`docs/CONTRACTS.md`](docs/CONTRACTS.md): Contratos de interfaces TypeScript, eventos, esquema de BD e IPC.
 - [`docs/TASKS.md`](docs/TASKS.md): Plan maestro de tareas organizadas por fases.
 - [`docs/PROMPT_OPENCODE.md`](docs/PROMPT_OPENCODE.md): Instrucciones completas para el agente implementador en Orca.
-- [`docs/REQUESTS.md`](docs/REQUESTS.md): Canal formal de solicitudes de cambio de contrato.
-- [`docs/PROGRESS.md`](docs/PROGRESS.md): Registro de progreso de tareas.
+- [`docs/REQUESTS.md`](docs/REQUESTS.md): Canal formal de solicitudes de cambio de contrato (REQ-001 a REQ-009 resueltos).
+- [`docs/PROGRESS.md`](docs/PROGRESS.md): Registro de progreso de tareas de Antigravity y OpenCode.
+

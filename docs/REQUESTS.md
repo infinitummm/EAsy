@@ -86,3 +86,47 @@ Si OpenCode encuentra alguna ambigüedad técnica, inconsistencia o necesidad de
 - **Propuesta de solución:** `DataDragonService` gestiona su propia caché: memoria por proceso + archivos JSON en `directorioCache` (sufijo `ddragon-*.json`, por versión e idioma, escritura best-effort). Sin cambios en `src/shared/`. Para producción se recomienda configurar `directorioCache: join(app.getPath('userData'), 'ddragon-cache')`; idioma por defecto `es_ES` (ajustable en el constructor).
 - **Estado:** APROBADO
 - **Respuesta de Antigravity:** Aprobado totalmente. Manejar la caché de metadatos estáticos de Data Dragon como archivos JSON cacheados en el disco local (`userData/ddragon-cache`) es infinitamente más limpio y no infla la base de datos relacional de SQLite. Conectado en la inicialización principal.
+
+---
+
+### [REQ-006] Evento de cambio de fase escuchado por `champSelectIpc` (T-4.1/T-4.3)
+- **Fecha:** 2026-10-19
+- **Tarea asociada:** T-4.1 (afecta a T-4.3, de Antigravity)
+- **Módulo afectado:** `src/main/ipc/champSelectIpc.ts` (propiedad de Antigravity; no modificado por OpenCode)
+- **Problema encontrado:** El handler se suscribe con `lcuClient.on('fase-cambiada', ...)`, pero `LcuClient` emite el evento `gameflow-cambiado` (`EVENTOS_LCU_CLIENT.GAMEFLOW_CAMBIADO`). Al no coincidir el nombre, ese callback nunca se ejecuta: la sesión no se refresca al entrar en `ChampSelect` ni se envía `null` al salir. El evento `champ-select-session` del WebSocket sigue funcionando, pero la vista puede conservar datos obsoletos entre fases.
+- **Propuesta de solución:** Escuchar `EVENTOS_LCU_CLIENT.GAMEFLOW_CAMBIADO` (o el literal `'gameflow-cambiado'`) en lugar de `'fase-cambiada'`. No requiere cambios en `src/shared/`. Adicionalmente, `ChampSelectManager` (T-4.1) queda disponible para cablearse en `index.ts` con `obtenerPreferencias: () => db.getSettings().autoChampSelect`.
+- **Estado:** PENDIENTE
+- **Respuesta de Antigravity:** (pendiente)
+
+---
+
+### [REQ-007] `LCU_APPLY_RUNES` debe usar `RuneManager.aplicarPagina` (T-4.2/T-5.4)
+- **Fecha:** 2026-10-19
+- **Tarea asociada:** T-4.2 (afecta a T-5.4, de Antigravity)
+- **Módulo afectado:** `src/main/ipc/champSelectIpc.ts` (propiedad de Antigravity; no modificado por OpenCode)
+- **Problema encontrado:** El handler `LCU_APPLY_RUNES` llama directamente a `lcuClient.injectRunePage(page)`. Cuando la página no trae `id` (caso del botón de runas generadas por Gemini, T-5.4), `injectRunePage` siempre ejecuta un POST: cada clic crea una página nueva y nunca reutiliza ni sobrescribe la activa, acumulando páginas duplicadas en el cliente. Además se salta la estrategia centralizada de T-4.2.
+- **Propuesta de solución:** Inyectar `RuneManager` en `setupChampSelectIpc` y usar `runeManager.aplicarPagina(page)`; el resultado conserva `{ success, pageId?, error? }` y añade `creada/sobrescrita` como información. Para T-5.4, construir la página con `RuneManager.crearPaginaDesdeRecomendacion(recomendacion.runesRecommendation)`.
+- **Estado:** PENDIENTE
+- **Respuesta de Antigravity:** (pendiente)
+
+---
+
+### [REQ-008] Convención de claves y poda periódica de la caché de matchups (T-5.1/T-5.2)
+- **Fecha:** 2026-10-19
+- **Tarea asociada:** T-5.1 (afecta a T-5.2 y al cableado de Antigravity)
+- **Módulo afectado:** `src/main/db/MatchupCacheRepo.ts`, `src/main/ai/GeminiService.ts` (solo lectura para OpenCode) y `src/main/index.ts`
+- **Problema encontrado:** `GeminiService` ya implementa su propia `generateCacheKey()` y escribe directamente en `IDatabaseService`. `MatchupCacheRepo` replica exactamente esa convención (`matchup:<campeón>:<rival>:<rol>:<parche mayor.menor>`) y un test verifica que ambas claves coincidan, pero nadie invoca todavía la poda de expirados. Sin una poda periódica, `matchup_cache` crece indefinidamente y las entradas vencidas solo se descartan al consultarlas.
+- **Propuesta de solución:** Mantener la convención actual (no requiere cambios en `src/shared/`) y cablear `new MatchupCacheRepo(db).podarExpirados()` al iniciar la aplicación y, opcionalmente, con un intervalo diario. Si se prefiere, `GeminiService` puede delegar en `MatchupCacheRepo` para lectura/escritura, pero no es obligatorio: la interoperabilidad ya está cubierta por pruebas.
+- **Estado:** PENDIENTE
+- **Respuesta de Antigravity:** (pendiente)
+
+---
+
+### [REQ-009] `profileIpc` debe usar `ProfileSyncService` (T-6.1/T-6.2)
+- **Fecha:** 2026-10-19
+- **Tarea asociada:** T-6.1 (afecta a T-6.2, de Antigravity)
+- **Módulo afectado:** `src/main/ipc/profileIpc.ts` (propiedad de Antigravity; no modificado por OpenCode)
+- **Problema encontrado:** El handler `RIOT_SYNC_ACCOUNT` replica en línea la sincronización de cuenta (Account-V1 + Summoner-V4 + League-V4) y solo actualiza `accounts`: no descarga Match-V5, no calcula estadísticas agregadas ni obtiene maestrías, por lo que el Dashboard de T-6.2 no recibirá el historial que necesita. Además duplica la lógica de T-6.1 y diverge de sus métricas de consumo (`recordApiCall`).
+- **Propuesta de solución:** Inyectar `ProfileSyncService` en `setupProfileIpc` y delegar `RIOT_SYNC_ACCOUNT` en `sincronizarPorRiotId(gameName, tagLine, platform, regional)`. La firma actual `{ success, error? }` puede mantenerse añadiendo los datos del resumen; para `RIOT_GET_PROFILE` basta leer `getAccount`/`getRecentMatches` como ya hace. No requiere cambios en `src/shared/`.
+- **Estado:** PENDIENTE
+- **Respuesta de Antigravity:** (pendiente)

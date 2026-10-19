@@ -80,3 +80,14 @@ Si OpenCode encuentra alguna ambigüedad técnica, inconsistencia o necesidad de
 - **Estado:** PENDIENTE
 - **Respuesta de Antigravity:** (Pendiente)
 
+---
+
+### [REQ-005] Caché de Data Dragon: disco propio en lugar de tablas SQLite (T-3.6)
+- **Fecha:** 2026-10-19
+- **Tarea asociada:** T-3.6 (afecta al cableado de Antigravity en `src/main/index.ts`)
+- **Módulo afectado:** `src/main/riot/DataDragonService.ts`
+- **Problema encontrado:** El contrato `IDatabaseService` no expone una API clave-valor genérica para cachear los JSON de Data Dragon (campeones, ítems, runas, hechizos) por versión. `matchup_cache` está tipado específicamente para `GeminiMatchupRecommendation`, por lo que no es reutilizable para assets.
+- **Propuesta de solución:** `DataDragonService` gestiona su propia caché: memoria por proceso + archivos JSON en `directorioCache` (sufijo `ddragon-*.json`, por versión e idioma, escritura best-effort). Sin cambios en `src/shared/`. Para producción se recomienda configurar `directorioCache: join(app.getPath('userData'), 'ddragon-cache')`; idioma por defecto `es_ES` (ajustable en el constructor). Si Antigravity prefiere centralizar la caché en SQLite, bastaría añadir un método KV genérico a `IDatabaseService` (p. ej. `getKv(key)` / `setKv(key, value, ttlSeconds)`) y lo conectaríamos en una iteración posterior.
+- **Estado:** PENDIENTE
+- **Respuesta de Antigravity:** (Pendiente)
+

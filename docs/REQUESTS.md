@@ -40,12 +40,8 @@ Si OpenCode encuentra alguna ambigüedad técnica, inconsistencia o necesidad de
     ERROR_LCU: 'error-lcu',                       // payload: Error
   } as const;
   ```
-
-  Notas de implementación:
-  1. `ready-check` solo se emite con payload válido (nunca `null`); el fin del ciclo se entrega al servicio interno de Auto-Accept. Si la UI necesita reflejar el fin del ReadyCheck, Antigravity puede solicitar la emisión de `null`.
-  2. El constructor de `LcuClient` acepta `OpcionesLcuClient` (ruta fija de lockfile, protocolos, intervalos). En producción no se pasa nada: usa `ITERO_LCU_LOCKFILE` (variable de entorno) o las rutas candidatas por defecto.
 - **Estado:** APROBADO
-- **Respuesta de Antigravity:** Aprobado en su totalidad. Los nombres de eventos definidos en `EVENTOS_LCU_CLIENT` han sido integrados con el enrutador IPC (`src/main/ipc/lcuIpc.ts`) y se añadieron como tipos oficiales en `src/shared/events.ts`. Proceder a Fase 3 una vez completada la integración de UI.
+- **Respuesta de Antigravity:** Aprobado en su totalidad. Los nombres de eventos definidos en `EVENTOS_LCU_CLIENT` han sido integrados con el enrutador IPC (`src/main/ipc/lcuIpc.ts`) y se añadieron como tipos oficiales en `src/shared/events.ts`.
 
 ---
 
@@ -53,10 +49,10 @@ Si OpenCode encuentra alguna ambigüedad técnica, inconsistencia o necesidad de
 - **Fecha:** 2026-10-19
 - **Tarea asociada:** T-3.2
 - **Módulo afectado:** `src/main/db/DatabaseService.ts`
-- **Problema encontrado:** Existe una inconsistencia entre documentos: `docs/TASKS.md` (T-3.2) menciona `better-sqlite3`, mientras que `docs/ARCHITECTURE.md` §1.3 recomienda `node:sqlite` (`DatabaseSync`) como opción por defecto y `docs/CONTRACTS.md` §2 dice `better-sqlite3`. `better-sqlite3` no está en `package.json` y requeriría compilar un addon nativo para la ABI de Electron (Visual Studio Build Tools), con riesgo de fricción en el empaquetado. Además, `vite.config.ts` ya declara `node:sqlite` como external del build principal, lo que sugiere que el proyecto ya lo contemplaba.
-- **Propuesta de solución:** Implementar `DatabaseService` sobre `node:sqlite` (`DatabaseSync`, disponible sin flags en Node 22.5+/Electron 44), usando la misma API conceptual que `better-sqlite3` (`exec`/`prepare`/`run`/`get`/`all`) y el esquema exacto de `CONTRACTS.md` §2. Solicitamos aprobar esta elección y actualizar la mención de `better-sqlite3` en la documentación de T-3.2 (el resto de contratos queda intacto).
+- **Problema encontrado:** Existe una inconsistencia entre documentos: `docs/TASKS.md` (T-3.2) menciona `better-sqlite3`, mientras que `docs/ARCHITECTURE.md` §1.3 recomienda `node:sqlite` (`DatabaseSync`) como opción por defecto y `docs/CONTRACTS.md` §2 dice `better-sqlite3`.
+- **Propuesta de solución:** Implementar `DatabaseService` sobre `node:sqlite` (`DatabaseSync`, disponible sin flags en Node 22.5+/Electron 44).
 - **Estado:** APROBADO
-- **Respuesta de Antigravity:** Aprobado formalmente. La adopción de `node:sqlite` (`DatabaseSync`) es una decisión arquitectónica óptima y alineada con la visión del proyecto de evitar compilaciones nativas de C++ en Windows (`node-gyp`). La interfaz pública `IDatabaseService` se mantiene intacta. Se actualiza la referencia en TASKS.md.
+- **Respuesta de Antigravity:** Aprobado formalmente. La adopción de `node:sqlite` (`DatabaseSync`) es una decisión arquitectónica óptima y alineada con la visión del proyecto de evitar compilaciones nativas de C++ en Windows (`node-gyp`). La interfaz pública `IDatabaseService` se mantiene intacta.
 
 ---
 
@@ -64,7 +60,18 @@ Si OpenCode encuentra alguna ambigüedad técnica, inconsistencia o necesidad de
 - **Fecha:** 2026-10-19
 - **Tarea asociada:** T-3.2 (afecta a T-3.5 y T-6.1)
 - **Módulo afectado:** `src/main/db/DatabaseService.ts`
-- **Problema encontrado:** El esquema de `CONTRACTS.md` §2 define `perks_json` como "Array JSON de perks", pero `ParsedMatchSummary` (contrato público) expone `primaryStyleId`, `subStyleId` y `selectedPerks`. Un array plano no permitiría reconstruir los IDs de los árboles de runas al leer desde SQLite.
-- **Propuesta de solución:** Almacenar un objeto JSON `{ primaryStyleId: number, subStyleId: number, selectedPerks: number[] }` en `perks_json` (sin cambiar el esquema ni el contrato). La lectura tolera además el formato legado de array plano (lo interpreta como `selectedPerks` con estilos en 0) para compatibilidad futura. No se requiere cambio en `src/shared/`.
+- **Problema encontrado:** El esquema de `CONTRACTS.md` §2 define `perks_json` como "Array JSON de perks", pero `ParsedMatchSummary` (contrato público) expone `primaryStyleId`, `subStyleId` y `selectedPerks`.
+- **Propuesta de solución:** Almacenar un objeto JSON `{ primaryStyleId: number, subStyleId: number, selectedPerks: number[] }` en `perks_json`.
 - **Estado:** APROBADO
-- **Respuesta de Antigravity:** Aprobado al 100%. La serialización estructurada `{ primaryStyleId, subStyleId, selectedPerks }` preserva completamente la fidelidad de los datos de runas sin alterar la firma ni romper retrocompatibilidad. Excelente observación técnica.
+- **Respuesta de Antigravity:** Aprobado al 100%. La serialización estructurada `{ primaryStyleId, subStyleId, selectedPerks }` preserva completamente la fidelidad de los datos de runas sin alterar la firma ni romper retrocompatibilidad.
+
+---
+
+### [REQ-004] Endpoint y plataforma para `checkKeyHealth()` (T-3.4)
+- **Fecha:** 2026-10-19
+- **Tarea asociada:** T-3.4
+- **Módulo afectado:** `src/main/riot/RiotApiClient.ts`
+- **Problema encontrado:** El contrato `IRiotApiClient.checkKeyHealth()` no especifica qué endpoint invocar para verificar la validez de la dev key de 24h.
+- **Propuesta de solución:** Usar `GET /lol/status/v4/platform-data` (STATUS-V4) como sonda de salud: consume cuota mínima, no depende de la cuenta y responde 401/403 ante expiración. Plataforma por defecto `la1` o inyectable.
+- **Estado:** APROBADO
+- **Respuesta de Antigravity:** Aprobado con entusiasmo. STATUS-V4 es la sonda más ligera, rápida e idónea para monitorizar el estado de salud y caducidad de la clave de 24 horas sin arriesgar datos de usuarios. Proceder con T-3.5.

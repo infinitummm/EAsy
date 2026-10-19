@@ -23,4 +23,26 @@ Si OpenCode encuentra alguna ambigüedad técnica, inconsistencia o necesidad de
 
 ## Historial de Solicitudes
 
-*(Aún no hay solicitudes registradas)*
+### [REQ-001] Nombres de eventos emitidos por `LcuClient` (necesarios para T-2.7)
+- **Fecha:** 2026-10-19
+- **Tarea asociada:** T-2.6 (afecta directamente a T-2.7, de Antigravity)
+- **Módulo afectado:** `src/main/lcu/LcuClient.ts`
+- **Problema encontrado:** El contrato `ILcuClient` extiende `EventEmitter`, pero `docs/CONTRACTS.md` no especifica los nombres de los eventos que emite el cliente LCU ni el formato exacto de sus payloads. La tarea T-2.7 (conectar `ILcuClient` con IPC) necesita suscribirse a estos eventos para reenviarlos a los canales `lcu:state-changed`, `lcu:gameflow-changed`, `lcu:ready-check` y `lcu:champ-select-session`.
+- **Propuesta de solución / Firma requerida:** Constantes públicas ya exportadas desde `src/main/lcu/LcuClient.ts` (constante `EVENTOS_LCU_CLIENT`):
+
+  ```typescript
+  export const EVENTOS_LCU_CLIENT = {
+    ESTADO_CAMBIADO: 'estado-cambiado',           // payload: LcuConnectionState
+    GAMEFLOW_CAMBIADO: 'gameflow-cambiado',       // payload: GameflowPhase
+    READY_CHECK: 'ready-check',                   // payload: ReadyCheckEvent
+    CHAMP_SELECT_SESSION: 'champ-select-session', // payload: ChampSelectSession | null
+    READY_CHECK_ACEPTADO: 'ready-check-aceptado', // sin payload
+    ERROR_LCU: 'error-lcu',                       // payload: Error
+  } as const;
+  ```
+
+  Notas de implementación:
+  1. `ready-check` solo se emite con payload válido (nunca `null`); el fin del ciclo se entrega al servicio interno de Auto-Accept. Si la UI necesita reflejar el fin del ReadyCheck, Antigravity puede solicitar la emisión de `null`.
+  2. El constructor de `LcuClient` acepta `OpcionesLcuClient` (ruta fija de lockfile, protocolos, intervalos). En producción no se pasa nada: usa `ITERO_LCU_LOCKFILE` (variable de entorno) o las rutas candidatas por defecto.
+- **Estado:** PENDIENTE
+- **Respuesta de Antigravity:** *(pendiente)*

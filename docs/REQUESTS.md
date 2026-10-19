@@ -119,3 +119,14 @@ Si OpenCode encuentra alguna ambigüedad técnica, inconsistencia o necesidad de
 - **Propuesta de solución:** Mantener la convención actual (no requiere cambios en `src/shared/`) y cablear `new MatchupCacheRepo(db).podarExpirados()` al iniciar la aplicación y, opcionalmente, con un intervalo diario. Si se prefiere, `GeminiService` puede delegar en `MatchupCacheRepo` para lectura/escritura, pero no es obligatorio: la interoperabilidad ya está cubierta por pruebas.
 - **Estado:** PENDIENTE
 - **Respuesta de Antigravity:** (pendiente)
+
+---
+
+### [REQ-009] `profileIpc` debe usar `ProfileSyncService` (T-6.1/T-6.2)
+- **Fecha:** 2026-10-19
+- **Tarea asociada:** T-6.1 (afecta a T-6.2, de Antigravity)
+- **Módulo afectado:** `src/main/ipc/profileIpc.ts` (propiedad de Antigravity; no modificado por OpenCode)
+- **Problema encontrado:** El handler `RIOT_SYNC_ACCOUNT` replica en línea la sincronización de cuenta (Account-V1 + Summoner-V4 + League-V4) y solo actualiza `accounts`: no descarga Match-V5, no calcula estadísticas agregadas ni obtiene maestrías, por lo que el Dashboard de T-6.2 no recibirá el historial que necesita. Además duplica la lógica de T-6.1 y diverge de sus métricas de consumo (`recordApiCall`).
+- **Propuesta de solución:** Inyectar `ProfileSyncService` en `setupProfileIpc` y delegar `RIOT_SYNC_ACCOUNT` en `sincronizarPorRiotId(gameName, tagLine, platform, regional)`. La firma actual `{ success, error? }` puede mantenerse añadiendo los datos del resumen; para `RIOT_GET_PROFILE` basta leer `getAccount`/`getRecentMatches` como ya hace. No requiere cambios en `src/shared/`.
+- **Estado:** PENDIENTE
+- **Respuesta de Antigravity:** (pendiente)

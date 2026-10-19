@@ -8,9 +8,20 @@ export interface ChampionInfo {
   readonly name: string;
   readonly key: string;
   readonly image: string;
+  /**
+   * URL absoluta del icono cuando la fuente no es Data Dragon (p. ej. Community
+   * Dragon para campeones recién lanzados como Yunara). Si está presente,
+   * `getChampionIconUrl` la devuelve tal cual.
+   */
+  readonly iconUrl?: string;
 }
 
-export const ALL_CHAMPIONS: readonly ChampionInfo[] = [
+/**
+ * Lista base de campeones. Se amplía en caliente mediante `registrarCampeones`
+ * para soportar lanzamientos nuevos (REQ-013); las vistas que conservan una
+ * referencia a este arreglo reciben los cambios sin reimportar el módulo.
+ */
+export const ALL_CHAMPIONS: ChampionInfo[] = [
   {
     "id": 266,
     "name": "Aatrox",
@@ -1019,11 +1030,101 @@ export const ALL_CHAMPIONS: readonly ChampionInfo[] = [
     "key": "Zyra",
     "image": "Zyra.png"
   }
-] as const;
+];
 
 const CHAMPIONS_BY_ID = new Map<number, ChampionInfo>(
   ALL_CHAMPIONS.map((c) => [c.id, c])
 );
+const CHAMPIONS_BY_IMAGE = new Map<string, ChampionInfo>(
+  ALL_CHAMPIONS.map((c) => [c.image, c])
+);
+
+// ==========================================
+// Registro dinámico de campeones (REQ-013)
+// ==========================================
+
+/**
+ * Icono genérico (SVG embebido) para campeones desconocidos. Evita mostrar el
+ * retrato de otro campeón (p. ej. Aatrox) o una imagen rota mientras llega el
+ * catálogo dinámico desde Data Dragon / la LCU.
+ */
+export const GENERIC_CHAMPION_ICON_URL =
+  'data:image/svg+xml;charset=utf-8,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">' +
+      '<rect width="48" height="48" rx="8" fill="#1e2328"/>' +
+      '<circle cx="24" cy="24" r="22" fill="none" stroke="#785a28" stroke-width="2"/>' +
+      '<circle cx="24" cy="19" r="8" fill="#5c6b73"/>' +
+      '<path d="M8 46c1.5-9 8-13 16-13s14.5 4 16 13z" fill="#5c6b73"/>' +
+    '</svg>'
+  );
+
+/** Normaliza una entrada antes de registrarla; devuelve `null` si es inválida. */
+function normalizarCampeon(campeon: ChampionInfo | null | undefined): ChampionInfo | null {
+  if (!campeon || !Number.isInteger(campeon.id) || campeon.id <= 0) {
+    return null;
+  }
+  const nombre = typeof campeon.name === 'string' ? campeon.name.trim() : '';
+  if (!nombre) {
+    return null;
+  }
+  const clave = typeof campeon.key === 'string' && campeon.key.trim() ? campeon.key.trim() : nombre;
+  return {
+    id: campeon.id,
+    name: nombre,
+    key: clave,
+    image: typeof campeon.image === 'string' && campeon.image.trim() ? campeon.image : `${clave}.png`,
+    iconUrl: typeof campeon.iconUrl === 'string' && campeon.iconUrl.trim() ? campeon.iconUrl : undefined,
+  };
+}
+
+/**
+ * Registra (o actualiza) campeones obtenidos dinámicamente desde Data Dragon,
+ * la LCU o Community Dragon. Muta `ALL_CHAMPIONS` en sitio para que las vistas
+ * que ya mantienen una referencia a la lista reciban los cambios al vuelo.
+ *
+ * @returns Cantidad de campeones nuevos añadidos (los existentes se actualizan).
+ */
+export function registrarCampeones(campeones: readonly ChampionInfo[]): number {
+  let nuevos = 0;
+
+  for (const candidato of campeones ?? []) {
+    const campeon = normalizarCampeon(candidato);
+    if (!campeon) {
+      continue;
+    }
+
+    const existente = CHAMPIONS_BY_ID.get(campeon.id);
+    if (!existente) {
+      ALL_CHAMPIONS.push(campeon);
+      CHAMPIONS_BY_ID.set(campeon.id, campeon);
+      CHAMPIONS_BY_IMAGE.set(campeon.image, campeon);
+      nuevos += 1;
+      continue;
+    }
+
+    const fusionado: ChampionInfo = {
+      id: existente.id,
+      name: campeon.name || existente.name,
+      key: campeon.key || existente.key,
+      image: campeon.image || existente.image,
+      iconUrl: campeon.iconUrl ?? existente.iconUrl,
+    };
+    const indice = ALL_CHAMPIONS.indexOf(existente);
+    if (indice !== -1) {
+      ALL_CHAMPIONS[indice] = fusionado;
+    }
+    CHAMPIONS_BY_ID.set(fusionado.id, fusionado);
+    CHAMPIONS_BY_IMAGE.set(fusionado.image, fusionado);
+  }
+
+  return nuevos;
+}
+
+/** Devuelve una copia del catálogo actual ordenada alfabéticamente por nombre. */
+export function obtenerTodosLosCampeones(): ChampionInfo[] {
+  return [...ALL_CHAMPIONS].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+}
 
 export function getChampionById(id: number): ChampionInfo | undefined {
   return CHAMPIONS_BY_ID.get(id);
@@ -1031,17 +1132,30 @@ export function getChampionById(id: number): ChampionInfo | undefined {
 
 export function getChampionName(id: number, fallback = 'Campeón'): string {
   const champ = CHAMPIONS_BY_ID.get(id);
-  return champ ? champ.name : `${fallback} ${id}`;
+  return champ ? champ.name : `${fallback} (${id})`;
 }
 
 export function getChampionIconUrl(imageOrId: string | number, patch = '14.20.1'): string {
   if (typeof imageOrId === 'number') {
     const champ = CHAMPIONS_BY_ID.get(imageOrId);
-    if (champ) {
-      return `https://ddragon.leagueoflegends.com/cdn/${patch}/img/champion/${champ.image}`;
+    if (!champ) {
+      return GENERIC_CHAMPION_ICON_URL;
     }
-    return `https://ddragon.leagueoflegends.com/cdn/${patch}/img/champion/Aatrox.png`;
+    if (champ.iconUrl) {
+      return champ.iconUrl;
+    }
+    return `https://ddragon.leagueoflegends.com/cdn/${patch}/img/champion/${champ.image}`;
   }
+
+  // Las URLs ya construidas (p. ej. Community Dragon) se respetan tal cual.
+  if (/^(https?:|data:)/i.test(imageOrId)) {
+    return imageOrId;
+  }
+
   const file = imageOrId.endsWith('.png') ? imageOrId : `${imageOrId}.png`;
+  const champ = CHAMPIONS_BY_IMAGE.get(file);
+  if (champ?.iconUrl) {
+    return champ.iconUrl;
+  }
   return `https://ddragon.leagueoflegends.com/cdn/${patch}/img/champion/${file}`;
 }

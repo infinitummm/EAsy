@@ -11,8 +11,14 @@ import { mkdtemp, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebSocket, WebSocketServer } from 'ws';
-import { EVENTOS_LCU_CLIENT, LcuClient, type OpcionesLcuClient } from '../../src/main/lcu/LcuClient';
+import {
+  EVENTOS_LCU_CLIENT,
+  LcuClient,
+  type EstadoAutoAccept,
+  type OpcionesLcuClient,
+} from '../../src/main/lcu/LcuClient';
 import type {
+  ChampSelectAction,
   ChampSelectSession,
   GameflowPhase,
   LcuConnectionState,
@@ -34,6 +40,9 @@ let rutaLockfile: string;
 let peticiones: PeticionRegistrada[];
 let socketLcu: WebSocket | null;
 let sesionChampSelect: ChampSelectSession | null;
+let readyCheckLcu: ReadyCheckEvent | null;
+let idsElegibles: number[];
+let resumenCampeones: unknown[];
 let clientesCreados: LcuClient[];
 
 function contenidoLockfile(): string {
@@ -69,11 +78,34 @@ function manejarSolicitud(req: IncomingMessage, res: ServerResponse): void {
       }
       return responderJson(res, 404, { message: 'Not Found' });
     }
+    if (ruta === '/lol-matchmaking/v1/ready-check' && req.method === 'GET') {
+      if (readyCheckLcu) {
+        return responderJson(res, 200, readyCheckLcu);
+      }
+      return responderJson(res, 404, { message: 'Not Found' });
+    }
+    if (ruta === '/lol-champ-select/v1/pickable-champion-ids' && req.method === 'GET') {
+      return responderJson(res, 200, idsElegibles);
+    }
+    if (ruta === '/lol-game-data/assets/v1/champion-summary.json' && req.method === 'GET') {
+      return responderJson(res, 200, resumenCampeones);
+    }
     if (ruta === '/lol-matchmaking/v1/ready-check/accept' && req.method === 'POST') {
       res.writeHead(204);
       return res.end();
     }
     if (ruta.startsWith('/lol-champ-select/v1/session/actions/') && req.method === 'PATCH') {
+      // Refleja el PATCH sobre la sesión simulada para que el GET de confirmación funcione.
+      const idAccion = Number(ruta.split('/').pop());
+      const cambios = (cuerpo ?? {}) as Partial<ChampSelectAction>;
+      for (const fila of sesionChampSelect?.actions ?? []) {
+        for (const accion of fila ?? []) {
+          if (accion.id === idAccion) {
+            if (typeof cambios.championId === 'number') accion.championId = cambios.championId;
+            if (typeof cambios.completed === 'boolean') accion.completed = cambios.completed;
+          }
+        }
+      }
       res.writeHead(204);
       return res.end();
     }
@@ -99,14 +131,14 @@ function emitirEvento(uri: string, eventType: string, data: unknown): void {
   socketLcu.send(JSON.stringify([8, 'OnJsonApiEvent', { uri, eventType, data }]));
 }
 
-function crearSesionChampSelect(): ChampSelectSession {
+function crearSesionChampSelect(actions: ChampSelectAction[][] = []): ChampSelectSession {
   return {
     gameId: 123,
     localPlayerCellId: 0,
     hasSimultaneousBans: false,
     hasSimultaneousPicks: false,
     isCustomGame: false,
-    actions: [],
+    actions,
     myTeam: [],
     theirTeam: [],
     bans: { myTeamBans: [], theirTeamBans: [], numBans: 0 },
@@ -119,6 +151,19 @@ function crearSesionChampSelect(): ChampSelectSession {
   };
 }
 
+function crearAccionPick(cambios: Partial<ChampSelectAction> = {}): ChampSelectAction {
+  return {
+    id: 7,
+    actorCellId: 0,
+    championId: 0,
+    completed: false,
+    type: 'pick',
+    isAllyAction: true,
+    isInProgress: true,
+    ...cambios,
+  };
+}
+
 /** Crea un cliente apuntando al lockfile temporal y al servidor simulado. */
 function crearCliente(opciones: OpcionesLcuClient = {}): LcuClient {
   const cliente = new LcuClient({
@@ -126,6 +171,7 @@ function crearCliente(opciones: OpcionesLcuClient = {}): LcuClient {
     protocoloHttp: 'http',
     protocoloWs: 'ws',
     intervaloDeteccionMs: 50,
+    intervaloPollingReadyCheckMs: 30,
     intervaloReconexionMs: 50,
     timeoutConexionWsMs: 2000,
     autoAccept: { retrasoSegundos: 0, varianzaHumana: false },
@@ -155,6 +201,9 @@ beforeEach(async () => {
   peticiones = [];
   socketLcu = null;
   sesionChampSelect = null;
+  readyCheckLcu = null;
+  idsElegibles = [];
+  resumenCampeones = [];
   clientesCreados = [];
 
   servidor = createServer(manejarSolicitud);
@@ -299,6 +348,170 @@ describe('LcuClient (T-2.6)', () => {
     sesionChampSelect = crearSesionChampSelect();
     const sesion = await cliente.getChampSelectSession();
     expect(sesion).toEqual(sesionChampSelect);
+  });
+
+  it('REQ-010: hace polling de respaldo del ReadyCheck y expone el estado de Auto-Accept', async () => {
+    const cliente = crearCliente();
+    await cliente.initialize();
+    await esperarEstado(cliente, 'connected');
+    await esperarHasta(() => socketLcu !== null);
+
+    const estados: EstadoAutoAccept[] = [];
+    const readyChecks: ReadyCheckEvent[] = [];
+    const aceptados: boolean[] = [];
+    cliente.on(EVENTOS_LCU_CLIENT.AUTO_ACCEPT_STATUS, (estado: EstadoAutoAccept) => estados.push(estado));
+    cliente.on(EVENTOS_LCU_CLIENT.READY_CHECK, (readyCheck: ReadyCheckEvent) => readyChecks.push(readyCheck));
+    cliente.on(EVENTOS_LCU_CLIENT.READY_CHECK_ACEPTADO, () => aceptados.push(true));
+
+    expect(cliente.getAutoAcceptStatus()).toMatchObject({
+      habilitado: false,
+      fase: 'Lobby',
+      conectado: true,
+      pollingActivo: false,
+      aceptacionPendiente: false,
+    });
+
+    cliente.setAutoAccept(true, 0);
+    emitirEvento('/lol-gameflow/v1/gameflow-phase', 'Update', 'Matchmaking');
+    await esperarHasta(() => cliente.getAutoAcceptStatus().pollingActivo);
+    expect(cliente.getAutoAcceptStatus()).toMatchObject({
+      habilitado: true,
+      retrasoSegundos: 0,
+      fase: 'Matchmaking',
+      conectado: true,
+      pollingActivo: true,
+    });
+
+    // El ReadyCheck solamente existe en el endpoint HTTP: sin evento WebSocket,
+    // el polling de respaldo debe detectarlo y aceptarlo.
+    readyCheckLcu = {
+      state: 'InProgress',
+      playerResponse: 'None',
+      suppressCountdown: false,
+      timer: 10,
+    };
+    await esperarHasta(() => aceptados.length === 1);
+    await esperarHasta(() => readyChecks.length === 1);
+    expect(readyChecks[0]).toMatchObject({ state: 'InProgress', playerResponse: 'None' });
+    expect(
+      peticiones.some((p) => p.ruta === '/lol-matchmaking/v1/ready-check' && p.metodo === 'GET')
+    ).toBe(true);
+    expect(estados.some((estado) => estado.aceptacionPendiente)).toBe(true);
+
+    // El polling deduplica: varias vueltas con el mismo estado no reemiten el evento.
+    const vueltasAnteriores = peticiones.filter(
+      (p) => p.ruta === '/lol-matchmaking/v1/ready-check' && p.metodo === 'GET'
+    ).length;
+    await esperarHasta(
+      () =>
+        peticiones.filter((p) => p.ruta === '/lol-matchmaking/v1/ready-check' && p.metodo === 'GET').length >
+        vueltasAnteriores + 1
+    );
+    expect(readyChecks).toHaveLength(1);
+
+    // Al salir de la fase de matchmaking el polling se detiene.
+    readyCheckLcu = null;
+    emitirEvento('/lol-gameflow/v1/gameflow-phase', 'Update', 'Lobby');
+    await esperarHasta(() => !cliente.getAutoAcceptStatus().pollingActivo);
+    expect(cliente.getAutoAcceptStatus()).toMatchObject({ fase: 'Lobby', pollingActivo: false });
+  });
+
+  it('REQ-012: obtiene los campeones elegibles y hace hover con confirmación por GET', async () => {
+    const cliente = crearCliente();
+    await cliente.initialize();
+
+    idsElegibles = [266, 24, 64, 64, -1];
+    expect(await cliente.getPickableChampionIds()).toEqual([266, 24, 64]);
+
+    sesionChampSelect = crearSesionChampSelect([
+      [
+        {
+          id: 5,
+          actorCellId: 0,
+          championId: 0,
+          completed: false,
+          type: 'ban',
+          isAllyAction: true,
+          isInProgress: false,
+        },
+        crearAccionPick(),
+      ],
+    ]);
+
+    const resultado = await cliente.hoverChampion(24);
+    expect(resultado).toEqual({ success: true, actionId: 7, championId: 24 });
+
+    const indicePatch = peticiones.findIndex(
+      (p) => p.ruta === '/lol-champ-select/v1/session/actions/7' && p.metodo === 'PATCH'
+    );
+    expect(indicePatch).toBeGreaterThanOrEqual(0);
+    expect(peticiones[indicePatch].cuerpo).toEqual({ championId: 24 });
+
+    // Después del PATCH se consulta la sesión para confirmar el hover.
+    expect(
+      peticiones
+        .slice(indicePatch + 1)
+        .some((p) => p.ruta === '/lol-champ-select/v1/session' && p.metodo === 'GET')
+    ).toBe(true);
+  });
+
+  it('REQ-012: hoverChampion devuelve errores controlados sin sesión, sin acción o con ID inválido', async () => {
+    const cliente = crearCliente();
+    await cliente.initialize();
+
+    expect(await cliente.hoverChampion(24)).toEqual({
+      success: false,
+      error: 'No hay una sesión de Champ Select activa.',
+    });
+    expect(await cliente.hoverChampion(0)).toMatchObject({ success: false });
+
+    sesionChampSelect = crearSesionChampSelect();
+    const sinAccion = await cliente.hoverChampion(24);
+    expect(sinAccion.success).toBe(false);
+    expect(sinAccion.error).toContain('acción de pick');
+    expect(
+      peticiones.some((p) => p.metodo === 'PATCH' && p.ruta.startsWith('/lol-champ-select/v1/session/actions/'))
+    ).toBe(false);
+  });
+
+  it('REQ-013: getChampionSummary normaliza el resumen de la LCU (incluye Yunara 804)', async () => {
+    const cliente = crearCliente();
+    await cliente.initialize();
+
+    // Sin endpoint disponible responde 404 y devuelve un arreglo vacío.
+    expect(await cliente.getChampionSummary()).toEqual([]);
+
+    resumenCampeones = [
+      {
+        id: 266,
+        name: 'Aatrox',
+        alias: 'Aatrox',
+        squarePortraitPath: '/lol-game-data/assets/v1/champion-icons/266.png',
+      },
+      {
+        id: 804,
+        name: 'Yunara',
+        alias: 'Yunara',
+        squarePortraitPath: '/lol-game-data/assets/v1/champion-icons/804.png',
+      },
+      { id: 'inválido', name: 'Entrada rota' },
+      null,
+    ];
+
+    expect(await cliente.getChampionSummary()).toEqual([
+      {
+        id: 266,
+        name: 'Aatrox',
+        alias: 'Aatrox',
+        squarePortraitPath: '/lol-game-data/assets/v1/champion-icons/266.png',
+      },
+      {
+        id: 804,
+        name: 'Yunara',
+        alias: 'Yunara',
+        squarePortraitPath: '/lol-game-data/assets/v1/champion-icons/804.png',
+      },
+    ]);
   });
 
   it('debe validar y enviar páginas de runas (crear y sobrescribir)', async () => {

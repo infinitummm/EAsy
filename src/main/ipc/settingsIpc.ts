@@ -2,20 +2,31 @@ import { ipcMain, WebContents } from 'electron';
 import { IPC_CHANNELS } from '../../shared/events';
 import { DEFAULT_APP_SETTINGS } from '../../shared/constants';
 import type { AppSettings } from '../../shared/types';
-import type { KeyHealthStatus, IDatabaseService, ISecurityService, IRiotApiClient } from '../../shared/contracts';
+import type {
+  KeyHealthStatus,
+  IDatabaseService,
+  ISecurityService,
+  IRiotApiClient,
+  ILcuClient,
+} from '../../shared/contracts';
 import { GeminiService } from '../ai/GeminiService';
 
 let memoriaSettings: AppSettings = { ...DEFAULT_APP_SETTINGS };
 
 /**
  * Registra los canales IPC para la gestión de ajustes, claves de API y monitor de cuotas.
+ *
+ * `lcuClient` es opcional pero imprescindible para aplicar el Auto-Accept en
+ * caliente: cada guardado de ajustes actualiza `setAutoAccept(enabled, delay)`
+ * (REQ-010), de modo que el servicio nunca queda desincronizado de la UI.
  */
 export function registrarSettingsIpc(
   getWebContents: () => WebContents | null,
   dbService?: IDatabaseService,
   securityService?: ISecurityService,
   riotClient?: IRiotApiClient,
-  geminiService?: GeminiService
+  geminiService?: GeminiService,
+  lcuClient?: ILcuClient
 ): void {
   // 1. Obtener Ajustes
   ipcMain.removeHandler(IPC_CHANNELS.SETTINGS_GET);
@@ -77,6 +88,12 @@ export function registrarSettingsIpc(
           ? securityService.decrypt(newSettings.apiKeys.geminiApiKeyEncrypted)
           : newSettings.apiKeys.geminiApiKeyEncrypted;
         geminiService.setApiKey(clave);
+      }
+
+      // Aplicar Auto-Accept en caliente con cada guardado (REQ-010).
+      if (lcuClient) {
+        const autoAccept = memoriaSettings.autoAccept ?? DEFAULT_APP_SETTINGS.autoAccept;
+        lcuClient.setAutoAccept(autoAccept.enabled, autoAccept.delaySeconds);
       }
 
       if (dbService) {

@@ -16,6 +16,12 @@ import {
   ErrorDataDragon,
   type OpcionesDataDragonService,
 } from '../../src/main/riot/DataDragonService';
+import {
+  GENERIC_CHAMPION_ICON_URL,
+  getChampionById,
+  getChampionIconUrl,
+  getChampionName,
+} from '../../src/shared/champions';
 
 // ==========================================
 // CDN simulado
@@ -83,6 +89,38 @@ const HECHIZOS = {
   },
 } as const;
 
+/** Resumen de campeones publicado por Community Dragon (contingencia REQ-013). */
+const RESUMEN_COMUNIDAD = [
+  {
+    id: 266,
+    name: 'Aatrox',
+    alias: 'Aatrox',
+    squarePortraitPath: '/lol-game-data/assets/v1/champion-icons/266.png',
+  },
+  {
+    id: 999,
+    name: 'Campeón Comunitario',
+    alias: 'Comunitario',
+    squarePortraitPath: '/lol-game-data/assets/v1/champion-icons/999.png',
+  },
+] as const;
+
+/** Resumen de campeones de la LCU con Yunara (lanzamiento reciente, REQ-013). */
+const RESUMEN_LCU = [
+  {
+    id: 266,
+    name: 'Aatrox de la LCU',
+    alias: 'AatroxLcu',
+    squarePortraitPath: '/lol-game-data/assets/v1/champion-icons/266.png',
+  },
+  {
+    id: 804,
+    name: 'Yunara',
+    alias: 'Yunara',
+    squarePortraitPath: '/lol-game-data/assets/v1/champion-icons/804.png',
+  },
+] as const;
+
 let servidor: Server;
 let puerto: number;
 let peticiones: string[];
@@ -132,6 +170,9 @@ beforeEach(async () => {
     if (ruta === '/cdn/roto/data/es_ES/champion.json') {
       res.writeHead(200, { 'Content-Type': 'text/plain' });
       return res.end('esto no es json');
+    }
+    if (ruta === '/comunidad/plugins/rcp-be-lol-game-data/global/default/v1/champion-summary.json') {
+      return responderJson(res, 200, [...RESUMEN_COMUNIDAD]);
     }
     return responderJson(res, 404, { message: 'Not Found' });
   });
@@ -298,6 +339,71 @@ describe('DataDragonService (T-3.6)', () => {
       const servicio = crearServicio({ urlVersiones: 'http://127.0.0.1:9/api/versions.json' });
 
       await expect(servicio.obtenerVersionActual()).rejects.toThrow(ErrorDataDragon);
+    });
+  });
+
+  describe('catálogo dinámico de campeones (REQ-013)', () => {
+    it('sincroniza el catálogo con Data Dragon como fuente principal', async () => {
+      const servicio = crearServicio();
+      const resultado = await servicio.sincronizarCatalogoCampeones();
+
+      expect(resultado.origenPrincipal).toBe('ddragon');
+      expect(resultado.version).toBe(VERSION);
+      expect(getChampionById(266)?.name).toBe('Aatrox');
+      expect(servicio.obtenerCatalogoCampeones().length).toBeGreaterThanOrEqual(160);
+    });
+
+    it('incorpora desde la LCU los campeones ausentes en Data Dragon (Yunara, ID 804)', async () => {
+      const servicio = crearServicio({ obtenerResumenCampeonesLcu: async () => [...RESUMEN_LCU] });
+
+      const resultado = await servicio.sincronizarCatalogoCampeones();
+
+      expect(resultado.fuenteFallback).toBe('lcu');
+      expect(getChampionById(804)).toMatchObject({ id: 804, name: 'Yunara' });
+      // Los IDs que ya existen en Data Dragon conservan el nombre de la fuente principal.
+      expect(getChampionById(266)?.name).toBe('Aatrox');
+      // El retrato de Yunara se resuelve vía Community Dragon.
+      expect(getChampionById(804)?.iconUrl).toContain(
+        '/comunidad/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/804.png'
+      );
+    });
+
+    it('usa Community Dragon cuando la LCU no aporta el resumen', async () => {
+      const servicio = crearServicio();
+
+      const resultado = await servicio.sincronizarCatalogoCampeones();
+
+      expect(resultado.fuenteFallback).toBe('communitydragon');
+      expect(getChampionById(999)?.name).toBe('Campeón Comunitario');
+      expect(getChampionById(999)?.iconUrl).toContain('champion-icons/999.png');
+    });
+
+    it('si la LCU falla cae a Community Dragon sin romper el catálogo', async () => {
+      const servicio = crearServicio({
+        obtenerResumenCampeonesLcu: async () => {
+          throw new Error('LCU cerrada');
+        },
+      });
+
+      const resultado = await servicio.sincronizarCatalogoCampeones();
+
+      expect(resultado.fuenteFallback).toBe('communitydragon');
+      expect(getChampionById(999)).toBeDefined();
+    });
+
+    it('conserva la lista base y el fallback seguro si todo el CDN falla', async () => {
+      const servicio = new DataDragonService({
+        urlVersiones: 'http://127.0.0.1:9/api/versions.json',
+        cdnBase: 'http://127.0.0.1:9/cdn',
+        comunidadBase: 'http://127.0.0.1:9/comunidad',
+      });
+
+      const resultado = await servicio.sincronizarCatalogoCampeones();
+
+      expect(resultado.version).toBeNull();
+      expect(servicio.obtenerCatalogoCampeones().length).toBeGreaterThanOrEqual(160);
+      expect(getChampionName(999999)).toBe('Campeón (999999)');
+      expect(getChampionIconUrl(999999)).toBe(GENERIC_CHAMPION_ICON_URL);
     });
   });
 

@@ -1,7 +1,7 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { LcuClient, ChampSelectManager, RuneManager, ItemSetManager } from './lcu';
+import { LcuClient, ChampSelectManager, RuneManager, ItemSetManager, EVENTOS_LCU_CLIENT } from './lcu';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { registrarLcuIpc } from './ipc/lcuIpc';
@@ -132,12 +132,25 @@ app.whenReady().then(async () => {
   // 3. Inicializar servicio de Data Dragon con caché en disco y traductor
   try {
     const ddragonCacheDir = path.join(userDataDir, 'ddragon-cache');
-    dataDragonService = new DataDragonService({ directorioCache: ddragonCacheDir });
+    dataDragonService = new DataDragonService({
+      directorioCache: ddragonCacheDir,
+      // Contingencia REQ-013: la LCU conoce lanzamientos recientes (Yunara ID 804).
+      obtenerResumenCampeonesLcu: () => lcuClient.getChampionSummary(),
+    });
     const dataDragonTranslator = new DataDragonTranslator(dataDragonService);
     geminiService.setTranslator(dataDragonTranslator);
-    // Carga no bloqueante de versión inicial y diccionarios
+
+    // Carga no bloqueante del catálogo de campeones y diccionarios
+    void dataDragonService.sincronizarCatalogoCampeones().catch(() => {});
     dataDragonTranslator.initialize().catch((err) => {
       console.warn('[Main] Advertencia inicializando DataDragonTranslator:', err);
+    });
+
+    // Refresco en segundo plano del catálogo al conectar con la LCU (REQ-013).
+    lcuClient.on(EVENTOS_LCU_CLIENT.ESTADO_CAMBIADO, (estado) => {
+      if (estado === 'connected') {
+        void dataDragonService?.sincronizarCatalogoCampeones().catch(() => {});
+      }
     });
   } catch (err) {
     console.warn('[Main] Advertencia inicializando DataDragonService:', err);
@@ -159,7 +172,19 @@ app.whenReady().then(async () => {
           : savedSettings.apiKeys.geminiApiKeyEncrypted;
         geminiService.setApiKey(key);
       }
+
+      // Restaurar Auto-Accept (REQ-010): el servicio arranca con la configuración guardada.
+      lcuClient.setAutoAccept(
+        savedSettings.autoAccept?.enabled ?? DEFAULT_APP_SETTINGS.autoAccept.enabled,
+        savedSettings.autoAccept?.delaySeconds ?? DEFAULT_APP_SETTINGS.autoAccept.delaySeconds
+      );
     } catch {}
+  } else {
+    // Sin base de datos, aplicar los valores por defecto para que el servicio no quede apagado.
+    lcuClient.setAutoAccept(
+      DEFAULT_APP_SETTINGS.autoAccept.enabled,
+      DEFAULT_APP_SETTINGS.autoAccept.delaySeconds
+    );
   }
 
   // 5. Registrar canales IPC con todas sus dependencias
@@ -170,7 +195,8 @@ app.whenReady().then(async () => {
     dbService || undefined,
     securityService || undefined,
     riotClient,
-    geminiService
+    geminiService,
+    lcuClient
   );
   setupProfileIpc(dbService || undefined, riotClient, profileSyncService || undefined);
 

@@ -27,7 +27,12 @@ import type {
   PlatformRouting,
   RegionalRouting,
 } from '@shared/types';
-import { ErrorRiotApi } from './RiotApiClient';
+import {
+  derivarRegionalDesdePlataforma,
+  esRegionalValido,
+  ErrorRiotApi,
+  normalizarRiotId,
+} from './RiotApiClient';
 
 export interface OpcionesProfileSync {
   /** Cantidad máxima de partidas a sincronizar (1-100). Por defecto 20. */
@@ -102,18 +107,28 @@ export class ProfileSyncService {
     this.colaRanked = opciones.colaRanked ?? 'RANKED_SOLO_5x5';
   }
 
-  /** Resuelve la cuenta por Riot ID (Account-V1) y sincroniza el perfil. */
+  /**
+   * Resuelve la cuenta por Riot ID (Account-V1) y sincroniza el perfil.
+   *
+   * Acepta el Riot ID en cualquiera de sus formas (`Nombre#Tag`, tag con `#`,
+   * nombre con `#Tag` pegado) y deriva el enrutamiento regional de la
+   * plataforma cuando no se especifica uno válido (REQ-011).
+   */
   async sincronizarPorRiotId(
     gameName: string,
     tagLine: string,
     platform: PlatformRouting,
-    regional: RegionalRouting
+    regional?: RegionalRouting
   ): Promise<ResumenSincronizacion> {
+    const riotId = normalizarRiotId(gameName, tagLine);
+    const regionalFinal: RegionalRouting =
+      regional && esRegionalValido(regional) ? regional : derivarRegionalDesdePlataforma(platform);
+
     const cuenta = await this.llamarRiot('Account-V1', () =>
-      this.riot.getAccountByRiotId(gameName, tagLine, regional)
+      this.riot.getAccountByRiotId(riotId.gameName, riotId.tagLine, regionalFinal)
     );
 
-    return this.sincronizarCuenta(cuenta.puuid, platform, regional, {
+    return this.sincronizarCuenta(cuenta.puuid, platform, regionalFinal, {
       gameName: cuenta.gameName,
       tagLine: cuenta.tagLine,
     });

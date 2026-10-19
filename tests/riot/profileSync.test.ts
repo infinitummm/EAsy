@@ -21,6 +21,7 @@ import type {
   MatchDto,
   MatchParticipantDto,
   RankedEntryDto,
+  RegionalRouting,
   RiotAccountDto,
   RiotSummonerDto,
 } from '../../src/shared/types';
@@ -472,6 +473,54 @@ describe('ProfileSyncService (T-6.1)', () => {
       expect(resumen.cuenta.tagLine).toBe('LAN');
       expect(resumen.cuenta).toMatchObject({ tier: 'GOLD', rank: 'II', leaguePoints: 45 });
       expect(riot.llamadas.some((llamada) => llamada.startsWith('account:'))).toBe(false);
+    });
+  });
+
+  describe('normalización de Riot ID y routing automático (REQ-011)', () => {
+    it('normaliza "Nombre#Tag" y deriva el regional desde la plataforma', async () => {
+      const resumen = await crearServicio().sincronizarPorRiotId('Infi#1505', '', 'la1');
+
+      expect(riot.llamadas[0]).toBe('account:americas');
+      expect(resumen.cuenta).toMatchObject({
+        gameName: 'Infi',
+        tagLine: '1505',
+        platform: 'la1',
+        regional: 'americas',
+      });
+      expect(riot.llamadas).toContain(`history:americas:${PUUID}:20`);
+    });
+
+    it('acepta el tag con # y recorta espacios sobrantes', async () => {
+      const resumen = await crearServicio().sincronizarPorRiotId('  Infi  ', ' #1505 ', 'br1');
+
+      expect(riot.llamadas[0]).toBe('account:americas');
+      expect(resumen.cuenta).toMatchObject({ gameName: 'Infi', tagLine: '1505' });
+    });
+
+    it('deriva el regional desde plataformas de otras regiones', async () => {
+      const resumen = await crearServicio().sincronizarPorRiotId('Itero', 'LAS', 'kr');
+
+      expect(riot.llamadas[0]).toBe('account:asia');
+      expect(resumen.cuenta.regional).toBe('asia');
+    });
+
+    it('ignora un regional inválido y lo deriva de la plataforma', async () => {
+      const resumen = await crearServicio().sincronizarPorRiotId(
+        'Itero',
+        'LAS',
+        'la2',
+        'las' as RegionalRouting
+      );
+
+      expect(riot.llamadas[0]).toBe('account:americas');
+      expect(resumen.cuenta.regional).toBe('americas');
+    });
+
+    it('respeta un regional explícito válido', async () => {
+      const resumen = await crearServicio().sincronizarPorRiotId('Itero', 'LAS', 'la1', 'europe');
+
+      expect(riot.llamadas[0]).toBe('account:europe');
+      expect(resumen.cuenta.regional).toBe('europe');
     });
   });
 

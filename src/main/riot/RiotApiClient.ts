@@ -31,12 +31,102 @@ import type {
 
 export type { KeyHealthStatus };
 
+/** Riot ID ya normalizado (sin `#` y sin espacios sobrantes). */
+export interface RiotIdNormalizado {
+  gameName: string;
+  tagLine: string;
+}
+
+/** Mapa oficial plataforma → enrutamiento regional (Account-V1 / Match-V5). */
+const REGIONAL_POR_PLATAFORMA: Record<PlatformRouting, RegionalRouting> = {
+  la1: 'americas',
+  la2: 'americas',
+  na1: 'americas',
+  br1: 'americas',
+  euw1: 'europe',
+  eun1: 'europe',
+  tr1: 'europe',
+  ru: 'europe',
+  kr: 'asia',
+  jp1: 'asia',
+  oc1: 'sea',
+  ph2: 'sea',
+  sg2: 'sea',
+  th2: 'sea',
+  tw2: 'sea',
+  vn2: 'sea',
+};
+
+/** Deriva el enrutamiento regional (`americas`, `europe`, `asia`, `sea`) de la plataforma. */
+export function derivarRegionalDesdePlataforma(platform: PlatformRouting): RegionalRouting {
+  return REGIONAL_POR_PLATAFORMA[platform] ?? 'americas';
+}
+
+/** Comprueba si un valor es un enrutamiento regional válido. */
+export function esRegionalValido(valor: unknown): valor is RegionalRouting {
+  return valor === 'americas' || valor === 'asia' || valor === 'europe' || valor === 'sea';
+}
+
+/**
+ * Normaliza un Riot ID escrito por el usuario (REQ-011).
+ *
+ * Soporta las formas habituales:
+ *  - `("Infi", "1505")`   → `{ gameName: "Infi", tagLine: "1505" }`
+ *  - `("Infi", "#1505")`  → `{ gameName: "Infi", tagLine: "1505" }`
+ *  - `("Infi#1505", "")`  → `{ gameName: "Infi", tagLine: "1505" }`
+ *
+ * Recorta espacios y elimina los `#` iniciales de la etiqueta para que la API
+ * nunca reciba `%231505`.
+ */
+export function normalizarRiotId(inputGameName: string, inputTagLine: string): RiotIdNormalizado {
+  let gameName = typeof inputGameName === 'string' ? inputGameName.trim() : '';
+  let tagLine = typeof inputTagLine === 'string' ? inputTagLine.trim() : '';
+
+  const separador = gameName.indexOf('#');
+  if (separador !== -1) {
+    if (!tagLine) {
+      tagLine = gameName.slice(separador + 1).trim();
+    }
+    gameName = gameName.slice(0, separador).trim();
+  }
+
+  tagLine = tagLine.replace(/^#+/, '').trim();
+
+  return { gameName, tagLine };
+}
+
+/** Mensaje descriptivo en español para un código HTTP de la Riot API (REQ-011). */
+export function describirErrorRiot(codigoEstado: number): string {
+  switch (codigoEstado) {
+    case 0:
+      return 'No se pudo contactar con la Riot API. Revisa tu conexión a Internet.';
+    case 400:
+      return 'La Riot API rechazó la solicitud (HTTP 400). Revisa el Riot ID y la plataforma seleccionada.';
+    case 401:
+      return 'La clave de Riot API no es válida (HTTP 401). Genera una clave nueva e inténtalo de nuevo.';
+    case 403:
+      return 'La clave de Riot API caducó o no tiene permisos (HTTP 403). Las claves de desarrollo caducan cada 24 horas.';
+    case 404:
+      return 'No se encontró la cuenta (HTTP 404). Verifica el Riot ID completo (nombre#etiqueta) y la plataforma seleccionada.';
+    case 408:
+      return 'La petición a la Riot API agotó el tiempo de espera (HTTP 408). Revisa tu conexión.';
+    case 429:
+      return 'Se superó el límite de peticiones de la Riot API (HTTP 429). Espera unos segundos e inténtalo de nuevo.';
+    default:
+      if (codigoEstado >= 500) {
+        return `La Riot API está teniendo problemas (HTTP ${codigoEstado}). Inténtalo más tarde.`;
+      }
+      return `La Riot API respondió con un error (HTTP ${codigoEstado}). Inténtalo de nuevo.`;
+  }
+}
+
 /** Error genérico de la Riot API (HTTP o red/timeout). */
 export class ErrorRiotApi extends Error {
   constructor(
     mensaje: string,
     readonly codigoEstado: number,
-    readonly cuerpo: string
+    readonly cuerpo: string,
+    readonly mensajeAmigable: string = describirErrorRiot(codigoEstado)
   ) {
     super(mensaje);
     this.name = 'ErrorRiotApi';
@@ -121,9 +211,10 @@ export class RiotApiClient implements IRiotApiClient {
     tagLine: string,
     regional: RegionalRouting
   ): Promise<RiotAccountDto> {
+    const riotId = normalizarRiotId(gameName, tagLine);
     const url = `${this.construirUrlRegional(regional)}/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(
-      gameName
-    )}/${encodeURIComponent(tagLine)}`;
+      riotId.gameName
+    )}/${encodeURIComponent(riotId.tagLine)}`;
     return this.peticion<RiotAccountDto>(url);
   }
 
@@ -247,7 +338,8 @@ export class RiotApiClient implements IRiotApiClient {
       throw new ErrorRiotApi(
         `La Riot API respondió ${respuesta.status} en ${url}: ${cuerpo}`,
         respuesta.status,
-        texto
+        texto,
+        describirErrorRiot(respuesta.status)
       );
     }
 

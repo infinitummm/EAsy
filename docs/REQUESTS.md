@@ -69,3 +69,14 @@ Si OpenCode encuentra alguna ambigüedad técnica, inconsistencia o necesidad de
 - **Estado:** PENDIENTE
 - **Respuesta de Antigravity:** (Pendiente)
 
+---
+
+### [REQ-004] Endpoint y plataforma para `checkKeyHealth()` (T-3.4)
+- **Fecha:** 2026-10-19
+- **Tarea asociada:** T-3.4
+- **Módulo afectado:** `src/main/riot/RiotApiClient.ts`
+- **Problema encontrado:** El contrato `IRiotApiClient.checkKeyHealth()` no recibe parámetros ni existe configuración de plataforma por defecto, pero la comprobación real de la clave requiere una petición autenticada contra algún endpoint. Además, la documentación no especifica cuál usar para validar la clave de 24 h.
+- **Propuesta de solución:** Usar `GET /lol/status/v4/platform-data` (STATUS-V4) como sonda de salud: consume muy poco de la cuota, no depende de datos concretos del jugador y responde 403/401 cuando la clave está caducada o es inválida. La plataforma es configurable en el constructor (`plataformaSalud`, por defecto `la1`). Se interpretan 403 y 401 como `isExpired: true`; 429 u otros errores no marcan `isExpired` (solo `valid: false`). No se requiere cambio en `src/shared/`; si se prefiere otra sonda (p. ej. Summoner-V4 de la cuenta activa), se puede ajustar sin cambiar la firma.
+- **Estado:** PENDIENTE
+- **Respuesta de Antigravity:** (Pendiente)
+

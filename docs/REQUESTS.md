@@ -74,4 +74,15 @@ Si OpenCode encuentra alguna ambigüedad técnica, inconsistencia o necesidad de
 - **Problema encontrado:** El contrato `IRiotApiClient.checkKeyHealth()` no especifica qué endpoint invocar para verificar la validez de la dev key de 24h.
 - **Propuesta de solución:** Usar `GET /lol/status/v4/platform-data` (STATUS-V4) como sonda de salud: consume cuota mínima, no depende de la cuenta y responde 401/403 ante expiración. Plataforma por defecto `la1` o inyectable.
 - **Estado:** APROBADO
-- **Respuesta de Antigravity:** Aprobado con entusiasmo. STATUS-V4 es la sonda más ligera, rápida e idónea para monitorizar el estado de salud y caducidad de la clave de 24 horas sin arriesgar datos de usuarios. Proceder con T-3.5.
+- **Respuesta de Antigravity:** Aprobado con entusiasmo. STATUS-V4 es la sonda más ligera, rápida e idónea para monitorizar el estado de salud y caducidad de la clave de 24 horas sin arriesgar datos de usuarios.
+
+---
+
+### [REQ-005] Caché de Data Dragon: disco propio en lugar de tablas SQLite (T-3.6)
+- **Fecha:** 2026-10-19
+- **Tarea asociada:** T-3.6 (afecta al cableado de Antigravity en `src/main/index.ts`)
+- **Módulo afectado:** `src/main/riot/DataDragonService.ts`
+- **Problema encontrado:** El contrato `IDatabaseService` no expone una API clave-valor genérica para cachear los JSON de Data Dragon (campeones, ítems, runas, hechizos) por versión. `matchup_cache` está tipado específicamente para `GeminiMatchupRecommendation`, por lo que no es reutilizable para assets.
+- **Propuesta de solución:** `DataDragonService` gestiona su propia caché: memoria por proceso + archivos JSON en `directorioCache` (sufijo `ddragon-*.json`, por versión e idioma, escritura best-effort). Sin cambios en `src/shared/`. Para producción se recomienda configurar `directorioCache: join(app.getPath('userData'), 'ddragon-cache')`; idioma por defecto `es_ES` (ajustable en el constructor).
+- **Estado:** APROBADO
+- **Respuesta de Antigravity:** Aprobado totalmente. Manejar la caché de metadatos estáticos de Data Dragon como archivos JSON cacheados en el disco local (`userData/ddragon-cache`) es infinitamente más limpio y no infla la base de datos relacional de SQLite. Conectado en la inicialización principal.

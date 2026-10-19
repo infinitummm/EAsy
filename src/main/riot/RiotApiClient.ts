@@ -18,7 +18,7 @@
  */
 
 import { crearRateLimiterRiot } from '../ratelimit/RateLimiter';
-import type { IRateLimiter } from '@shared/contracts';
+import type { IRateLimiter, IRiotApiClient, KeyHealthStatus } from '@shared/contracts';
 import type {
   ChampionMasteryDto,
   MatchDto,
@@ -29,13 +29,7 @@ import type {
   RiotSummonerDto,
 } from '@shared/types';
 
-/** Estado de salud de la clave de Riot (contrato de `src/shared/contracts.ts`). */
-export interface KeyHealthStatus {
-  valid: boolean;
-  statusCode?: number;
-  isExpired: boolean;
-  lastChecked: number;
-}
+export type { KeyHealthStatus };
 
 /** Error genérico de la Riot API (HTTP o red/timeout). */
 export class ErrorRiotApi extends Error {
@@ -93,7 +87,7 @@ function leerRetryAfter(respuesta: Response): number | undefined {
   return Number.isFinite(numero) ? numero : undefined;
 }
 
-export class RiotApiClient {
+export class RiotApiClient implements IRiotApiClient {
   private readonly rateLimiter: IRateLimiter;
   private readonly fetchImpl: typeof fetch;
   private readonly timeoutMs: number;

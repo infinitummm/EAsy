@@ -72,9 +72,6 @@ function createWindow() {
   mainWindow.webContents.on('did-finish-load', enviarEstadoActual);
   mainWindow.webContents.on('dom-ready', enviarEstadoActual);
 
-  // Registrar IPC de la ventana activa con gestor de runas activo
-  setupChampSelectIpc(mainWindow, lcuClient, geminiService, runeManager);
-
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -158,6 +155,7 @@ app.whenReady().then(async () => {
 
   // 5. Registrar canales IPC con todas sus dependencias
   registrarLcuIpc(lcuClient, () => mainWindow?.webContents ?? null);
+  setupChampSelectIpc(null, lcuClient, geminiService, runeManager);
   registrarSettingsIpc(
     () => mainWindow?.webContents ?? null,
     dbService || undefined,

@@ -15,6 +15,7 @@ export function setupProfileIpc(
   profileSyncService?: ProfileSyncService
 ): void {
   // 1. Obtener perfil y partidas guardadas en SQLite
+  ipcMain.removeHandler(IPC_CHANNELS.RIOT_GET_PROFILE);
   ipcMain.handle(
     IPC_CHANNELS.RIOT_GET_PROFILE,
     async (_event, puuid: string): Promise<{
@@ -55,6 +56,7 @@ export function setupProfileIpc(
   );
 
   // 2. Sincronizar cuenta desde Riot API y almacenar en SQLite
+  ipcMain.removeHandler(IPC_CHANNELS.RIOT_SYNC_ACCOUNT);
   ipcMain.handle(
     IPC_CHANNELS.RIOT_SYNC_ACCOUNT,
     async (

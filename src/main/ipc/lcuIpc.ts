@@ -41,6 +41,7 @@ export function registrarLcuIpc(lcuClient: ILcuClient, _getWebContents?: () => W
   });
 
   // 2. Manejadores de invocaciones desde el Renderer
+  ipcMain.removeHandler(IPC_CHANNELS.LCU_GET_STATE);
   ipcMain.handle(IPC_CHANNELS.LCU_GET_STATE, async (): Promise<LcuStateInfo> => {
     return {
       state: lcuClient.getConnectionState(),
@@ -52,6 +53,7 @@ export function registrarLcuIpc(lcuClient: ILcuClient, _getWebContents?: () => W
     };
   });
 
+  ipcMain.removeHandler(IPC_CHANNELS.LCU_TEST_DETECTION);
   ipcMain.handle(IPC_CHANNELS.LCU_TEST_DETECTION, async (_event, manualPath?: string) => {
     if (clienteConcreto) {
       return await clienteConcreto.testDetection(manualPath);
@@ -65,6 +67,7 @@ export function registrarLcuIpc(lcuClient: ILcuClient, _getWebContents?: () => W
     };
   });
 
+  ipcMain.removeHandler(IPC_CHANNELS.LCU_SELECT_FOLDER);
   ipcMain.handle(IPC_CHANNELS.LCU_SELECT_FOLDER, async () => {
     const res = await dialog.showOpenDialog({
       title: 'Seleccionar carpeta de instalación de League of Legends',
@@ -76,15 +79,12 @@ export function registrarLcuIpc(lcuClient: ILcuClient, _getWebContents?: () => W
     return res.filePaths[0];
   });
 
+  ipcMain.removeHandler(IPC_CHANNELS.LCU_SET_AUTO_ACCEPT);
   ipcMain.handle(
     IPC_CHANNELS.LCU_SET_AUTO_ACCEPT,
     async (_event, params: { enabled: boolean; delaySeconds: number }) => {
       lcuClient.setAutoAccept(params.enabled, params.delaySeconds);
     }
   );
-
-  ipcMain.handle(IPC_CHANNELS.LCU_APPLY_RUNES, async (_event, page: RunePage) => {
-    return await lcuClient.injectRunePage(page);
-  });
 }
 

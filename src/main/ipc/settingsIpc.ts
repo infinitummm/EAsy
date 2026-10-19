@@ -18,6 +18,7 @@ export function registrarSettingsIpc(
   geminiService?: GeminiService
 ): void {
   // 1. Obtener Ajustes
+  ipcMain.removeHandler(IPC_CHANNELS.SETTINGS_GET);
   ipcMain.handle(IPC_CHANNELS.SETTINGS_GET, async (): Promise<AppSettings> => {
     if (dbService) {
       try {
@@ -32,6 +33,7 @@ export function registrarSettingsIpc(
   });
 
   // 2. Guardar Ajustes
+  ipcMain.removeHandler(IPC_CHANNELS.SETTINGS_SAVE);
   ipcMain.handle(IPC_CHANNELS.SETTINGS_SAVE, async (_event, newSettings: Partial<AppSettings>) => {
     try {
       memoriaSettings = {
@@ -89,6 +91,7 @@ export function registrarSettingsIpc(
   });
 
   // 3. Validar Clave de Riot API
+  ipcMain.removeHandler(IPC_CHANNELS.RIOT_VALIDATE_KEY);
   ipcMain.handle(IPC_CHANNELS.RIOT_VALIDATE_KEY, async (_event, apiKey: string): Promise<KeyHealthStatus> => {
     if (!apiKey || apiKey.trim().length === 0) {
       return {

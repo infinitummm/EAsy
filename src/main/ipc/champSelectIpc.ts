@@ -11,12 +11,22 @@ import { RuneManager } from '../lcu/RuneManager';
 import { RunePage, Role, ChampSelectSession, GameflowPhase } from '../../shared/types';
 
 export function setupChampSelectIpc(
-  mainWindow: BrowserWindow,
+  _mainWindow: BrowserWindow | null,
   lcuClient: ILcuClient,
   geminiService: GeminiService,
   runeManager?: RuneManager
 ): void {
+  const difundir = (canal: string, ...args: unknown[]) => {
+    const windows = BrowserWindow.getAllWindows();
+    for (const win of windows) {
+      if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
+        win.webContents.send(canal, ...args);
+      }
+    }
+  };
+
   // 1. Inyección de runas al cliente LoL vía LCU API (con soporte de sobrescritura activa)
+  ipcMain.removeHandler(IPC_CHANNELS.LCU_APPLY_RUNES);
   ipcMain.handle(
     IPC_CHANNELS.LCU_APPLY_RUNES,
     async (_event, page: RunePage): Promise<{ success: boolean; pageId?: number; error?: string }> => {
@@ -40,6 +50,7 @@ export function setupChampSelectIpc(
   );
 
   // 2. Consulta de recomendación táctica y de matchup con Gemini AI
+  ipcMain.removeHandler(IPC_CHANNELS.AI_GET_MATCHUP_ADVICE);
   ipcMain.handle(
     IPC_CHANNELS.AI_GET_MATCHUP_ADVICE,
     async (
@@ -59,9 +70,7 @@ export function setupChampSelectIpc(
 
   // 3. Re-emisión de sesión de Champ Select cuando LCU emita eventos
   lcuClient.on('champ-select-session', (session: ChampSelectSession | null) => {
-    if (!mainWindow.isDestroyed()) {
-      mainWindow.webContents.send(IPC_CHANNELS.LCU_CHAMP_SELECT_SESSION, session);
-    }
+    difundir(IPC_CHANNELS.LCU_CHAMP_SELECT_SESSION, session);
   });
 
   // Re-emisión periódica o al cambiar de fase
@@ -69,14 +78,10 @@ export function setupChampSelectIpc(
     if (phase === 'ChampSelect') {
       try {
         const session = await lcuClient.getChampSelectSession();
-        if (!mainWindow.isDestroyed()) {
-          mainWindow.webContents.send(IPC_CHANNELS.LCU_CHAMP_SELECT_SESSION, session);
-        }
+        difundir(IPC_CHANNELS.LCU_CHAMP_SELECT_SESSION, session);
       } catch {}
     } else {
-      if (!mainWindow.isDestroyed()) {
-        mainWindow.webContents.send(IPC_CHANNELS.LCU_CHAMP_SELECT_SESSION, null);
-      }
+      difundir(IPC_CHANNELS.LCU_CHAMP_SELECT_SESSION, null);
     }
   });
 }

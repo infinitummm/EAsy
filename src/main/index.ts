@@ -1,13 +1,15 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
-import { IPC_CHANNELS } from '../shared/events';
-import { DEFAULT_APP_SETTINGS } from '../shared/constants';
 import { LcuClient } from './lcu';
 import { registrarLcuIpc } from './ipc/lcuIpc';
 import { registrarSettingsIpc } from './ipc/settingsIpc';
+import { setupChampSelectIpc } from './ipc/champSelectIpc';
+import { setupProfileIpc } from './ipc/profileIpc';
+import { GeminiService } from './ai/GeminiService';
 
 let mainWindow: BrowserWindow | null = null;
 const lcuClient = new LcuClient();
+const geminiService = new GeminiService();
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -31,14 +33,18 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
   }
 
+  // Registrar IPC específico de la ventana
+  setupChampSelectIpc(mainWindow, lcuClient, geminiService);
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 }
 
-// Registrar canales IPC
+// Registrar canales IPC globales
 registrarLcuIpc(lcuClient, () => mainWindow?.webContents ?? null);
 registrarSettingsIpc(() => mainWindow?.webContents ?? null);
+setupProfileIpc();
 
 app.whenReady().then(async () => {
   createWindow();

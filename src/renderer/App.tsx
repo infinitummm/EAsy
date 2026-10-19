@@ -4,6 +4,9 @@ import type { LcuConnectionState, GameflowPhase, AppSettings, ReadyCheckEvent } 
 import { DEFAULT_APP_SETTINGS } from '../shared/constants';
 import { DashboardView } from './views/DashboardView';
 import { SettingsView } from './views/SettingsView';
+import { ChampSelectView } from './views/ChampSelectView';
+import { MatchupView } from './views/MatchupView';
+import { ProfileView } from './views/ProfileView';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'champSelect' | 'matchups' | 'profile' | 'settings'>('dashboard');
@@ -30,6 +33,10 @@ export default function App() {
 
       const unsubGameflow = window.api.on('lcu:gameflow-changed', (phase: GameflowPhase) => {
         setGameflow(phase);
+        // Si el cliente entra a selección de campeón, auto-cambiar a la pestaña Champ Select
+        if (phase === 'ChampSelect') {
+          setActiveTab('champSelect');
+        }
       });
 
       const unsubReadyCheck = window.api.on('lcu:ready-check', (event: ReadyCheckEvent) => {
@@ -56,6 +63,16 @@ export default function App() {
     setAutoAcceptDelay(seconds);
     if (window.api) {
       window.api.setAutoAccept({ enabled: autoAcceptEnabled, delaySeconds: seconds }).catch(console.error);
+    }
+  };
+
+  const handleSaveSettings = async (newSettings: Partial<AppSettings>) => {
+    if (window.api) {
+      await window.api.saveSettings(newSettings);
+      const updated = await window.api.getSettings();
+      if (updated) {
+        setSettings(updated);
+      }
     }
   };
 
@@ -184,24 +201,29 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'settings' && (
-          <SettingsView
+        {activeTab === 'champSelect' && (
+          <ChampSelectView
             settings={settings}
-            onSaveSettings={async (newSettings) => {
-              if (window.api) {
-                await window.api.saveSettings(newSettings);
-                const updated = await window.api.getSettings();
-                setSettings(updated);
-              }
-            }}
+            onSaveSettings={handleSaveSettings}
           />
         )}
 
-        {activeTab !== 'dashboard' && activeTab !== 'settings' && (
-          <div className="max-w-4xl mx-auto py-12 text-center text-[#A09B8C]">
-            <p className="text-lg font-medium text-[#F0E6D2]">Módulo en preparación</p>
-            <p className="text-sm mt-1">Esta vista se activará en las siguientes fases del proyecto.</p>
-          </div>
+        {activeTab === 'matchups' && (
+          <MatchupView />
+        )}
+
+        {activeTab === 'profile' && (
+          <ProfileView
+            settings={settings}
+            onSaveSettings={handleSaveSettings}
+          />
+        )}
+
+        {activeTab === 'settings' && (
+          <SettingsView
+            settings={settings}
+            onSaveSettings={handleSaveSettings}
+          />
         )}
       </main>
     </div>

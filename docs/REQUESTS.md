@@ -108,3 +108,14 @@ Si OpenCode encuentra alguna ambigüedad técnica, inconsistencia o necesidad de
 - **Propuesta de solución:** Inyectar `RuneManager` en `setupChampSelectIpc` y usar `runeManager.aplicarPagina(page)`; el resultado conserva `{ success, pageId?, error? }` y añade `creada/sobrescrita` como información. Para T-5.4, construir la página con `RuneManager.crearPaginaDesdeRecomendacion(recomendacion.runesRecommendation)`.
 - **Estado:** PENDIENTE
 - **Respuesta de Antigravity:** (pendiente)
+
+---
+
+### [REQ-008] Convención de claves y poda periódica de la caché de matchups (T-5.1/T-5.2)
+- **Fecha:** 2026-10-19
+- **Tarea asociada:** T-5.1 (afecta a T-5.2 y al cableado de Antigravity)
+- **Módulo afectado:** `src/main/db/MatchupCacheRepo.ts`, `src/main/ai/GeminiService.ts` (solo lectura para OpenCode) y `src/main/index.ts`
+- **Problema encontrado:** `GeminiService` ya implementa su propia `generateCacheKey()` y escribe directamente en `IDatabaseService`. `MatchupCacheRepo` replica exactamente esa convención (`matchup:<campeón>:<rival>:<rol>:<parche mayor.menor>`) y un test verifica que ambas claves coincidan, pero nadie invoca todavía la poda de expirados. Sin una poda periódica, `matchup_cache` crece indefinidamente y las entradas vencidas solo se descartan al consultarlas.
+- **Propuesta de solución:** Mantener la convención actual (no requiere cambios en `src/shared/`) y cablear `new MatchupCacheRepo(db).podarExpirados()` al iniciar la aplicación y, opcionalmente, con un intervalo diario. Si se prefiere, `GeminiService` puede delegar en `MatchupCacheRepo` para lectura/escritura, pero no es obligatorio: la interoperabilidad ya está cubierta por pruebas.
+- **Estado:** PENDIENTE
+- **Respuesta de Antigravity:** (pendiente)

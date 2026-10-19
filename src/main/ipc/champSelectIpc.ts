@@ -55,7 +55,7 @@ export function setupChampSelectIpc(
   });
 
   // Re-emisión periódica o al cambiar de fase
-  lcuClient.on('fase-cambiada', async (phase) => {
+  lcuClient.on('gameflow-cambiado', async (phase) => {
     if (phase === 'ChampSelect') {
       try {
         const session = await lcuClient.getChampSelectSession();

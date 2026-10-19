@@ -3,6 +3,7 @@ import { ChampSelectSession, ChampSelectPlayer, Role, AppSettings } from '../../
 import { IPC_CHANNELS } from '../../shared/events';
 import { RolePreferencesEditor } from '../components/RolePreferencesEditor';
 import { MatchupView } from './MatchupView';
+import { getChampionName, getChampionIconUrl } from '../../shared/champions';
 
 interface ChampSelectViewProps {
   settings: AppSettings;
@@ -124,9 +125,23 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                           }`}
                         >
                           <div className="flex items-center space-x-3">
-                            <span className="w-6 h-6 rounded bg-neutral-800 text-[10px] font-bold text-neutral-300 flex items-center justify-center">
-                              {p.assignedPosition.slice(0, 3)}
-                            </span>
+                            {p.championId > 0 ? (
+                              <img
+                                src={getChampionIconUrl(p.championId)}
+                                alt={getChampionName(p.championId)}
+                                className="w-7 h-7 rounded-md object-cover border border-cyan-500/40"
+                              />
+                            ) : p.championPickIntent > 0 ? (
+                              <img
+                                src={getChampionIconUrl(p.championPickIntent)}
+                                alt={getChampionName(p.championPickIntent)}
+                                className="w-7 h-7 rounded-md object-cover border border-amber-500/40 opacity-70"
+                              />
+                            ) : (
+                              <span className="w-7 h-7 rounded-md bg-neutral-800 text-[10px] font-bold text-neutral-300 flex items-center justify-center">
+                                {p.assignedPosition.slice(0, 3)}
+                              </span>
+                            )}
                             <div>
                               <div className="text-xs font-semibold text-white flex items-center space-x-1.5">
                                 <span>{isMe ? 'Tú (Jugador Local)' : `Aliado #${p.cellId}`}</span>
@@ -136,11 +151,11 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                                   </span>
                                 )}
                               </div>
-                              <span className="text-[11px] text-neutral-400">
+                              <span className="text-[11px] text-neutral-300">
                                 {p.championId > 0
-                                  ? `Campeón ID: ${p.championId}`
+                                  ? getChampionName(p.championId)
                                   : p.championPickIntent > 0
-                                  ? `Hover ID: ${p.championPickIntent}`
+                                  ? `Mostrando: ${getChampionName(p.championPickIntent)}`
                                   : 'Esperando elección...'}
                               </span>
                             </div>
@@ -170,24 +185,32 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                         className="p-3 rounded-lg bg-neutral-950/50 border border-neutral-800 flex items-center justify-between"
                       >
                         <div className="flex items-center space-x-3">
-                          <span className="w-6 h-6 rounded bg-neutral-800 text-[10px] font-bold text-neutral-300 flex items-center justify-center">
-                            {p.assignedPosition ? p.assignedPosition.slice(0, 3) : `E${idx + 1}`}
-                          </span>
+                          {p.championId > 0 ? (
+                            <img
+                              src={getChampionIconUrl(p.championId)}
+                              alt={getChampionName(p.championId)}
+                              className="w-7 h-7 rounded-md object-cover border border-rose-500/40"
+                            />
+                          ) : (
+                            <span className="w-7 h-7 rounded-md bg-neutral-800 text-[10px] font-bold text-neutral-300 flex items-center justify-center">
+                              {p.assignedPosition ? p.assignedPosition.slice(0, 3) : `E${idx + 1}`}
+                            </span>
+                          )}
                           <div>
                             <span className="text-xs font-semibold text-neutral-200 block">
-                              Enemigo #{idx + 1}
+                              {p.championId > 0 ? getChampionName(p.championId) : `Enemigo #${idx + 1}`}
                             </span>
                             <span className="text-[11px] text-neutral-400">
                               {p.championId > 0
-                                ? `Campeón Revelado (ID ${p.championId})`
+                                ? 'Campeón Revelado'
                                 : 'Campeón Oculto'}
                             </span>
                           </div>
                         </div>
 
                         {p.championId > 0 && (
-                          <span className="text-xs text-rose-400 font-semibold bg-rose-950/40 px-2 py-0.5 rounded border border-rose-900">
-                            ID: {p.championId}
+                          <span className="text-xs text-rose-300 font-semibold bg-rose-950/40 px-2 py-0.5 rounded border border-rose-900">
+                            {getChampionName(p.championId)}
                           </span>
                         )}
                       </div>

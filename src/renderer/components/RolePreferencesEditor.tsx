@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Role, AppSettings } from '../../shared/types';
+import { getChampionName, getChampionIconUrl } from '../../shared/champions';
 
 interface RolePreferencesEditorProps {
   settings: AppSettings['autoChampSelect'];
@@ -64,6 +65,30 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = ({
     onSave(prefs);
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
+  };
+
+  const renderChampionChips = (ids: number[]) => {
+    if (!ids || ids.length === 0) return null;
+    return (
+      <div className="flex flex-wrap gap-1.5 mt-1.5">
+        {ids.map((id) => (
+          <span
+            key={id}
+            className="inline-flex items-center space-x-1.5 bg-neutral-900 border border-neutral-750 px-2 py-0.5 rounded text-[11px] text-neutral-200"
+          >
+            <img
+              src={getChampionIconUrl(id)}
+              alt={getChampionName(id)}
+              className="w-3.5 h-3.5 rounded-sm object-cover"
+              onError={(e) => {
+                (e.target as HTMLElement).style.display = 'none';
+              }}
+            />
+            <span>{getChampionName(id)}</span>
+          </span>
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -169,6 +194,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = ({
             placeholder="ej. 266, 24, 84"
             className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono"
           />
+          {renderChampionChips(currentRolePref.preferredChampions)}
           <span className="text-[10px] text-neutral-400 block mt-1">
             El sistema intentará seleccionar el primero disponible.
           </span>
@@ -188,6 +214,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = ({
             placeholder="ej. 517, 39"
             className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono"
           />
+          {renderChampionChips(currentRolePref.fallbackChampions)}
           <span className="text-[10px] text-neutral-400 block mt-1">
             Si los preferidos están baneados o elegidos por otro jugador.
           </span>
@@ -207,6 +234,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = ({
             placeholder="ej. 157, 238"
             className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono"
           />
+          {renderChampionChips(currentRolePref.banChampions)}
         </div>
 
         <div>

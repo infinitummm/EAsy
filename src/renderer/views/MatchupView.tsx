@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { GeminiMatchupRecommendation, Role, RunePage } from '../../shared/types';
 import { ApplyRunesButton } from '../components/ApplyRunesButton';
 import { BuildVisualizer } from '../components/BuildVisualizer';
+import { ChampionSelectInput } from '../components/ChampionSelectInput';
+import { getChampionName, getChampionIconUrl } from '../../shared/champions';
 
 interface MatchupViewProps {
   initialChampionId?: number;
@@ -94,7 +96,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
 
   const currentRunePage: RunePage = recommendation
     ? {
-        name: `Itero: AI Champ ${recommendation.championId} vs ${recommendation.opponentChampionId}`,
+        name: `Itero: ${getChampionName(recommendation.championId)} vs ${getChampionName(recommendation.opponentChampionId)}`,
         primaryStyleId: recommendation.runesRecommendation.primaryStyleId,
         subStyleId: recommendation.runesRecommendation.subStyleId,
         selectedPerkIds: recommendation.runesRecommendation.selectedPerkIds,
@@ -149,25 +151,19 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
 
         {/* Selector de Parámetros */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 pt-5 border-t border-neutral-800/80">
-          <div>
-            <label className="text-xs text-neutral-400 font-medium block mb-1">Mi Campeón (ID)</label>
-            <input
-              type="number"
-              value={championId}
-              onChange={(e) => setChampionId(Number(e.target.value))}
-              className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 font-mono"
-            />
-          </div>
+          <ChampionSelectInput
+            label="Mi Campeón"
+            value={championId}
+            onChange={setChampionId}
+            patchVersion={patchVersion}
+          />
 
-          <div>
-            <label className="text-xs text-neutral-400 font-medium block mb-1">Campeón Rival (ID)</label>
-            <input
-              type="number"
-              value={opponentId}
-              onChange={(e) => setOpponentId(Number(e.target.value))}
-              className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 font-mono"
-            />
-          </div>
+          <ChampionSelectInput
+            label="Campeón Rival"
+            value={opponentId}
+            onChange={setOpponentId}
+            patchVersion={patchVersion}
+          />
 
           <div>
             <label className="text-xs text-neutral-400 font-medium block mb-1">Rol / Línea</label>
@@ -197,6 +193,39 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
         <div className="space-y-6">
           {/* Tarjeta de Dificultad y Resumen */}
           <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 shadow-lg">
+            {/* Header visual del Enfrentamiento */}
+            <div className="flex items-center space-x-3 pb-4 mb-4 border-b border-neutral-800/80">
+              <div className="flex items-center space-x-2.5 bg-neutral-950 px-3 py-1.5 rounded-lg border border-neutral-800">
+                <img
+                  src={getChampionIconUrl(recommendation.championId, patchVersion)}
+                  alt={getChampionName(recommendation.championId)}
+                  className="w-7 h-7 rounded-md object-cover border border-indigo-500/50"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none';
+                  }}
+                />
+                <span className="font-bold text-white text-sm">
+                  {getChampionName(recommendation.championId)}
+                </span>
+              </div>
+              <span className="text-xs uppercase font-extrabold text-neutral-500 tracking-wider">
+                VS
+              </span>
+              <div className="flex items-center space-x-2.5 bg-neutral-950 px-3 py-1.5 rounded-lg border border-neutral-800">
+                <img
+                  src={getChampionIconUrl(recommendation.opponentChampionId, patchVersion)}
+                  alt={getChampionName(recommendation.opponentChampionId)}
+                  className="w-7 h-7 rounded-md object-cover border border-rose-500/50"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none';
+                  }}
+                />
+                <span className="font-bold text-white text-sm">
+                  {getChampionName(recommendation.opponentChampionId)}
+                </span>
+              </div>
+            </div>
+
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
               <div>
                 <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">

@@ -21,6 +21,11 @@ export default function App() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
   const [autoAcceptEnabled, setAutoAcceptEnabled] = useState<boolean>(true);
   const [autoAcceptDelay, setAutoAcceptDelay] = useState<number>(2);
+  const [autoAcceptStatus, setAutoAcceptStatus] = useState<{
+    lastAction?: string;
+    lastActionTimestamp?: number;
+    pollingActivo?: boolean;
+  }>({});
   const [isPermissionError, setIsPermissionError] = useState<boolean>(false);
 
   const refrescarEstadoLcu = () => {
@@ -42,6 +47,24 @@ export default function App() {
       }).catch((err) => {
         setLastConnectionError(`Error en invoke getLcuState: ${err.message}`);
       });
+    }
+
+    if (window.api && window.api.getAutoAcceptStatus) {
+      window.api.getAutoAcceptStatus().then((status: any) => {
+        if (status) {
+          setAutoAcceptStatus({
+            lastAction: status.lastAction,
+            lastActionTimestamp: status.lastActionTimestamp,
+            pollingActivo: status.pollingActivo,
+          });
+          if (status.habilitado !== undefined) {
+            setAutoAcceptEnabled(status.habilitado);
+          }
+          if (status.retrasoSegundos !== undefined) {
+            setAutoAcceptDelay(status.retrasoSegundos);
+          }
+        }
+      }).catch(() => {});
     }
   };
 
@@ -90,12 +113,28 @@ export default function App() {
         setLastIpcEvent(`lcu:permission-error -> ${errorPermisos}`);
       });
 
+      const unsubAutoAccept = window.api.on('lcu:auto-accept-event', (status: any) => {
+        if (status) {
+          setAutoAcceptStatus(prev => ({
+            ...prev,
+            ...status,
+            lastAction: status.lastAction || prev.lastAction,
+            lastActionTimestamp: status.lastActionTimestamp || prev.lastActionTimestamp || Date.now(),
+          }));
+          if (status.habilitado !== undefined) setAutoAcceptEnabled(status.habilitado);
+          if (status.retrasoSegundos !== undefined) setAutoAcceptDelay(status.retrasoSegundos);
+          setLastIpcTimestamp(new Date().toLocaleTimeString());
+          setLastIpcEvent(`lcu:auto-accept-event`);
+        }
+      });
+
       return () => {
         clearInterval(syncInterval);
         unsubLcu();
         unsubGameflow();
         unsubReadyCheck();
         unsubPerm();
+        unsubAutoAccept();
       };
     }
   }, []);
@@ -237,6 +276,9 @@ export default function App() {
             readyCheck={readyCheck}
             autoAcceptEnabled={autoAcceptEnabled}
             autoAcceptDelay={autoAcceptDelay}
+            autoAcceptLastAction={autoAcceptStatus.lastAction}
+            autoAcceptLastTimestamp={autoAcceptStatus.lastActionTimestamp}
+            autoAcceptPollingActive={autoAcceptStatus.pollingActivo}
             lastConnectionError={lastConnectionError}
             lcuPort={lcuPort}
             lastIpcTimestamp={lastIpcTimestamp}

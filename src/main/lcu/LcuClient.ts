@@ -84,6 +84,10 @@ export interface EstadoAutoAccept {
   pollingActivo: boolean;
   /** `true` si hay una aceptación agendada pendiente de enviarse. */
   aceptacionPendiente: boolean;
+  /** Última acción realizada o estado del servicio para la UI. */
+  lastAction?: string;
+  /** Timestamp en ms de la última acción. */
+  lastActionTimestamp?: number;
 }
 
 /** Resultado de intentar hacer hover de un campeón en Champ Select (REQ-012). */
@@ -307,6 +311,8 @@ export class LcuClient extends EventEmitter implements ILcuClient {
   private temporizadorPollingReadyCheck: NodeJS.Timeout | null = null;
   private pollingReadyCheckActivo = false;
   private ultimoReadyCheck: ReadyCheckEvent | null = null;
+  private ultimaAccionAutoAccept = 'Inactivo';
+  private ultimoTimestampAutoAccept = Date.now();
 
   constructor(opciones: OpcionesLcuClient = {}) {
     super();
@@ -354,15 +360,21 @@ export class LcuClient extends EventEmitter implements ILcuClient {
     this.ws.on('evento', (evento: EventoLcu) => this.procesarEvento(evento));
     this.ws.on('error-websocket', (error: Error) => this.emit(EVENTOS_LCU_CLIENT.ERROR_LCU, error));
     this.autoAccept.on('programado', ({ esperaMs }: { esperaMs: number }) => {
+      this.ultimaAccionAutoAccept = `Aceptando en ${(esperaMs / 1000).toFixed(1)} s`;
+      this.ultimoTimestampAutoAccept = Date.now();
       registrarLog(`[AutoAccept] Aceptación programada en ${Math.round(esperaMs)} ms.`);
       this.emitirEstadoAutoAccept();
     });
     this.autoAccept.on('aceptado', () => {
+      this.ultimaAccionAutoAccept = 'Aceptado';
+      this.ultimoTimestampAutoAccept = Date.now();
       registrarLog('[AutoAccept] ReadyCheck aceptado automáticamente.');
       this.emit(EVENTOS_LCU_CLIENT.READY_CHECK_ACEPTADO);
       this.emitirEstadoAutoAccept();
     });
     this.autoAccept.on('fallo-aceptacion', (error: Error) => {
+      this.ultimaAccionAutoAccept = `Error: ${error.message}`;
+      this.ultimoTimestampAutoAccept = Date.now();
       registrarLog(`[AutoAccept ERROR] Fallo al aceptar el ReadyCheck: ${error.message}`);
       this.emit(EVENTOS_LCU_CLIENT.ERROR_LCU, error);
       this.emitirEstadoAutoAccept();
@@ -420,6 +432,8 @@ export class LcuClient extends EventEmitter implements ILcuClient {
   /** Activa/desactiva el Auto-Accept y, opcionalmente, ajusta el retardo (0-8 s). */
   setAutoAccept(enabled: boolean, delaySeconds?: number): void {
     this.autoAccept.configurar(enabled, delaySeconds);
+    this.ultimaAccionAutoAccept = enabled ? 'Activo (esperando partida)' : 'Inactivo (desactivado)';
+    this.ultimoTimestampAutoAccept = Date.now();
     registrarLog(
       `[AutoAccept] Configurado: habilitado=${enabled}, retraso=${this.autoAccept.obtenerRetrasoSegundos()}s.`
     );
@@ -443,6 +457,8 @@ export class LcuClient extends EventEmitter implements ILcuClient {
       conectado: this.estado === 'connected',
       pollingActivo: this.pollingReadyCheckActivo,
       aceptacionPendiente: this.autoAccept.hayAceptacionPendiente(),
+      lastAction: this.ultimaAccionAutoAccept,
+      lastActionTimestamp: this.ultimoTimestampAutoAccept,
     };
   }
 
@@ -1102,6 +1118,10 @@ export class LcuClient extends EventEmitter implements ILcuClient {
     if (hayCambio) {
       this.ultimoReadyCheck = readyCheck;
       if (readyCheck) {
+        if (readyCheck.state === 'InProgress' && readyCheck.playerResponse === 'None') {
+          this.ultimaAccionAutoAccept = 'Ready check detectado';
+          this.ultimoTimestampAutoAccept = Date.now();
+        }
         registrarLog(
           `[AutoAccept] ReadyCheck (${origen}): state=${readyCheck.state}, playerResponse=${readyCheck.playerResponse}, timer=${readyCheck.timer}s.`
         );

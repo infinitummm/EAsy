@@ -9,6 +9,9 @@ interface DashboardViewProps {
   readyCheck: ReadyCheckEvent | null;
   autoAcceptEnabled: boolean;
   autoAcceptDelay: number;
+  autoAcceptLastAction?: string;
+  autoAcceptLastTimestamp?: number;
+  autoAcceptPollingActive?: boolean;
   lastConnectionError: string | null;
   lcuPort: number | null;
   lastIpcTimestamp: string;
@@ -25,6 +28,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   readyCheck,
   autoAcceptEnabled,
   autoAcceptDelay,
+  autoAcceptLastAction,
+  autoAcceptLastTimestamp,
+  autoAcceptPollingActive,
   lastConnectionError,
   lcuPort,
   lastIpcTimestamp,
@@ -178,59 +184,90 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* Tarjeta de Control de Auto-Accept */}
-      <div className="bg-[#0D192D] p-6 rounded-xl border border-[#1E355B] shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h3 className="text-base font-bold text-white flex items-center space-x-2 tracking-wide uppercase">
-            <span>Auto-Accept de Partidas</span>
-            {autoAcceptEnabled ? (
-              <span className="text-[10px] bg-[#10B981]/20 text-[#10B981] border border-[#10B981]/40 px-2 py-0.5 rounded font-bold">
-                ACTIVO
-              </span>
-            ) : (
-              <span className="text-[10px] bg-[#1E355B]/50 text-[#94A3B8] border border-[#1E355B] px-2 py-0.5 rounded font-bold">
-                INACTIVO
-              </span>
-            )}
-          </h3>
-          <p className="text-xs text-[#94A3B8] mt-1 leading-relaxed">
-            Detecta automáticamente la fase de Ready Check y acepta la partida respetando un retardo para simular comportamiento humano.
-          </p>
+      <div className="bg-[#0D192D] p-6 rounded-xl border border-[#1E355B] shadow-xl space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-base font-bold text-white flex items-center space-x-2 tracking-wide uppercase">
+              <span>Auto-Accept de Partidas</span>
+              {autoAcceptEnabled ? (
+                <span className="text-[10px] bg-[#10B981]/20 text-[#10B981] border border-[#10B981]/40 px-2 py-0.5 rounded font-bold">
+                  ACTIVO
+                </span>
+              ) : (
+                <span className="text-[10px] bg-[#1E355B]/50 text-[#94A3B8] border border-[#1E355B] px-2 py-0.5 rounded font-bold">
+                  INACTIVO
+                </span>
+              )}
+            </h3>
+            <p className="text-xs text-[#94A3B8] mt-1 leading-relaxed">
+              Detecta automáticamente la fase de Ready Check y acepta la partida respetando un retardo para simular comportamiento humano.
+            </p>
 
-          <div className="mt-4 flex items-center space-x-4">
-            <div className="flex items-center space-x-3 text-xs text-white">
-              <span className="text-[#94A3B8]">Retardo:</span>
-              <span className="font-mono bg-[#0A111F] border border-[#1E355B] px-2 py-1 rounded text-white font-bold">
-                {autoAcceptDelay}s
+            <div className="mt-3 flex items-center space-x-4">
+              <div className="flex items-center space-x-3 text-xs text-white">
+                <span className="text-[#94A3B8]">Retardo:</span>
+                <span className="font-mono bg-[#0A111F] border border-[#1E355B] px-2 py-1 rounded text-white font-bold">
+                  {autoAcceptDelay}s
+                </span>
+                <input
+                  type="range"
+                  min="0"
+                  max="8"
+                  step="1"
+                  value={autoAcceptDelay}
+                  onChange={(e) => onChangeDelay(Number(e.target.value))}
+                  className="accent-[#0070EB] cursor-pointer w-36"
+                />
+              </div>
+              <span className="text-[11px] text-[#64748B]">
+                (Rango seguro: 0 - 8s)
               </span>
-              <input
-                type="range"
-                min="0"
-                max="8"
-                step="1"
-                value={autoAcceptDelay}
-                onChange={(e) => onChangeDelay(Number(e.target.value))}
-                className="accent-[#0070EB] cursor-pointer w-36"
-              />
             </div>
-            <span className="text-[11px] text-[#64748B]">
-              (Rango seguro: 0 - 8s)
-            </span>
+          </div>
+
+          <div>
+            <button
+              onClick={onToggleAutoAccept}
+              className={`px-5 py-2.5 rounded font-bold text-xs uppercase tracking-wider transition shadow-md transform -skew-x-6 active:scale-95 ${
+                autoAcceptEnabled
+                  ? 'bg-[#0070EB] hover:bg-[#005CE6] text-white'
+                  : 'bg-[#0A111F] hover:bg-[#1E355B] text-[#94A3B8] border border-[#1E355B]'
+              }`}
+            >
+              <span className="transform skew-x-6 inline-block">
+                {autoAcceptEnabled ? 'Desactivar Auto-Accept' : 'Activar Auto-Accept'}
+              </span>
+            </button>
           </div>
         </div>
 
-        <div>
-          <button
-            onClick={onToggleAutoAccept}
-            className={`px-5 py-2.5 rounded font-bold text-xs uppercase tracking-wider transition shadow-md transform -skew-x-6 active:scale-95 ${
-              autoAcceptEnabled
-                ? 'bg-[#0070EB] hover:bg-[#005CE6] text-white'
-                : 'bg-[#0A111F] hover:bg-[#1E355B] text-[#94A3B8] border border-[#1E355B]'
-            }`}
-          >
-            <span className="transform skew-x-6 inline-block">
-              {autoAcceptEnabled ? 'Desactivar Auto-Accept' : 'Activar Auto-Accept'}
+        {/* Panel de Estado en Vivo del Auto-Accept */}
+        <div className="pt-3 border-t border-[#1E355B] grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono">
+          <div className="bg-[#0A111F] p-3 rounded border border-[#1E355B] flex items-center justify-between">
+            <div>
+              <span className="text-[10px] text-[#94A3B8] uppercase font-bold block">Última Acción</span>
+              <span className={`text-xs font-bold ${autoAcceptEnabled ? 'text-[#00F0FF]' : 'text-[#64748B]'}`}>
+                {autoAcceptLastAction || (autoAcceptEnabled ? 'En espera de partida' : 'Inactivo')}
+              </span>
+            </div>
+            {autoAcceptLastTimestamp && (
+              <span className="text-[10px] text-[#64748B] bg-[#11223F] px-2 py-1 rounded border border-[#1E355B]">
+                {new Date(autoAcceptLastTimestamp).toLocaleTimeString()}
+              </span>
+            )}
+          </div>
+
+          <div className="bg-[#0A111F] p-3 rounded border border-[#1E355B] flex items-center justify-between">
+            <div>
+              <span className="text-[10px] text-[#94A3B8] uppercase font-bold block">Polling de Respaldo (1s)</span>
+              <span className={`text-xs font-bold ${autoAcceptPollingActive ? 'text-[#10B981]' : 'text-[#64748B]'}`}>
+                {autoAcceptPollingActive ? '● ACTIVO (Matchmaking)' : '○ Standby'}
+              </span>
+            </div>
+            <span className="text-[10px] text-[#94A3B8] bg-[#11223F] px-2 py-1 rounded border border-[#1E355B]">
+              HTTP Backup
             </span>
-          </button>
+          </div>
         </div>
       </div>
 

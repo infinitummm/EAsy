@@ -110,28 +110,63 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     }
   };
 
+  const PLATFORM_ROUTING_MAP: Record<PlatformRouting, RegionalRouting> = {
+  la1: 'americas',
+  la2: 'americas',
+  na1: 'americas',
+  br1: 'americas',
+  euw1: 'europe',
+  eun1: 'europe',
+  tr1: 'europe',
+  ru: 'europe',
+  kr: 'asia',
+  jp1: 'asia',
+  oc1: 'sea',
+  ph2: 'sea',
+  sg2: 'sea',
+  th2: 'sea',
+  tw2: 'sea',
+  vn2: 'sea',
+};
+
   const handleSync = async () => {
     setSyncing(true);
     setSyncMessage(null);
 
     try {
+      let cleanName = gameName.trim();
+      let cleanTag = tagLine.replace(/#/g, '').trim();
+
+      if (cleanName.includes('#')) {
+        const parts = cleanName.split('#');
+        cleanName = parts[0].trim();
+        if (!cleanTag && parts[1]) {
+          cleanTag = parts[1].replace(/#/g, '').trim();
+        }
+      }
+
+      setGameName(cleanName);
+      setTagLine(cleanTag);
+
+      const derivedRegional = PLATFORM_ROUTING_MAP[platform] || regional;
+
       if (window.api && window.api.syncAccount) {
         const res = await window.api.syncAccount({
-          gameName: gameName.trim(),
-          tagLine: tagLine.trim(),
+          gameName: cleanName,
+          tagLine: cleanTag,
           platform,
-          regional
+          regional: derivedRegional
         });
 
         if (res.success) {
-          setSyncMessage({ type: 'success', text: '¡Cuenta sincronizada exitosamente desde Riot Games!' });
+          setSyncMessage({ type: 'success', text: `¡Cuenta ${cleanName}#${cleanTag} sincronizada exitosamente!` });
           onSaveSettings({
             activeAccount: {
               puuid: account?.puuid || '',
-              gameName: gameName.trim(),
-              tagLine: tagLine.trim(),
+              gameName: cleanName,
+              tagLine: cleanTag,
               platform,
-              regional
+              regional: derivedRegional
             }
           });
           await loadProfile();
@@ -265,11 +300,23 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-4">
           <div>
-            <label className="text-[11px] text-neutral-400 block mb-1">Game Name</label>
+            <label className="text-[11px] text-neutral-400 block mb-1">Riot ID o Nombre (ej: Infi o Infi#1505)</label>
             <input
               type="text"
               value={gameName}
-              onChange={(e) => setGameName(e.target.value)}
+              placeholder="Infi o Infi#1505"
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val.includes('#')) {
+                  const parts = val.split('#');
+                  setGameName(parts[0].trim());
+                  if (parts[1] !== undefined) {
+                    setTagLine(parts[1].replace(/#/g, '').trim());
+                  }
+                } else {
+                  setGameName(val);
+                }
+              }}
               className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono"
             />
           </div>
@@ -279,7 +326,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             <input
               type="text"
               value={tagLine}
-              onChange={(e) => setTagLine(e.target.value)}
+              placeholder="1505"
+              onChange={(e) => setTagLine(e.target.value.replace(/#/g, '').trim())}
               className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono"
             />
           </div>
@@ -288,31 +336,31 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             <label className="text-[11px] text-neutral-400 block mb-1">Plataforma</label>
             <select
               value={platform}
-              onChange={(e) => setPlatform(e.target.value as PlatformRouting)}
+              onChange={(e) => {
+                const p = e.target.value as PlatformRouting;
+                setPlatform(p);
+                setRegional(PLATFORM_ROUTING_MAP[p] || 'americas');
+              }}
               className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
             >
-              <option value="la1">LAN (la1)</option>
-              <option value="la2">LAS (la2)</option>
-              <option value="na1">NA (na1)</option>
-              <option value="br1">BR (br1)</option>
-              <option value="euw1">EUW (euw1)</option>
-              <option value="eun1">EUN (eun1)</option>
-              <option value="kr">KR (kr)</option>
+              <option value="la1">LAN (la1) → Americas</option>
+              <option value="la2">LAS (la2) → Americas</option>
+              <option value="na1">NA (na1) → Americas</option>
+              <option value="br1">BR (br1) → Americas</option>
+              <option value="euw1">EUW (euw1) → Europe</option>
+              <option value="eun1">EUN (eun1) → Europe</option>
+              <option value="kr">KR (kr) → Asia</option>
             </select>
           </div>
 
           <div>
-            <label className="text-[11px] text-neutral-400 block mb-1">Región de Enrutamiento</label>
-            <select
-              value={regional}
-              onChange={(e) => setRegional(e.target.value as RegionalRouting)}
-              className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
-            >
-              <option value="americas">Americas (LAN, LAS, NA, BR)</option>
-              <option value="europe">Europe (EUW, EUNE, TR, RU)</option>
-              <option value="asia">Asia (KR, JP)</option>
-              <option value="sea">SEA (PH, SG, TH, TW, VN)</option>
-            </select>
+            <label className="text-[11px] text-neutral-400 block mb-1">Enrutamiento Regional (Auto)</label>
+            <input
+              type="text"
+              readOnly
+              value={PLATFORM_ROUTING_MAP[platform] || regional}
+              className="w-full bg-neutral-950/60 border border-neutral-800/60 rounded-lg px-3 py-2 text-xs text-cyan-400 font-mono cursor-not-allowed"
+            />
           </div>
         </div>
 

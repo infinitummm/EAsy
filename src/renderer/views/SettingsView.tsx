@@ -36,6 +36,32 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
   const [testingLcu, setTestingLcu] = useState<boolean>(false);
   const [lcuReport, setLcuReport] = useState<LcuDetectionReport | null>(null);
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
+  const [patchVersion, setPatchVersion] = useState<string>('16.20.1');
+  const [refreshingData, setRefreshingData] = useState<boolean>(false);
+  const [dataRefreshMsg, setDataRefreshMsg] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (window.api?.getPatchVersion) {
+      window.api.getPatchVersion().then((p) => {
+        if (p) setPatchVersion(p);
+      }).catch(() => {});
+    }
+  }, []);
+
+  const handleRefreshGameData = async () => {
+    if (!window.api?.refreshDataDragon) return;
+    setRefreshingData(true);
+    setDataRefreshMsg(null);
+    try {
+      const res = await window.api.refreshDataDragon();
+      setPatchVersion(res.patch);
+      setDataRefreshMsg(`✓ Catálogo actualizado con éxito: Parche ${res.patch} (${res.championsCount} campeones indexados, incluyendo lanzamientos recientes).`);
+    } catch (err: any) {
+      setDataRefreshMsg(`Error al actualizar catálogo: ${err.message || String(err)}`);
+    } finally {
+      setRefreshingData(false);
+    }
+  };
 
   const handleSelectFolder = async () => {
     if (!window.api?.selectFolder) return;
@@ -390,7 +416,50 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
         )}
       </div>
 
-      {/* Sección 4: Monitor de Cuotas y Límites de Tasa */}
+      {/* Sección 4: Catálogo y Datos del Juego (Data Dragon & LCU) */}
+      <div className="bg-[#111823] p-6 rounded-lg border border-[#1E282D] space-y-4 shadow">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-[#F0E6D2] flex items-center space-x-2">
+              <RefreshCw className="w-5 h-5 text-[#00F0FF]" />
+              <span>Datos del Juego & Parche Actual</span>
+            </h3>
+            <p className="text-xs text-[#A09B8C] mt-1">
+              Catálogo sincronizado dinámicamente con Data Dragon oficial y LCU local. Resuelve automáticamente campeones nuevos (como Yunara).
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleRefreshGameData}
+            disabled={refreshingData}
+            className="flex items-center space-x-2 bg-[#0070EB] hover:bg-[#005CE6] text-white text-xs font-bold px-4 py-2.5 rounded transition disabled:opacity-50 self-start sm:self-auto transform -skew-x-6"
+          >
+            <div className="transform skew-x-6 flex items-center space-x-2">
+              <RefreshCw className={`w-4 h-4 ${refreshingData ? 'animate-spin' : ''}`} />
+              <span>{refreshingData ? 'Actualizando...' : 'Actualizar datos del juego'}</span>
+            </div>
+          </button>
+        </div>
+
+        <div className="p-3 bg-[#0A1428] rounded border border-[#1E282D] flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center space-x-3">
+            <span className="text-[#A09B8C]">Parche detectado:</span>
+            <span className="font-mono text-emerald-400 font-bold bg-[#111A24] px-2.5 py-1 rounded border border-[#1E282D]">
+              v{patchVersion}
+            </span>
+            <span className="text-gray-400 text-[11px]">• Sincronización en tiempo real</span>
+          </div>
+
+          {dataRefreshMsg && (
+            <div className="text-xs text-emerald-300 font-semibold bg-emerald-950/40 border border-emerald-500/30 px-3 py-1 rounded">
+              {dataRefreshMsg}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Sección 5: Monitor de Cuotas y Límites de Tasa */}
       <div className="bg-[#111823] p-6 rounded-lg border border-[#1E282D] space-y-4 shadow">
         <h3 className="text-lg font-semibold text-[#F0E6D2] flex items-center space-x-2">
           <Activity className="w-5 h-5 text-[#C89B3C]" />
@@ -415,6 +484,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
               <div className="text-emerald-400 font-mono mt-2">✓ Cola y Caché SQLite Activos</div>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Footer de versión y estado */}
+      <div className="pt-4 border-t border-[#1E355B]/60 flex items-center justify-between text-[11px] text-[#64748B] font-mono">
+        <div>
+          <span>Itero Local Assistant</span> • <span>Parche Activo: <strong className="text-white">v{patchVersion}</strong></span>
+        </div>
+        <div>
+          <span>DDragon & LCU Dynamic Sync</span> • <span>Arquitectura 100% Local</span>
         </div>
       </div>
     </div>

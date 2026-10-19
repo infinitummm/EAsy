@@ -40,6 +40,10 @@ export function registrarLcuIpc(lcuClient: ILcuClient, _getWebContents?: () => W
     difundirEvento(IPC_CHANNELS.LCU_PERMISSION_ERROR, errorPermisos);
   });
 
+  lcuClient.on(EVENTOS_LCU_CLIENT.AUTO_ACCEPT_STATUS, (status) => {
+    difundirEvento(IPC_CHANNELS.LCU_AUTO_ACCEPT_EVENT, status);
+  });
+
   // 2. Manejadores de invocaciones desde el Renderer
   ipcMain.removeHandler(IPC_CHANNELS.LCU_GET_STATE);
   ipcMain.handle(IPC_CHANNELS.LCU_GET_STATE, async (): Promise<LcuStateInfo> => {

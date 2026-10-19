@@ -7,10 +7,17 @@
 
 import { GeminiMatchupRecommendation, Role } from '../../shared/types';
 import { IDatabaseService } from '../../shared/contracts';
-import { buildMatchupPrompt, buildCorrectionPrompt, validateGeminiMatchupResponse } from './prompts';
+import {
+  buildMatchupPrompt,
+  buildCorrectionPrompt,
+  validateGeminiMatchupResponse,
+  buildDraftRecommendationPrompt,
+  validateGeminiDraftResponse,
+} from './prompts';
 import { getAccurateFallbackRecommendation } from '../../shared/buildDatabase';
 import { DataDragonTranslator, RawGeminiRecommendation } from '../riot/DataDragonTranslator';
 import { registrarLog } from '../lcu/LcuDetector';
+import { ALL_CHAMPIONS, getChampionName, getChampionById } from '../../shared/champions';
 
 export interface GeminiServiceOptions {
   apiKey?: string;
@@ -434,6 +441,192 @@ export class GeminiService {
       debugInfo: {
         validationStatus: `Fallback activo: ${reason}`
       }
+    };
+  }
+
+  /**
+   * Genera recomendaciones de picks en vivo para el draft de selección de campeón.
+   */
+  public async getDraftRecommendations(params: {
+    role: Role;
+    patch: string;
+    allies: number[];
+    enemies: number[];
+    bans: number[];
+    pickableChampionIds?: number[];
+    forceRefresh?: boolean;
+  }): Promise<any> {
+    const pickableIds = params.pickableChampionIds && params.pickableChampionIds.length > 0
+      ? params.pickableChampionIds
+      : ALL_CHAMPIONS.map(c => c.id);
+
+    // Mapear aliados, enemigos y baneos a nombres
+    const alliedPicks = params.allies
+      .filter(id => id > 0)
+      .map(id => ({ championName: getChampionName(id) }));
+
+    const enemyPicks = params.enemies
+      .filter(id => id > 0)
+      .map(id => ({ championName: getChampionName(id) }));
+
+    const bans = params.bans
+      .filter(id => id > 0)
+      .map(id => getChampionName(id));
+
+    const pickableChampionNames = pickableIds.map(id => getChampionName(id));
+
+    // Consultar historial local si hay base de datos conectada
+    let userStats: Array<{ championName: string; winrate: number; totalMatches: number }> = [];
+    if (this.dbService) {
+      try {
+        const matches = this.dbService.getRecentMatches('local-player-puuid', 50);
+        const champCount = new Map<number, { wins: number; total: number }>();
+        for (const m of matches) {
+          if (!champCount.has(m.championId)) {
+            champCount.set(m.championId, { wins: 0, total: 0 });
+          }
+          const curr = champCount.get(m.championId)!;
+          curr.total++;
+          if (m.win) curr.wins++;
+        }
+        userStats = Array.from(champCount.entries())
+          .filter(([_, stats]) => stats.total >= 1)
+          .map(([champId, stats]) => ({
+            championName: getChampionName(champId),
+            winrate: Math.round((stats.wins / stats.total) * 100),
+            totalMatches: stats.total,
+          }))
+          .sort((a, b) => b.totalMatches - a.totalMatches)
+          .slice(0, 10);
+      } catch {}
+    }
+
+    // Fallback estándar si no hay API key
+    if (!this.apiKey) {
+      registrarLog('[GeminiService] Sin API Key para draft. Devolviendo recomendaciones genéricas de contingencia.');
+      return this.createDraftFallback(params.role, pickableIds, params.bans, params.allies, params.enemies, 'Sin Gemini API Key configurada. Mostrando recomendaciones estándar del meta.');
+    }
+
+    const { systemInstruction, userPrompt } = buildDraftRecommendationPrompt({
+      role: params.role,
+      patch: params.patch,
+      alliedPicks,
+      enemyPicks,
+      bans,
+      pickableChampionNames,
+      userStats,
+    });
+
+    const modelsToTry = [this.model];
+    if (this.fallbackModel && this.fallbackModel !== this.model) {
+      modelsToTry.push(this.fallbackModel);
+    }
+
+    for (const modelToUse of modelsToTry) {
+      try {
+        const reqResult = await this.executeGeminiRequest(modelToUse, systemInstruction, userPrompt);
+        if (reqResult.text) {
+          const parsed = this.cleanAndParseJson(reqResult.text) as Record<string, any>;
+          if (validateGeminiDraftResponse(parsed)) {
+            // Validar que los picks recomendados existan y resolver sus IDs
+            const validatedPicks = [];
+            const bannedOrPicked = new Set([...params.bans, ...params.allies, ...params.enemies]);
+
+            for (const p of parsed.picks) {
+              const nameLower = (p.championName || '').trim().toLowerCase();
+              const foundChamp = ALL_CHAMPIONS.find(c => c.name.toLowerCase() === nameLower || c.key.toLowerCase() === nameLower);
+              const champId = foundChamp ? foundChamp.id : 0;
+
+              // Validar que esté en la lista de elegibles y no esté bloqueado/baneado
+              const isEligible = pickableIds.length === 0 || (champId > 0 && pickableIds.includes(champId));
+              const isAvailable = !bannedOrPicked.has(champId);
+
+              if (champId > 0 && isEligible && isAvailable) {
+                const userStat = userStats.find(s => s.championName.toLowerCase() === nameLower);
+                validatedPicks.push({
+                  championId: champId,
+                  championName: foundChamp!.name,
+                  role: params.role,
+                  fitReason: p.fitReason || 'Buena sinergia con la composición.',
+                  threatMitigation: p.threatMitigation,
+                  synergyReason: p.synergyReason,
+                  localWinrate: userStat?.winrate,
+                  localMatches: userStat?.totalMatches,
+                  isNewChampion: champId >= 800 || !!p.isNewChampion,
+                });
+              }
+            }
+
+            if (validatedPicks.length > 0) {
+              return {
+                assignedRole: params.role,
+                picks: validatedPicks.slice(0, 3),
+                recommendedBans: parsed.recommendedBans || [],
+                allyCompAnalysis: parsed.allyCompAnalysis,
+                enemyThreats: parsed.enemyThreats || [],
+                source: 'ai',
+                modelUsed: modelToUse,
+                generatedAt: Date.now(),
+                debugInfo: {
+                  rawPrompt: userPrompt,
+                  rawResponse: reqResult.text,
+                  validated: true,
+                  lcuStatus: 'Picks validados contra lista de elegibles del LCU',
+                },
+              };
+            }
+          }
+        }
+      } catch (err) {
+        registrarLog(`[GeminiService] Error en modelo ${modelToUse} para draft: ${err}`);
+      }
+    }
+
+    return this.createDraftFallback(params.role, pickableIds, params.bans, params.allies, params.enemies, 'Fallo temporal al conectar con Gemini. Mostrando recomendaciones estándar del meta.');
+  }
+
+  private createDraftFallback(
+    role: Role,
+    pickableIds: number[],
+    bans: number[],
+    allies: number[],
+    enemies: number[],
+    reason: string
+  ): any {
+    const defaultMetaByRole: Record<Role, number[]> = {
+      TOP: [266, 24, 58, 875, 897], // Aatrox, Jax, Renekton, Sett, K'Sante
+      JUNGLE: [64, 76, 254, 121, 113], // Lee Sin, Nidalee, Vi, Kha'Zix, Sejuani
+      MIDDLE: [103, 517, 61, 84, 157], // Ahri, Sylas, Orianna, Akali, Yasuo
+      BOTTOM: [51, 222, 145, 81, 901], // Caitlyn, Jinx, Kai'Sa, Ezreal, Smolder
+      UTILITY: [412, 89, 40, 111, 267], // Thresh, Leona, Janna, Nautilus, Nami
+      FILL: [51, 266, 103, 64, 412],
+    };
+
+    const candidates = defaultMetaByRole[role] || [51, 266, 103];
+    const blocked = new Set([...bans, ...allies, ...enemies]);
+    const available = candidates.filter(id => !blocked.has(id) && (pickableIds.length === 0 || pickableIds.includes(id)));
+
+    const picks = (available.length >= 3 ? available.slice(0, 3) : candidates.slice(0, 3)).map(id => {
+      const champ = getChampionById(id);
+      return {
+        championId: id,
+        championName: champ ? champ.name : getChampionName(id),
+        role,
+        fitReason: 'Selección estándar del meta con solidez táctica.',
+        isNewChampion: id >= 800,
+      };
+    });
+
+    return {
+      assignedRole: role,
+      picks,
+      recommendedBans: [],
+      source: 'fallback',
+      fallbackReason: reason,
+      generatedAt: Date.now(),
+      debugInfo: {
+        validationStatus: `Recomendación genérica: ${reason}`,
+      },
     };
   }
 }

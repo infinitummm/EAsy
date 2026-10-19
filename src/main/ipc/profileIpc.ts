@@ -9,6 +9,12 @@ import { IDatabaseService, IRiotApiClient, AccountEntity } from '../../shared/co
 import { PlatformRouting, RegionalRouting, ParsedMatchSummary } from '../../shared/types';
 import { ProfileSyncService } from '../riot/ProfileSyncService';
 
+import {
+  ErrorRiotApi,
+  derivarRegionalDesdePlataforma,
+  normalizarRiotId,
+} from '../riot/RiotApiClient';
+
 export function setupProfileIpc(
   dbService?: IDatabaseService,
   riotClient?: IRiotApiClient,
@@ -24,10 +30,15 @@ export function setupProfileIpc(
     }> => {
       if (dbService) {
         try {
-          const account = dbService.getAccount(puuid);
-          const matches = dbService.getRecentMatches(puuid, 20);
-
+          let account = puuid ? dbService.getAccount(puuid) : null;
+          if (!account) {
+            const all = dbService.getAccounts();
+            if (all.length > 0) {
+              account = all[0];
+            }
+          }
           if (account) {
+            const matches = dbService.getRecentMatches(account.puuid, 20);
             return { account, matches };
           }
         } catch {}
@@ -69,12 +80,15 @@ export function setupProfileIpc(
       }
     ): Promise<{ success: boolean; error?: string }> => {
       try {
+        const { gameName, tagLine } = normalizarRiotId(params.gameName, params.tagLine);
+        const regional = params.regional || derivarRegionalDesdePlataforma(params.platform);
+
         if (profileSyncService) {
           await profileSyncService.sincronizarPorRiotId(
-            params.gameName,
-            params.tagLine,
+            gameName,
+            tagLine,
             params.platform,
-            params.regional
+            regional
           );
           return { success: true };
         }
@@ -85,9 +99,9 @@ export function setupProfileIpc(
 
         // Consultar Account-V1
         const accountDto = await riotClient.getAccountByRiotId(
-          params.gameName,
-          params.tagLine,
-          params.regional
+          gameName,
+          tagLine,
+          regional
         );
 
         // Consultar Summoner-V4
@@ -109,7 +123,7 @@ export function setupProfileIpc(
           gameName: accountDto.gameName,
           tagLine: accountDto.tagLine,
           platform: params.platform,
-          regional: params.regional,
+          regional,
           summonerId: summonerDto.id,
           profileIconId: summonerDto.profileIconId,
           summonerLevel: summonerDto.summonerLevel,
@@ -125,9 +139,15 @@ export function setupProfileIpc(
 
         return { success: true };
       } catch (err: unknown) {
+        let mensaje = err instanceof Error ? err.message : String(err);
+        if (err instanceof ErrorRiotApi && err.mensajeAmigable) {
+          mensaje = err.mensajeAmigable;
+        } else if ((err as any)?.mensajeAmigable) {
+          mensaje = (err as any).mensajeAmigable;
+        }
         return {
           success: false,
-          error: err instanceof Error ? err.message : String(err)
+          error: mensaje
         };
       }
     }

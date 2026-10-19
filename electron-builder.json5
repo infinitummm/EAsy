@@ -4,6 +4,7 @@
   "directories": {
     "output": "release"
   },
+  "electronDist": "./electron-base",
   "files": [
     "dist/**/*",
     "package.json"

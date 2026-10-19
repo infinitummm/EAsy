@@ -5,6 +5,9 @@ node_modules/
 dist/
 dist-electron/
 out/
+release/
+electron-base/
+.electron-dist/
 
 # Logs y cachés
 *.log

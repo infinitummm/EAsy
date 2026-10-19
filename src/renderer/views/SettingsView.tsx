@@ -285,21 +285,71 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
           </div>
         )}
 
-        {/* Diagnóstico detallado por método */}
+        {/* Diagnóstico detallado por método y pasos de conexión */}
         {lcuReport && (
-          <div className="space-y-2 mt-3 pt-3 border-t border-[#1E282D]">
+          <div className="space-y-3 mt-3 pt-3 border-t border-[#1E282D]">
             <div className="flex justify-between items-center text-xs font-semibold">
-              <span className="text-[#F0E6D2]">Resultado de la Detección:</span>
-              <span className={lcuReport.success ? 'text-emerald-400' : 'text-rose-400'}>
-                {lcuReport.success ? '✓ Conexión Exitosa' : '✕ No se pudo conectar'}
+              <span className="text-[#F0E6D2]">Resultado de la Prueba de Conexión LCU:</span>
+              <span className={lcuReport.success ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
+                {lcuReport.success ? '✓ Conexión Completada' : '✕ Fallo en la Conexión'}
               </span>
             </div>
 
-            <div className="space-y-1.5">
+            {/* Pasos de conexión completos: a, b, c, d */}
+            {lcuReport.testSteps && lcuReport.testSteps.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-[11px] font-bold text-[#C89B3C] uppercase tracking-wider">
+                  Etapas de Conexión Verificadas:
+                </div>
+                {lcuReport.testSteps.map((ts, idx) => (
+                  <div
+                    key={idx}
+                    className={`p-3 rounded text-xs border ${
+                      ts.status === 'success'
+                        ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-200'
+                        : ts.status === 'skipped'
+                        ? 'bg-[#0A1428] border-[#1E282D] text-gray-400 opacity-60'
+                        : 'bg-rose-950/30 border-rose-500/40 text-rose-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between font-bold">
+                      <span className="flex items-center space-x-2">
+                        <span className={ts.status === 'success' ? 'text-emerald-400' : ts.status === 'skipped' ? 'text-gray-400' : 'text-rose-400'}>
+                          {ts.status === 'success' ? '✓' : ts.status === 'skipped' ? '○' : '✕'}
+                        </span>
+                        <span className="text-[#F0E6D2]">{ts.name}</span>
+                      </span>
+                      <span className={`text-[10px] uppercase font-mono px-2 py-0.5 rounded ${
+                        ts.status === 'success' ? 'bg-emerald-900/50 text-emerald-300' : ts.status === 'skipped' ? 'bg-gray-800 text-gray-400' : 'bg-rose-900/50 text-rose-300'
+                      }`}>
+                        {ts.status === 'success' ? 'ÉXITO' : ts.status === 'skipped' ? 'OMITIDO' : 'FALLO'}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-xs text-[#E6E0D4] font-medium">
+                      {ts.summary}
+                    </div>
+                    <div className="mt-0.5 text-[11px] font-mono text-[#A09B8C]">
+                      {ts.details}
+                    </div>
+                    {ts.error && (
+                      <div className="mt-1 text-[11px] font-mono text-rose-300 bg-black/40 p-1.5 rounded">
+                        Error: {ts.error}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Desglose de métodos de detección A, B, C, D */}
+            <div className="space-y-1.5 mt-3 pt-2 border-t border-[#1E282D]/60">
+              <div className="text-[11px] font-bold text-[#A09B8C] uppercase tracking-wider">
+                Métodos de Detección Evaluados:
+              </div>
               {lcuReport.steps.map((step, idx) => (
                 <div
                   key={idx}
-                  className={`p-2.5 rounded text-xs border ${
+                  className={`p-2 rounded text-xs border ${
                     step.success
                       ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-200'
                       : 'bg-[#0A1428] border-[#1E282D] text-[#A09B8C]'
@@ -315,9 +365,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
                     <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-[#111A24]">
                       {step.step}
                     </span>
-                  </div>
-                  <div className="mt-1 text-[11px] font-mono text-[#785A28] truncate">
-                    {step.commandOrPath}
                   </div>
                   <div className="mt-0.5 text-[11px] text-[#A09B8C]">
                     {step.details}

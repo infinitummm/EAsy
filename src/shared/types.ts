@@ -326,12 +326,34 @@ export interface LcuDetectionStepResult {
   details: string;
 }
 
+export interface LcuConnectionStepDetail {
+  id: 'detection' | 'http' | 'ws' | 'state';
+  name: string;
+  status: 'success' | 'failure' | 'skipped';
+  summary: string;
+  details: string;
+  error?: string;
+}
+
 export interface LcuDetectionReport {
   success: boolean;
   credentials: LcuCredentials | null;
   successfulStep?: string;
   steps: LcuDetectionStepResult[];
+  testSteps?: LcuConnectionStepDetail[];
+  finalState?: LcuConnectionState;
+  finalGameflow?: GameflowPhase;
+  lastError?: string;
   isPermissionError: boolean;
   logFilePath: string;
+}
+
+export interface LcuStateInfo {
+  state: LcuConnectionState;
+  gameflow: GameflowPhase;
+  isPermissionError: boolean;
+  port?: number;
+  lastError?: string;
+  lastUpdated?: string;
 }
 

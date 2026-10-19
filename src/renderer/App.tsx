@@ -11,12 +11,39 @@ import { ProfileView } from './views/ProfileView';
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'champSelect' | 'matchups' | 'profile' | 'settings'>('dashboard');
   const [lcuState, setLcuState] = useState<LcuConnectionState>('disconnected');
+  const [mainLcuState, setMainLcuState] = useState<LcuConnectionState>('disconnected');
+  const [lastConnectionError, setLastConnectionError] = useState<string | null>(null);
+  const [lcuPort, setLcuPort] = useState<number | null>(null);
+  const [lastIpcTimestamp, setLastIpcTimestamp] = useState<string>('Esperando...');
+  const [lastIpcEvent, setLastIpcEvent] = useState<string>('Ninguno');
   const [gameflow, setGameflow] = useState<GameflowPhase>('None');
   const [readyCheck, setReadyCheck] = useState<ReadyCheckEvent | null>(null);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
   const [autoAcceptEnabled, setAutoAcceptEnabled] = useState<boolean>(true);
   const [autoAcceptDelay, setAutoAcceptDelay] = useState<number>(2);
   const [isPermissionError, setIsPermissionError] = useState<boolean>(false);
+
+  const refrescarEstadoLcu = () => {
+    if (window.api && window.api.getLcuState) {
+      window.api.getLcuState().then((info) => {
+        if (info) {
+          setMainLcuState(info.state);
+          setLcuState(info.state);
+          setGameflow(info.gameflow);
+          setIsPermissionError(info.isPermissionError);
+          setLastConnectionError(info.lastError ?? null);
+          setLcuPort(info.port ?? null);
+          setLastIpcTimestamp(new Date().toLocaleTimeString());
+          setLastIpcEvent('getLcuState (invoke)');
+          if (info.gameflow === 'ChampSelect') {
+            setActiveTab('champSelect');
+          }
+        }
+      }).catch((err) => {
+        setLastConnectionError(`Error en invoke getLcuState: ${err.message}`);
+      });
+    }
+  };
 
   useEffect(() => {
     if (window.api) {
@@ -28,26 +55,23 @@ export default function App() {
         }
       }).catch(console.error);
 
-      // Consulta de estado inicial para evitar condiciones de carrera al montar
-      if (window.api.getLcuState) {
-        window.api.getLcuState().then((info) => {
-          if (info) {
-            setLcuState(info.state);
-            setGameflow(info.gameflow);
-            setIsPermissionError(info.isPermissionError);
-            if (info.gameflow === 'ChampSelect') {
-              setActiveTab('champSelect');
-            }
-          }
-        }).catch(console.error);
-      }
+      // Consulta de estado inmediata
+      refrescarEstadoLcu();
+
+      // Sincronización periódica cada 2.5s para autorreparar cualquier pérdida de eventos IPC
+      const syncInterval = setInterval(refrescarEstadoLcu, 2500);
 
       const unsubLcu = window.api.on('lcu:state-changed', (state: LcuConnectionState) => {
         setLcuState(state);
+        setMainLcuState(state);
+        setLastIpcTimestamp(new Date().toLocaleTimeString());
+        setLastIpcEvent(`lcu:state-changed -> ${state}`);
       });
 
       const unsubGameflow = window.api.on('lcu:gameflow-changed', (phase: GameflowPhase) => {
         setGameflow(phase);
+        setLastIpcTimestamp(new Date().toLocaleTimeString());
+        setLastIpcEvent(`lcu:gameflow-changed -> ${phase}`);
         // Si el cliente entra a selección de campeón, auto-cambiar a la pestaña Champ Select
         if (phase === 'ChampSelect') {
           setActiveTab('champSelect');
@@ -56,13 +80,18 @@ export default function App() {
 
       const unsubReadyCheck = window.api.on('lcu:ready-check', (event: ReadyCheckEvent) => {
         setReadyCheck(event);
+        setLastIpcTimestamp(new Date().toLocaleTimeString());
+        setLastIpcEvent(`lcu:ready-check`);
       });
 
       const unsubPerm = window.api.on('lcu:permission-error', (errorPermisos: boolean) => {
         setIsPermissionError(errorPermisos);
+        setLastIpcTimestamp(new Date().toLocaleTimeString());
+        setLastIpcEvent(`lcu:permission-error -> ${errorPermisos}`);
       });
 
       return () => {
+        clearInterval(syncInterval);
         unsubLcu();
         unsubGameflow();
         unsubReadyCheck();
@@ -230,12 +259,18 @@ export default function App() {
         {activeTab === 'dashboard' && (
           <DashboardView
             lcuState={lcuState}
+            mainLcuState={mainLcuState}
             gameflow={gameflow}
             readyCheck={readyCheck}
             autoAcceptEnabled={autoAcceptEnabled}
             autoAcceptDelay={autoAcceptDelay}
+            lastConnectionError={lastConnectionError}
+            lcuPort={lcuPort}
+            lastIpcTimestamp={lastIpcTimestamp}
+            lastIpcEvent={lastIpcEvent}
             onToggleAutoAccept={handleToggleAutoAccept}
             onChangeDelay={handleChangeDelay}
+            onRefreshLcu={refrescarEstadoLcu}
           />
         )}
 

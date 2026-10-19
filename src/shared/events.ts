@@ -15,7 +15,8 @@ import {
   Role,
   GeminiMatchupRecommendation,
   ParsedMatchSummary,
-  LcuDetectionReport
+  LcuDetectionReport,
+  LcuStateInfo,
 } from './types';
 import { AccountEntity, KeyHealthStatus } from './contracts';
 
@@ -52,11 +53,7 @@ export const IPC_CHANNELS = {
 export interface IpcInvokeHandlers {
   [IPC_CHANNELS.SETTINGS_GET]: () => Promise<AppSettings>;
   [IPC_CHANNELS.SETTINGS_SAVE]: (settings: Partial<AppSettings>) => Promise<{ success: boolean }>;
-  [IPC_CHANNELS.LCU_GET_STATE]: () => Promise<{
-    state: LcuConnectionState;
-    gameflow: GameflowPhase;
-    isPermissionError: boolean;
-  }>;
+  [IPC_CHANNELS.LCU_GET_STATE]: () => Promise<LcuStateInfo>;
   [IPC_CHANNELS.LCU_TEST_DETECTION]: (manualPath?: string) => Promise<LcuDetectionReport>;
   [IPC_CHANNELS.LCU_SELECT_FOLDER]: () => Promise<string | null>;
   [IPC_CHANNELS.LCU_SET_AUTO_ACCEPT]: (params: { enabled: boolean; delaySeconds: number }) => Promise<void>;

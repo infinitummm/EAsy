@@ -15,6 +15,8 @@
  */
 
 import { EventEmitter } from 'node:events';
+import https from 'node:https';
+import WebSocket from 'ws';
 import type { ILcuClient } from '@shared/contracts';
 import type {
   ChampSelectSession,
@@ -24,13 +26,14 @@ import type {
   ReadyCheckEvent,
   RunePage,
   LcuDetectionReport,
+  LcuConnectionStepDetail,
 } from '@shared/types';
 import { LCU_CONSTANTS } from '@shared/constants';
 import { buscarLockfile, leerLockfile, type ResultadoBusquedaLockfile } from './lockfile';
 import { ErrorPeticionLcu, LcuHttpClient, type MetodoHttp } from './LcuHttpClient';
-import { LcuWebSocket, type EventoLcu, type OpcionesLcuWebSocket } from './LcuWebSocket';
+import { LcuWebSocket, type EventoLcu, type OpcionesLcuWebSocket, MENSAJE_SUSCRIPCION_LCU } from './LcuWebSocket';
 import { AutoAcceptService, type OpcionesAutoAcceptService } from './AutoAcceptService';
-import { ejecutarDeteccionLcu } from './LcuDetector';
+import { ejecutarDeteccionLcu, registrarLog } from './LcuDetector';
 
 /** Nombres de los eventos emitidos por `LcuClient`. */
 export const EVENTOS_LCU_CLIENT = {
@@ -163,6 +166,7 @@ export class LcuClient extends EventEmitter implements ILcuClient {
   private credenciales: LcuCredentials | null = null;
   private errorPermisos = false;
   private ultimoReporte: LcuDetectionReport | null = null;
+  private ultimoError: string | null = null;
   private activo = false;
   private conexionEnCurso = false;
   private temporizadorDeteccion: NodeJS.Timeout | null = null;
@@ -338,27 +342,276 @@ export class LcuClient extends EventEmitter implements ILcuClient {
     return this.errorPermisos;
   }
 
+  /** Devuelve el último error ocurrido en la conexión con la LCU. */
+  getLastError(): string | null {
+    return this.ultimoError || this.ws.getLastError();
+  }
+
+  /** Devuelve el puerto actualmente conectado o detectado. */
+  getPort(): number | null {
+    return this.credenciales?.port ?? null;
+  }
+
   /** Devuelve el último reporte completo de detección. */
   getDetectionReport(): LcuDetectionReport | null {
     return this.ultimoReporte;
   }
 
-  /** Ejecuta una prueba manual de diagnóstico bajo demanda. */
+  /** Prueba directamente el endpoint HTTP GET /lol-gameflow/v1/gameflow-phase. */
+  async probarEndpointGameflow(port: number, tokenBase64: string): Promise<{ statusCode: number; phase: string }> {
+    return new Promise<{ statusCode: number; phase: string }>((resolve, reject) => {
+      const agent = new https.Agent({ rejectUnauthorized: false });
+      const req = https.request(
+        {
+          hostname: '127.0.0.1',
+          port,
+          path: ENDPOINTS_LCU.GAMEFLOW_PHASE,
+          method: 'GET',
+          headers: {
+            Authorization: tokenBase64,
+            Accept: 'application/json',
+          },
+          agent,
+          timeout: 5000,
+        },
+        (res) => {
+          let body = '';
+          res.on('data', (chunk) => (body += chunk));
+          res.on('end', () => {
+            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+              let phase = 'None';
+              try {
+                const parsed = JSON.parse(body);
+                phase = typeof parsed === 'string' ? parsed : String(parsed);
+              } catch {
+                phase = body.replace(/"/g, '').trim() || 'None';
+              }
+              resolve({ statusCode: res.statusCode, phase });
+            } else {
+              reject(new Error(`HTTP ${res.statusCode}: ${body || res.statusMessage || 'Error LCU'}`));
+            }
+          });
+        }
+      );
+
+      req.on('timeout', () => {
+        req.destroy(new Error('Timeout de 5000ms al consultar /lol-gameflow/v1/gameflow-phase'));
+      });
+
+      req.on('error', (err) => {
+        reject(err);
+      });
+
+      req.end();
+    });
+  }
+
+  /** Prueba la conexión WebSocket y la suscripción global de forma directa. */
+  async probarConexionWebSocketDirecta(port: number, tokenBase64: string): Promise<{ conectado: boolean; mensajesRecibidos: number }> {
+    return new Promise<{ conectado: boolean; mensajesRecibidos: number }>((resolve, reject) => {
+      let resuelto = false;
+      let contadorMensajes = 0;
+      const url = `wss://127.0.0.1:${port}/`;
+
+      const socket = new WebSocket(url, {
+        headers: { Authorization: tokenBase64 },
+        rejectUnauthorized: false,
+        handshakeTimeout: 5000,
+      });
+
+      const timer = setTimeout(() => {
+        if (!resuelto) {
+          resuelto = true;
+          try {
+            socket.close();
+          } catch {}
+          if (socket.readyState === WebSocket.OPEN) {
+            resolve({ conectado: true, mensajesRecibidos: contadorMensajes });
+          } else {
+            reject(new Error(`Timeout de 5000ms esperando handshake WebSocket en ${url}`));
+          }
+        }
+      }, 5000);
+
+      socket.on('open', () => {
+        socket.send(JSON.stringify([...MENSAJE_SUSCRIPCION_LCU]));
+        setTimeout(() => {
+          if (!resuelto) {
+            resuelto = true;
+            clearTimeout(timer);
+            try {
+              socket.close(1000, 'Test completado');
+            } catch {}
+            resolve({ conectado: true, mensajesRecibidos: contadorMensajes });
+          }
+        }, 300);
+      });
+
+      socket.on('message', () => {
+        contadorMensajes++;
+      });
+
+      socket.on('error', (err) => {
+        if (!resuelto) {
+          resuelto = true;
+          clearTimeout(timer);
+          try {
+            socket.close();
+          } catch {}
+          reject(new Error(`Fallo WebSocket: ${err.message}`));
+        }
+      });
+
+      socket.on('close', (code, reason) => {
+        if (!resuelto && code !== 1000) {
+          resuelto = true;
+          clearTimeout(timer);
+          reject(new Error(`WebSocket cerrado (Código: ${code}, Motivo: ${reason.toString() || 'sin detalle'})`));
+        }
+      });
+    });
+  }
+
+  /** Ejecuta una prueba manual de diagnóstico bajo demanda verificando cada paso (a, b, c, d). */
   async testDetection(manualPath?: string): Promise<LcuDetectionReport> {
+    const testSteps: LcuConnectionStepDetail[] = [];
+    registrarLog(`=== INICIANDO PRUEBA COMPLETA DE CONEXIÓN BAJO DEMANDA ===`);
+
     const ruta = manualPath || this.opciones.rutaLockfile || this.opciones.obtenerRutaManual?.();
     const rep = await ejecutarDeteccionLcu({ rutaManual: ruta });
-    this.ultimoReporte = rep;
 
     if (rep.isPermissionError !== this.errorPermisos) {
       this.errorPermisos = rep.isPermissionError;
       this.emit(EVENTOS_LCU_CLIENT.ERROR_PERMISOS, this.errorPermisos);
     }
 
-    if (rep.success && rep.credentials) {
-      void this.intentarConexion();
+    if (!rep.success || !rep.credentials) {
+      testSteps.push({
+        id: 'detection',
+        name: 'a) Detección de Proceso / Lockfile',
+        status: 'failure',
+        summary: 'No se pudo detectar el cliente de LoL por ninguno de los 4 métodos.',
+        details: rep.steps.map((s) => `${s.name}: ${s.success ? 'OK' : s.details}`).join(' | '),
+        error: 'Cliente de League of Legends no encontrado.',
+      });
+      testSteps.push({
+        id: 'http',
+        name: 'b) GET /lol-gameflow/v1/gameflow-phase',
+        status: 'skipped',
+        summary: 'Omitido: no se obtuvieron credenciales.',
+        details: 'Requiere que el paso a) tenga éxito.',
+      });
+      testSteps.push({
+        id: 'ws',
+        name: 'c) WebSocket wss://127.0.0.1:<puerto>',
+        status: 'skipped',
+        summary: 'Omitido: no se obtuvieron credenciales.',
+        details: 'Requiere que el paso a) tenga éxito.',
+      });
+      testSteps.push({
+        id: 'state',
+        name: 'd) Estado final de LcuClient',
+        status: 'failure',
+        summary: `Estado actual: ${this.estado}`,
+        details: `Fase: ${this.fase}`,
+      });
+
+      const reporteFallo: LcuDetectionReport = {
+        ...rep,
+        testSteps,
+        finalState: this.estado,
+        finalGameflow: this.fase,
+        lastError: this.ultimoError || 'Cliente no detectado',
+      };
+      this.ultimoReporte = reporteFallo;
+      return reporteFallo;
     }
 
-    return rep;
+    const { port, password, tokenBase64 } = rep.credentials;
+    const tokenMasked = password ? `Sí (${password.length} caracteres)` : 'No';
+    testSteps.push({
+      id: 'detection',
+      name: 'a) Detección de Proceso / Lockfile',
+      status: 'success',
+      summary: `Detectado mediante ${rep.successfulStep || 'Método A'}. Puerto: ${port}, Token presente: ${tokenMasked}`,
+      details: `PID: ${rep.credentials.pid}, Protocolo: ${rep.credentials.protocol}`,
+    });
+
+    // Paso b: HTTP GET
+    let gameflowPhaseObtenida = 'None';
+    try {
+      registrarLog(`[Test Conexión - Paso b] GET https://127.0.0.1:${port}/lol-gameflow/v1/gameflow-phase`);
+      const httpResult = await this.probarEndpointGameflow(port, tokenBase64);
+      gameflowPhaseObtenida = httpResult.phase;
+      testSteps.push({
+        id: 'http',
+        name: 'b) GET /lol-gameflow/v1/gameflow-phase (HTTPS)',
+        status: 'success',
+        summary: `HTTP 200 OK. Fase de Gameflow: "${gameflowPhaseObtenida}"`,
+        details: `Conexión HTTPS autorizada con Basic riot:*** y rejectUnauthorized:false en puerto ${port}.`,
+      });
+      registrarLog(`[Test Conexión - Paso b] Éxito: HTTP ${httpResult.statusCode}, Fase: "${gameflowPhaseObtenida}"`);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      testSteps.push({
+        id: 'http',
+        name: 'b) GET /lol-gameflow/v1/gameflow-phase (HTTPS)',
+        status: 'failure',
+        summary: `Fallo en petición HTTP GET en puerto ${port}.`,
+        details: `Error exacto: ${errMsg}`,
+        error: errMsg,
+      });
+      registrarLog(`[Test Conexión - Paso b] Fallo HTTP: ${errMsg}`);
+    }
+
+    // Paso c: WebSocket
+    try {
+      registrarLog(`[Test Conexión - Paso c] Conectando WebSocket a wss://127.0.0.1:${port}/`);
+      const wsResult = await this.probarConexionWebSocketDirecta(port, tokenBase64);
+      testSteps.push({
+        id: 'ws',
+        name: 'c) WebSocket wss://127.0.0.1:<puerto> (WSS)',
+        status: 'success',
+        summary: `Handshake WSS completado y suscripción [5, "OnJsonApiEvent"] aceptada.`,
+        details: `Socket abierto y operativo en wss://127.0.0.1:${port}/ con rejectUnauthorized:false. Mensajes recibidos: ${wsResult.mensajesRecibidos}`,
+      });
+      registrarLog(`[Test Conexión - Paso c] Éxito WebSocket en puerto ${port}`);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      testSteps.push({
+        id: 'ws',
+        name: 'c) WebSocket wss://127.0.0.1:<puerto> (WSS)',
+        status: 'failure',
+        summary: `Fallo en handshake WebSocket en puerto ${port}.`,
+        details: `Error exacto: ${errMsg}`,
+        error: errMsg,
+      });
+      registrarLog(`[Test Conexión - Paso c] Fallo WebSocket: ${errMsg}`);
+    }
+
+    // Paso d: Sincronizar conexión activa de LcuClient
+    await this.intentarConexion();
+
+    testSteps.push({
+      id: 'state',
+      name: 'd) Estado final de LcuClient',
+      status: this.estado === 'connected' ? 'success' : 'failure',
+      summary: `Estado de LcuClient: ${this.estado}. Fase de Gameflow: "${this.fase}"`,
+      details: `Socket activo: ${this.ws.estaConectado()}, Credenciales: ${this.credenciales ? 'Presentes' : 'Ausentes'}`,
+      error: this.estado !== 'connected' ? (this.ultimoError || 'LcuClient no pasó a connected') : undefined,
+    });
+
+    registrarLog(`[Test Conexión - Paso d] Estado final: ${this.estado}, Fase: ${this.fase}`);
+
+    const reporteCompleto: LcuDetectionReport = {
+      ...rep,
+      testSteps,
+      finalState: this.estado,
+      finalGameflow: this.fase,
+      lastError: this.ultimoError || undefined,
+    };
+    this.ultimoReporte = reporteCompleto;
+    return reporteCompleto;
   }
 
   /** Realiza un intento de conexión completo mediante los 4 métodos de LcuDetector (o lockfile directo si se configuró). */
@@ -422,6 +675,7 @@ export class LcuClient extends EventEmitter implements ILcuClient {
 
       if (handshakeOk) {
         this.cambiarEstado('connected');
+        this.ultimoError = null;
         await this.refrescarFaseInicial();
       } else {
         if (this.estado === 'connected') {
@@ -429,6 +683,9 @@ export class LcuClient extends EventEmitter implements ILcuClient {
         }
       }
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.ultimoError = msg;
+      registrarLog(`[LcuClient ERROR] Excepción conectando: ${msg}`);
       if (this.estado === 'connected') {
         this.desmontarConexion();
       }
@@ -450,16 +707,39 @@ export class LcuClient extends EventEmitter implements ILcuClient {
         clearTimeout(temporizador);
         this.ws.off('conectado', alConectar);
         this.ws.off('desconectado', alDesconectar);
+        this.ws.off('error-websocket', alError);
         resolver(exito);
       };
-      const alConectar = (): void => finalizar(true);
-      const alDesconectar = (): void => finalizar(false);
+      const alConectar = (): void => {
+        this.ultimoError = null;
+        registrarLog(`[LCU Handshake] Handshake completado exitosamente.`);
+        finalizar(true);
+      };
+      const alDesconectar = (det: { codigo: number; motivo: string }): void => {
+        if (det.codigo !== 1000) {
+          const motivo = det.motivo || 'Cierre inesperado';
+          this.ultimoError = `WebSocket cerrado durante handshake (Código: ${det.codigo}, ${motivo})`;
+          registrarLog(`[LCU Handshake ERROR] ${this.ultimoError}`);
+        }
+        finalizar(false);
+      };
+      const alError = (err: Error): void => {
+        const msg = `${err.name}: ${err.message}${(err as any).code ? ` [${(err as any).code}]` : ''}`;
+        this.ultimoError = msg;
+        registrarLog(`[LCU Handshake ERROR] Error en handshake: ${msg}`);
+        finalizar(false);
+      };
 
-      const temporizador = setTimeout(() => finalizar(false), this.opciones.timeoutConexionWsMs);
+      const temporizador = setTimeout(() => {
+        this.ultimoError = `Timeout (${this.opciones.timeoutConexionWsMs}ms) esperando handshake WebSocket`;
+        registrarLog(`[LCU Handshake TIMEOUT] ${this.ultimoError}`);
+        finalizar(false);
+      }, this.opciones.timeoutConexionWsMs);
       temporizador.unref?.();
 
       this.ws.on('conectado', alConectar);
       this.ws.on('desconectado', alDesconectar);
+      this.ws.on('error-websocket', alError);
     });
   }
 

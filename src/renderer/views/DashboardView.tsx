@@ -4,22 +4,34 @@ import type { LcuConnectionState, GameflowPhase, ReadyCheckEvent } from '../../s
 
 interface DashboardViewProps {
   lcuState: LcuConnectionState;
+  mainLcuState: LcuConnectionState;
   gameflow: GameflowPhase;
   readyCheck: ReadyCheckEvent | null;
   autoAcceptEnabled: boolean;
   autoAcceptDelay: number;
+  lastConnectionError: string | null;
+  lcuPort: number | null;
+  lastIpcTimestamp: string;
+  lastIpcEvent: string;
   onToggleAutoAccept: () => void;
   onChangeDelay: (seconds: number) => void;
+  onRefreshLcu: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   lcuState,
+  mainLcuState,
   gameflow,
   readyCheck,
   autoAcceptEnabled,
   autoAcceptDelay,
+  lastConnectionError,
+  lcuPort,
+  lastIpcTimestamp,
+  lastIpcEvent,
   onToggleAutoAccept,
   onChangeDelay,
+  onRefreshLcu,
 }) => {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -98,6 +110,59 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               Monitoreo continuo en tiempo real
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Panel de Diagnóstico en Vivo Main ↔ Renderer (Requisito 2) */}
+      <div className="bg-[#0D1520] p-4 rounded-lg border border-[#1E282D] space-y-3 shadow-inner">
+        <div className="flex items-center justify-between border-b border-[#1E282D] pb-2">
+          <div className="flex items-center space-x-2">
+            <span className={`w-2.5 h-2.5 rounded-full ${mainLcuState === 'connected' ? 'bg-emerald-400 animate-pulse' : 'bg-cyan-400'}`}></span>
+            <h3 className="text-sm font-bold text-[#F0E6D2]">Diagnóstico en Vivo: Comunicación Main ↔ Renderer IPC</h3>
+          </div>
+          <button
+            onClick={onRefreshLcu}
+            className="px-2.5 py-1 text-xs font-semibold rounded bg-[#1E2328] hover:bg-[#2A3038] text-[#C89B3C] border border-[#C89B3C]/40 transition"
+          >
+            🔄 Sincronizar Ahora
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono">
+          <div className="bg-[#111823] p-2.5 rounded border border-[#1E282D]">
+            <div className="text-[#A09B8C] text-[10px] uppercase">Estado en Main</div>
+            <div className={`mt-1 font-bold ${mainLcuState === 'connected' ? 'text-emerald-400' : mainLcuState === 'connecting' ? 'text-amber-400' : 'text-rose-400'}`}>
+              {mainLcuState}
+            </div>
+          </div>
+
+          <div className="bg-[#111823] p-2.5 rounded border border-[#1E282D]">
+            <div className="text-[#A09B8C] text-[10px] uppercase">Estado en Renderer (IPC)</div>
+            <div className={`mt-1 font-bold ${lcuState === 'connected' ? 'text-emerald-400' : lcuState === 'connecting' ? 'text-amber-400' : 'text-rose-400'}`}>
+              {lcuState}
+            </div>
+          </div>
+
+          <div className="bg-[#111823] p-2.5 rounded border border-[#1E282D]">
+            <div className="text-[#A09B8C] text-[10px] uppercase">Puerto LCU</div>
+            <div className="mt-1 font-bold text-[#F0E6D2]">
+              {lcuPort ? lcuPort : 'No detectado'}
+            </div>
+          </div>
+
+          <div className="bg-[#111823] p-2.5 rounded border border-[#1E282D]">
+            <div className="text-[#A09B8C] text-[10px] uppercase">Último Evento IPC</div>
+            <div className="mt-1 text-gray-300 truncate" title={`${lastIpcEvent} (${lastIpcTimestamp})`}>
+              {lastIpcTimestamp} • {lastIpcEvent}
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-[#111823] p-2.5 rounded border border-[#1E282D] text-xs">
+          <span className="text-[#A09B8C] font-semibold">Último error de conexión: </span>
+          <span className={lastConnectionError ? 'text-rose-400 font-mono' : 'text-emerald-400 font-mono'}>
+            {lastConnectionError || 'Ninguno (conexión saludable)'}
+          </span>
         </div>
       </div>
 

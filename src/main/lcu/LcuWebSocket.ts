@@ -10,6 +10,7 @@ import { EventEmitter } from 'node:events';
 import WebSocket from 'ws';
 import type { LcuCredentials } from '@shared/types';
 import { LCU_CONSTANTS } from '@shared/constants';
+import { registrarLog } from './LcuDetector';
 
 /** Nombre del evento global de la LCU al que se suscribe el cliente. */
 export const EVENTO_GLOBAL_LCU = 'OnJsonApiEvent';
@@ -67,6 +68,7 @@ export class LcuWebSocket extends EventEmitter {
   private conectado = false;
   private manual = false;
   private intentosReconexion = 0;
+  private ultimoError: string | null = null;
   private temporizadorReconexion: NodeJS.Timeout | null = null;
 
   constructor(opciones: OpcionesLcuWebSocket = {}) {
@@ -78,6 +80,11 @@ export class LcuWebSocket extends EventEmitter {
       intervaloReconexionMs: opciones.intervaloReconexionMs ?? LCU_CONSTANTS.RECONNECT_BACKOFF_MS,
       timeoutConexionMs: opciones.timeoutConexionMs ?? 10_000,
     };
+  }
+
+  /** Devuelve el último error ocurrido en la conexión WebSocket. */
+  getLastError(): string | null {
+    return this.ultimoError;
   }
 
   /**
@@ -113,7 +120,6 @@ export class LcuWebSocket extends EventEmitter {
 
     try {
       if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
-        // El evento `close` conservará `this.socket` para poder emitir `desconectado`.
         socket.close(1000, 'Cierre manual');
       } else {
         this.socket = null;
@@ -144,7 +150,8 @@ export class LcuWebSocket extends EventEmitter {
       return;
     }
 
-    const url = `${this.opciones.protocolo}://${this.opciones.host}:${credenciales.port}`;
+    const url = `${this.opciones.protocolo}://${this.opciones.host}:${credenciales.port}/`;
+    registrarLog(`[WebSocket] Intentando conectar a ${url} con Basic Auth...`);
     const socket = new WebSocket(url, {
       headers: { Authorization: credenciales.tokenBase64 },
       rejectUnauthorized: false,
@@ -155,8 +162,11 @@ export class LcuWebSocket extends EventEmitter {
     socket.on('open', () => {
       this.conectado = true;
       this.intentosReconexion = 0;
+      this.ultimoError = null;
+      registrarLog(`[WebSocket OPEN] Conexión establecida con éxito en ${url}`);
       // Suscripción al evento global de la LCU.
       this.enviar([...MENSAJE_SUSCRIPCION_LCU]);
+      registrarLog(`[WebSocket] Suscripción enviada: [5, "OnJsonApiEvent"]`);
       this.emit('conectado');
     });
 
@@ -168,6 +178,9 @@ export class LcuWebSocket extends EventEmitter {
       if (this.socket !== socket) {
         return;
       }
+      const detalleError = `${error.name}: ${error.message}${(error as any).code ? ` [${(error as any).code}]` : ''}`;
+      this.ultimoError = detalleError;
+      registrarLog(`[WebSocket ERROR] Fallo en handshake/conexión a ${url}: ${detalleError}`);
       this.emit('error-websocket', error);
     });
 
@@ -177,11 +190,22 @@ export class LcuWebSocket extends EventEmitter {
         return;
       }
 
+      const motivoStr = motivo.toString('utf-8');
+      if (!this.manual) {
+        const detalleClose = `Código: ${codigo}, Motivo: ${motivoStr || 'Sin detalle'}`;
+        if (codigo !== 1000) {
+          this.ultimoError = `Desconexión inesperada (${detalleClose})`;
+          registrarLog(`[WebSocket CLOSE ANORMAL] Socket cerrado en ${url}. ${detalleClose}`);
+        } else {
+          registrarLog(`[WebSocket CLOSE] Socket cerrado normalmente en ${url}`);
+        }
+      }
+
       this.socket = null;
       this.conectado = false;
       const detalle: DetalleDesconexion = {
         codigo,
-        motivo: motivo.toString('utf-8'),
+        motivo: motivoStr,
         manual: this.manual,
       };
       this.emit('desconectado', detalle);

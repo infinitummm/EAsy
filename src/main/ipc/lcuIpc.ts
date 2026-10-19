@@ -1,57 +1,54 @@
-import { ipcMain, WebContents, dialog } from 'electron';
+import { ipcMain, WebContents, dialog, BrowserWindow } from 'electron';
 import { IPC_CHANNELS } from '../../shared/events';
 import type { ILcuClient } from '../../shared/contracts';
 import { EVENTOS_LCU_CLIENT, LcuClient } from '../lcu/LcuClient';
-import type { RunePage } from '../../shared/types';
+import type { RunePage, LcuStateInfo } from '../../shared/types';
 
 /**
  * Conecta los eventos del cliente LCU con el sistema IPC de Electron.
  */
-export function registrarLcuIpc(lcuClient: ILcuClient, getWebContents: () => WebContents | null): void {
+export function registrarLcuIpc(lcuClient: ILcuClient, _getWebContents?: () => WebContents | null): void {
   const clienteConcreto = lcuClient instanceof LcuClient ? lcuClient : null;
 
-  // 1. Escuchar eventos del LcuClient y retransmitirlos al Renderer
-  lcuClient.on(EVENTOS_LCU_CLIENT.ESTADO_CAMBIADO, (estado) => {
-    const wc = getWebContents();
-    if (wc && !wc.isDestroyed()) {
-      wc.send(IPC_CHANNELS.LCU_STATE_CHANGED, estado);
+  const difundirEvento = (canal: string, ...args: unknown[]) => {
+    const windows = BrowserWindow.getAllWindows();
+    for (const win of windows) {
+      if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
+        win.webContents.send(canal, ...args);
+      }
     }
+  };
+
+  // 1. Escuchar eventos del LcuClient y retransmitirlos a todas las ventanas
+  lcuClient.on(EVENTOS_LCU_CLIENT.ESTADO_CAMBIADO, (estado) => {
+    difundirEvento(IPC_CHANNELS.LCU_STATE_CHANGED, estado);
   });
 
   lcuClient.on(EVENTOS_LCU_CLIENT.GAMEFLOW_CAMBIADO, (fase) => {
-    const wc = getWebContents();
-    if (wc && !wc.isDestroyed()) {
-      wc.send(IPC_CHANNELS.LCU_GAMEFLOW_CHANGED, fase);
-    }
+    difundirEvento(IPC_CHANNELS.LCU_GAMEFLOW_CHANGED, fase);
   });
 
   lcuClient.on(EVENTOS_LCU_CLIENT.READY_CHECK, (readyCheck) => {
-    const wc = getWebContents();
-    if (wc && !wc.isDestroyed()) {
-      wc.send(IPC_CHANNELS.LCU_READY_CHECK, readyCheck);
-    }
+    difundirEvento(IPC_CHANNELS.LCU_READY_CHECK, readyCheck);
   });
 
   lcuClient.on(EVENTOS_LCU_CLIENT.CHAMP_SELECT_SESSION, (session) => {
-    const wc = getWebContents();
-    if (wc && !wc.isDestroyed()) {
-      wc.send(IPC_CHANNELS.LCU_CHAMP_SELECT_SESSION, session);
-    }
+    difundirEvento(IPC_CHANNELS.LCU_CHAMP_SELECT_SESSION, session);
   });
 
   lcuClient.on(EVENTOS_LCU_CLIENT.ERROR_PERMISOS, (errorPermisos: boolean) => {
-    const wc = getWebContents();
-    if (wc && !wc.isDestroyed()) {
-      wc.send(IPC_CHANNELS.LCU_PERMISSION_ERROR, errorPermisos);
-    }
+    difundirEvento(IPC_CHANNELS.LCU_PERMISSION_ERROR, errorPermisos);
   });
 
   // 2. Manejadores de invocaciones desde el Renderer
-  ipcMain.handle(IPC_CHANNELS.LCU_GET_STATE, async () => {
+  ipcMain.handle(IPC_CHANNELS.LCU_GET_STATE, async (): Promise<LcuStateInfo> => {
     return {
       state: lcuClient.getConnectionState(),
       gameflow: lcuClient.getGameflowPhase(),
       isPermissionError: clienteConcreto?.getIsPermissionError() ?? false,
+      port: clienteConcreto?.getPort() ?? undefined,
+      lastError: clienteConcreto?.getLastError() ?? undefined,
+      lastUpdated: new Date().toISOString(),
     };
   });
 

@@ -17,6 +17,7 @@ import { MatchParser } from './riot/MatchParser';
 import { ProfileSyncService } from './riot/ProfileSyncService';
 import { DataDragonService } from './riot/DataDragonService';
 import { DEFAULT_APP_SETTINGS } from '../shared/constants';
+import { IPC_CHANNELS } from '../shared/events';
 
 let mainWindow: BrowserWindow | null = null;
 const lcuClient = new LcuClient({
@@ -55,6 +56,21 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
   }
+
+  // Enviar estado LCU en cuanto el Renderer termina de cargar
+  const enviarEstadoActual = () => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+      const estado = lcuClient.getConnectionState();
+      const fase = lcuClient.getGameflowPhase();
+      const errorPermisos = lcuClient.getIsPermissionError();
+      mainWindow.webContents.send(IPC_CHANNELS.LCU_STATE_CHANGED, estado);
+      mainWindow.webContents.send(IPC_CHANNELS.LCU_GAMEFLOW_CHANGED, fase);
+      mainWindow.webContents.send(IPC_CHANNELS.LCU_PERMISSION_ERROR, errorPermisos);
+    }
+  };
+
+  mainWindow.webContents.on('did-finish-load', enviarEstadoActual);
+  mainWindow.webContents.on('dom-ready', enviarEstadoActual);
 
   // Registrar IPC de la ventana activa con gestor de runas activo
   setupChampSelectIpc(mainWindow, lcuClient, geminiService, runeManager);

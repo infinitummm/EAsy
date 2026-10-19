@@ -8,7 +8,8 @@ import {
   RegionalRouting,
   LcuDetectionReport,
   LcuConnectionState,
-  GameflowPhase
+  GameflowPhase,
+  LcuStateInfo
 } from '../shared/types';
 
 export const api = {
@@ -18,7 +19,7 @@ export const api = {
     ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_SAVE, settings),
 
   // LCU
-  getLcuState: (): Promise<{ state: LcuConnectionState; gameflow: GameflowPhase; isPermissionError: boolean }> =>
+  getLcuState: (): Promise<LcuStateInfo> =>
     ipcRenderer.invoke(IPC_CHANNELS.LCU_GET_STATE),
   testLcuDetection: (manualPath?: string): Promise<LcuDetectionReport> =>
     ipcRenderer.invoke(IPC_CHANNELS.LCU_TEST_DETECTION, manualPath),

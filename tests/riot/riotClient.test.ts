@@ -13,6 +13,10 @@ import {
   ErrorRiotApi,
   MAX_PARTIDAS_HISTORIAL,
   RiotApiClient,
+  derivarRegionalDesdePlataforma,
+  describirErrorRiot,
+  esRegionalValido,
+  normalizarRiotId,
 } from '../../src/main/riot/RiotApiClient';
 import type { IRateLimiter } from '../../src/shared/contracts';
 import type {
@@ -446,6 +450,91 @@ describe('RiotApiClient (T-3.4)', () => {
       );
       expect(salud.statusCode).toBeUndefined();
       expect(peticiones).toHaveLength(0);
+    });
+  });
+
+  describe('normalización de Riot ID y routing regional (REQ-011)', () => {
+    it('normalizarRiotId soporta Nombre#Tag, tag con # y espacios sobrantes', () => {
+      expect(normalizarRiotId('Infi', '1505')).toEqual({ gameName: 'Infi', tagLine: '1505' });
+      expect(normalizarRiotId('Infi', '#1505')).toEqual({ gameName: 'Infi', tagLine: '1505' });
+      expect(normalizarRiotId('Infi#1505', '')).toEqual({ gameName: 'Infi', tagLine: '1505' });
+      expect(normalizarRiotId('  Infi#1505  ', '  ')).toEqual({ gameName: 'Infi', tagLine: '1505' });
+      expect(normalizarRiotId('Infi', '  ##1505 ')).toEqual({ gameName: 'Infi', tagLine: '1505' });
+      // El tag explícito no se pisa con el de un nombre que ya incluye `#`.
+      expect(normalizarRiotId('Infi#viejo', 'nuevo')).toEqual({
+        gameName: 'Infi',
+        tagLine: 'nuevo',
+      });
+    });
+
+    it('deriva el enrutamiento regional desde la plataforma', () => {
+      expect(derivarRegionalDesdePlataforma('la1')).toBe('americas');
+      expect(derivarRegionalDesdePlataforma('la2')).toBe('americas');
+      expect(derivarRegionalDesdePlataforma('na1')).toBe('americas');
+      expect(derivarRegionalDesdePlataforma('br1')).toBe('americas');
+      expect(derivarRegionalDesdePlataforma('euw1')).toBe('europe');
+      expect(derivarRegionalDesdePlataforma('eun1')).toBe('europe');
+      expect(derivarRegionalDesdePlataforma('tr1')).toBe('europe');
+      expect(derivarRegionalDesdePlataforma('ru')).toBe('europe');
+      expect(derivarRegionalDesdePlataforma('kr')).toBe('asia');
+      expect(derivarRegionalDesdePlataforma('jp1')).toBe('asia');
+      expect(derivarRegionalDesdePlataforma('oc1')).toBe('sea');
+      expect(derivarRegionalDesdePlataforma('vn2')).toBe('sea');
+
+      expect(esRegionalValido('americas')).toBe(true);
+      expect(esRegionalValido('asia')).toBe(true);
+      expect(esRegionalValido('las')).toBe(false);
+      expect(esRegionalValido(undefined)).toBe(false);
+    });
+
+    it('getAccountByRiotId acepta las tres formas de Riot ID sin codificar el #', async () => {
+      registrarRuta('/regional/riot/account/v1/accounts/by-riot-id/Infi/1505', (_req, res) =>
+        responderJson(res, 200, { puuid: 'puuid-1', gameName: 'Infi', tagLine: '1505' })
+      );
+      const cliente = crearCliente(crearLimitadorEspia());
+      cliente.setApiKey('clave');
+
+      await cliente.getAccountByRiotId('Infi#1505', '', 'americas');
+      await cliente.getAccountByRiotId('Infi', '#1505', 'americas');
+      await cliente.getAccountByRiotId('  Infi  ', '  1505 ', 'americas');
+
+      expect(peticiones).toHaveLength(3);
+      for (const peticion of peticiones) {
+        expect(peticion.ruta).toBe('/regional/riot/account/v1/accounts/by-riot-id/Infi/1505');
+        expect(peticion.ruta).not.toContain('%23');
+      }
+    });
+
+    it('los errores HTTP exponen mensajes descriptivos en español', async () => {
+      expect(describirErrorRiot(404)).toContain('Verifica el Riot ID');
+      expect(describirErrorRiot(401)).toContain('no es válida');
+      expect(describirErrorRiot(403)).toContain('24 horas');
+      expect(describirErrorRiot(429)).toContain('límite de peticiones');
+      expect(describirErrorRiot(500)).toContain('problemas');
+      expect(describirErrorRiot(0)).toContain('conexión');
+
+      const cliente = crearCliente(crearLimitadorEspia());
+      cliente.setApiKey('clave');
+      const error = await cliente
+        .getSummonerByPuuid('desconocido', 'la1')
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(ErrorRiotApi);
+      expect((error as ErrorRiotApi).mensajeAmigable).toContain('No se encontró la cuenta');
+    });
+
+    it('un 429 adjunta el mensaje amigable correspondiente', async () => {
+      registrarRuta('/regional/lol/match/v5/matches/by-puuid/puuid-1/ids', (_req, res) =>
+        responderJson(res, 429, { status: { message: 'Rate limit exceeded' } })
+      );
+      const cliente = crearCliente(crearLimitadorEspia());
+      cliente.setApiKey('clave');
+
+      const error = await cliente
+        .getMatchHistory('puuid-1', 'americas')
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ErrorRiotApi);
+      expect((error as ErrorRiotApi).mensajeAmigable).toContain('límite de peticiones');
     });
   });
 });

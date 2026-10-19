@@ -148,7 +148,6 @@ export class AutoAcceptService extends EventEmitter {
   /** Agenda el envío de la aceptación tras el retardo calculado. */
   private programarAceptacion(): void {
     const esperaMs = calcularRetrasoMilisegundos(this.retrasoSegundos, this.varianzaHumana, this.aleatorio);
-    this.emit('programado', { esperaMs });
 
     const temporizador = setTimeout(() => {
       this.temporizador = null;
@@ -156,6 +155,10 @@ export class AutoAcceptService extends EventEmitter {
     }, esperaMs);
     temporizador.unref?.();
     this.temporizador = temporizador;
+
+    // Se emite después de registrar el temporizador para que los oyentes
+    // (p. ej. el estado vivo de `LcuClient`) observen `aceptacionPendiente: true`.
+    this.emit('programado', { esperaMs });
   }
 
   /** Envía la aceptación a la LCU y notifica el resultado. */

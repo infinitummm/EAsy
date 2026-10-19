@@ -11,7 +11,13 @@
  * - `ready-check`: `ReadyCheckEvent`.
  * - `champ-select-session`: `ChampSelectSession | null`.
  * - `ready-check-aceptado`: sin payload.
+ * - `auto-accept-status`: `EstadoAutoAccept` (estado vivo del Auto-Accept y del polling).
  * - `error-lcu`: `Error`.
+ *
+ * Además del evento WebSocket, se ejecuta un polling HTTP de respaldo cada
+ * segundo contra `/lol-matchmaking/v1/ready-check` mientras la fase de gameflow
+ * sea `Matchmaking` o `ReadyCheck` (REQ-010), de modo que el Auto-Accept
+ * funcione aunque la LCU no emita el evento de ReadyCheck por WebSocket.
  */
 
 import { EventEmitter } from 'node:events';
@@ -20,6 +26,7 @@ import WebSocket from 'ws';
 import type { ILcuClient } from '@shared/contracts';
 import type {
   ChampSelectSession,
+  ChampSelectAction,
   GameflowPhase,
   LcuConnectionState,
   LcuCredentials,
@@ -42,6 +49,7 @@ export const EVENTOS_LCU_CLIENT = {
   READY_CHECK: 'ready-check',
   CHAMP_SELECT_SESSION: 'champ-select-session',
   READY_CHECK_ACEPTADO: 'ready-check-aceptado',
+  AUTO_ACCEPT_STATUS: 'auto-accept-status',
   ERROR_LCU: 'error-lcu',
   ERROR_PERMISOS: 'error-permisos',
 } as const;
@@ -54,8 +62,48 @@ export const ENDPOINTS_LCU = {
   CHAMP_SELECT_SESSION: '/lol-champ-select/v1/session',
   CHAMP_SELECT_ACTIONS: '/lol-champ-select/v1/session/actions',
   CHAMP_SELECT_MY_SELECTION: '/lol-champ-select/v1/session/my-selection',
+  PICKABLE_CHAMPION_IDS: '/lol-champ-select/v1/pickable-champion-ids',
+  CHAMPION_SUMMARY: '/lol-game-data/assets/v1/champion-summary.json',
   RUNE_PAGES: '/lol-perks/v1/pages',
 } as const;
+
+/** Intervalo por defecto del polling de respaldo del ReadyCheck (REQ-010). */
+export const INTERVALO_POLLING_READY_CHECK_MS = 1000;
+
+/** Estado vivo del Auto-Accept expuesto a la UI (REQ-010). */
+export interface EstadoAutoAccept {
+  /** `true` si el Auto-Accept está habilitado por configuración. */
+  habilitado: boolean;
+  /** Retardo configurado en segundos (0-8). */
+  retrasoSegundos: number;
+  /** Fase de gameflow conocida en el momento del evento. */
+  fase: GameflowPhase;
+  /** `true` si el WebSocket de la LCU está conectado. */
+  conectado: boolean;
+  /** `true` si el polling HTTP de respaldo está activo. */
+  pollingActivo: boolean;
+  /** `true` si hay una aceptación agendada pendiente de enviarse. */
+  aceptacionPendiente: boolean;
+}
+
+/** Resultado de intentar hacer hover de un campeón en Champ Select (REQ-012). */
+export interface ResultadoHoverCampeon {
+  success: boolean;
+  /** ID de la acción local sobre la que se aplicó el hover. */
+  actionId?: number;
+  /** Campeón solicitado. */
+  championId?: number;
+  /** Mensaje descriptivo cuando el hover no pudo aplicarse o confirmarse. */
+  error?: string;
+}
+
+/** Entrada normalizada de `champion-summary.json` (LCU o Community Dragon). */
+export interface ResumenCampeonLcu {
+  id: number;
+  name: string;
+  alias: string;
+  squarePortraitPath: string;
+}
 
 /** Opciones de construcción del cliente LCU unificado. */
 export interface OpcionesLcuClient extends Pick<OpcionesLcuWebSocket, 'reconectarAutomaticamente'> {
@@ -71,6 +119,11 @@ export interface OpcionesLcuClient extends Pick<OpcionesLcuWebSocket, 'reconecta
   protocoloWs?: 'wss' | 'ws';
   /** Intervalo entre comprobaciones del lockfile en milisegundos. Por defecto 3000 ms. */
   intervaloDeteccionMs?: number;
+  /**
+   * Intervalo del polling HTTP de respaldo del ReadyCheck en milisegundos.
+   * Por defecto `INTERVALO_POLLING_READY_CHECK_MS` (1000 ms) según REQ-010.
+   */
+  intervaloPollingReadyCheckMs?: number;
   /** Espera entre intentos de reconexión del WebSocket. Por defecto `LCU_CONSTANTS.RECONNECT_BACKOFF_MS`. */
   intervaloReconexionMs?: number;
   /** Tiempo máximo por petición HTTP. Por defecto 10000 ms. */
@@ -138,6 +191,86 @@ export function validarPaginaRunas(pagina: RunePage): string | null {
   return null;
 }
 
+/** `true` si la fase de gameflow puede albergar un ReadyCheck activo (REQ-010). */
+export function esFaseConReadyCheck(fase: GameflowPhase): boolean {
+  return fase === 'Matchmaking' || fase === 'ReadyCheck';
+}
+
+/**
+ * Compara dos ReadyCheck por su estado relevante (`state` + `playerResponse`).
+ * El `timer` se ignora para poder deduplicar el polling de respaldo sin inundar
+ * de eventos a la UI cada segundo.
+ */
+export function sonReadyChecksEquivalentes(
+  a: ReadyCheckEvent | null,
+  b: ReadyCheckEvent | null
+): boolean {
+  if (!a || !b) {
+    return a === b;
+  }
+  return a.state === b.state && a.playerResponse === b.playerResponse;
+}
+
+/** Normaliza la lista de IDs elegibles devuelta por `pickable-champion-ids`. */
+export function normalizarIdsCampeones(datos: unknown): number[] {
+  if (!Array.isArray(datos)) {
+    return [];
+  }
+  const ids = datos.filter(
+    (valor): valor is number => Number.isInteger(valor) && (valor as number) > 0
+  );
+  return [...new Set(ids)];
+}
+
+/** Normaliza `champion-summary.json` (LCU o Community Dragon) a entradas tipadas. */
+export function normalizarResumenCampeonesLcu(datos: unknown): ResumenCampeonLcu[] {
+  if (!Array.isArray(datos)) {
+    return [];
+  }
+
+  const campeones: ResumenCampeonLcu[] = [];
+  for (const entrada of datos) {
+    if (!entrada || typeof entrada !== 'object') {
+      continue;
+    }
+    const parcial = entrada as Record<string, unknown>;
+    const id = Number(parcial.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      continue;
+    }
+    const name = typeof parcial.name === 'string' ? parcial.name.trim() : '';
+    const alias = typeof parcial.alias === 'string' ? parcial.alias.trim() : '';
+    campeones.push({
+      id,
+      name: name || alias,
+      alias: alias || name,
+      squarePortraitPath:
+        typeof parcial.squarePortraitPath === 'string' ? parcial.squarePortraitPath.trim() : '',
+    });
+  }
+  return campeones;
+}
+
+/** Busca la acción de pick activa y pendiente del jugador local (REQ-012). */
+export function buscarAccionPickLocal(sesion: ChampSelectSession | null): ChampSelectAction | null {
+  if (!sesion) {
+    return null;
+  }
+  for (const fila of sesion.actions ?? []) {
+    for (const accion of fila ?? []) {
+      if (
+        accion.actorCellId === sesion.localPlayerCellId &&
+        accion.type === 'pick' &&
+        Boolean(accion.isInProgress) &&
+        !accion.completed
+      ) {
+        return accion;
+      }
+    }
+  }
+  return null;
+}
+
 /**
  * Cliente LCU unificado: detecta el lockfile, establece las conexiones HTTP/WS,
  * reenvía los eventos relevantes y acepta partidas automáticamente.
@@ -150,6 +283,7 @@ export class LcuClient extends EventEmitter implements ILcuClient {
       | 'protocoloHttp'
       | 'protocoloWs'
       | 'intervaloDeteccionMs'
+      | 'intervaloPollingReadyCheckMs'
       | 'intervaloReconexionMs'
       | 'timeoutHttpMs'
       | 'timeoutConexionWsMs'
@@ -170,6 +304,9 @@ export class LcuClient extends EventEmitter implements ILcuClient {
   private activo = false;
   private conexionEnCurso = false;
   private temporizadorDeteccion: NodeJS.Timeout | null = null;
+  private temporizadorPollingReadyCheck: NodeJS.Timeout | null = null;
+  private pollingReadyCheckActivo = false;
+  private ultimoReadyCheck: ReadyCheckEvent | null = null;
 
   constructor(opciones: OpcionesLcuClient = {}) {
     super();
@@ -180,6 +317,8 @@ export class LcuClient extends EventEmitter implements ILcuClient {
       protocoloHttp: opciones.protocoloHttp ?? 'https',
       protocoloWs: opciones.protocoloWs ?? 'wss',
       intervaloDeteccionMs: opciones.intervaloDeteccionMs ?? 3000,
+      intervaloPollingReadyCheckMs:
+        opciones.intervaloPollingReadyCheckMs ?? INTERVALO_POLLING_READY_CHECK_MS,
       intervaloReconexionMs: opciones.intervaloReconexionMs ?? LCU_CONSTANTS.RECONNECT_BACKOFF_MS,
       timeoutHttpMs: opciones.timeoutHttpMs ?? 10_000,
       timeoutConexionWsMs: opciones.timeoutConexionWsMs ?? 10_000,
@@ -214,8 +353,20 @@ export class LcuClient extends EventEmitter implements ILcuClient {
     });
     this.ws.on('evento', (evento: EventoLcu) => this.procesarEvento(evento));
     this.ws.on('error-websocket', (error: Error) => this.emit(EVENTOS_LCU_CLIENT.ERROR_LCU, error));
-    this.autoAccept.on('aceptado', () => this.emit(EVENTOS_LCU_CLIENT.READY_CHECK_ACEPTADO));
-    this.autoAccept.on('fallo-aceptacion', (error: Error) => this.emit(EVENTOS_LCU_CLIENT.ERROR_LCU, error));
+    this.autoAccept.on('programado', ({ esperaMs }: { esperaMs: number }) => {
+      registrarLog(`[AutoAccept] Aceptación programada en ${Math.round(esperaMs)} ms.`);
+      this.emitirEstadoAutoAccept();
+    });
+    this.autoAccept.on('aceptado', () => {
+      registrarLog('[AutoAccept] ReadyCheck aceptado automáticamente.');
+      this.emit(EVENTOS_LCU_CLIENT.READY_CHECK_ACEPTADO);
+      this.emitirEstadoAutoAccept();
+    });
+    this.autoAccept.on('fallo-aceptacion', (error: Error) => {
+      registrarLog(`[AutoAccept ERROR] Fallo al aceptar el ReadyCheck: ${error.message}`);
+      this.emit(EVENTOS_LCU_CLIENT.ERROR_LCU, error);
+      this.emitirEstadoAutoAccept();
+    });
   }
 
   /**
@@ -237,10 +388,13 @@ export class LcuClient extends EventEmitter implements ILcuClient {
     this.activo = false;
     this.autoAccept.cancelar();
     this.limpiarDeteccion();
+    this.detenerPollingReadyCheck();
+    this.ultimoReadyCheck = null;
     this.ws.desconectar();
     this.http.actualizarCredenciales(null);
     this.credenciales = null;
     this.cambiarEstado('disconnected');
+    this.emitirEstadoAutoAccept();
   }
 
   /** Devuelve el estado actual de la conexión con la LCU. */
@@ -266,11 +420,30 @@ export class LcuClient extends EventEmitter implements ILcuClient {
   /** Activa/desactiva el Auto-Accept y, opcionalmente, ajusta el retardo (0-8 s). */
   setAutoAccept(enabled: boolean, delaySeconds?: number): void {
     this.autoAccept.configurar(enabled, delaySeconds);
+    registrarLog(
+      `[AutoAccept] Configurado: habilitado=${enabled}, retraso=${this.autoAccept.obtenerRetrasoSegundos()}s.`
+    );
+    this.emitirEstadoAutoAccept();
   }
 
   /** Devuelve `true` si el Auto-Accept está habilitado. */
   isAutoAcceptEnabled(): boolean {
     return this.autoAccept.estaHabilitado();
+  }
+
+  /**
+   * Devuelve el estado vivo del Auto-Accept (habilitado, retardo, fase,
+   * conexión, polling y aceptación pendiente) para la UI (REQ-010).
+   */
+  getAutoAcceptStatus(): EstadoAutoAccept {
+    return {
+      habilitado: this.autoAccept.estaHabilitado(),
+      retrasoSegundos: this.autoAccept.obtenerRetrasoSegundos(),
+      fase: this.fase,
+      conectado: this.estado === 'connected',
+      pollingActivo: this.pollingReadyCheckActivo,
+      aceptacionPendiente: this.autoAccept.hayAceptacionPendiente(),
+    };
   }
 
   /** Inyecta (crea o sobrescribe) una página de runas en el cliente oficial. */
@@ -328,13 +501,126 @@ export class LcuClient extends EventEmitter implements ILcuClient {
     }
   }
 
+  /**
+   * Obtiene la lista de campeones elegibles del Champ Select actual
+   * (`GET /lol-champ-select/v1/pickable-champion-ids`, REQ-012).
+   * Devuelve un arreglo vacío si no hay sesión activa (404).
+   */
+  async getPickableChampionIds(): Promise<number[]> {
+    try {
+      const datos = await this.http.request<unknown>('GET', ENDPOINTS_LCU.PICKABLE_CHAMPION_IDS);
+      return normalizarIdsCampeones(datos);
+    } catch (error) {
+      if (error instanceof ErrorPeticionLcu && error.codigoEstado === 404) {
+        return [];
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Hace hover de un campeón en la acción de pick activa del jugador local
+   * (`PATCH /lol-champ-select/v1/session/actions/{actionId}` con `{ championId }`,
+   * REQ-012), confirmando el resultado con un GET de la sesión.
+   */
+  async hoverChampion(championId: number): Promise<ResultadoHoverCampeon> {
+    if (!Number.isInteger(championId) || championId <= 0) {
+      return { success: false, error: 'El identificador del campeón es inválido.' };
+    }
+
+    let sesion: ChampSelectSession | null;
+    try {
+      sesion = await this.getChampSelectSession();
+    } catch (error) {
+      return {
+        success: false,
+        error: `No se pudo leer la sesión de Champ Select: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      };
+    }
+
+    if (!sesion) {
+      return { success: false, error: 'No hay una sesión de Champ Select activa.' };
+    }
+
+    const accion = buscarAccionPickLocal(sesion);
+    if (!accion) {
+      return {
+        success: false,
+        error: 'No hay una acción de pick activa para el jugador local en este momento.',
+      };
+    }
+
+    try {
+      await this.http.request<unknown>(
+        'PATCH',
+        `${ENDPOINTS_LCU.CHAMP_SELECT_ACTIONS}/${accion.id}`,
+        { championId }
+      );
+    } catch (error) {
+      return {
+        success: false,
+        actionId: accion.id,
+        championId,
+        error: `La LCU rechazó el hover del campeón: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      };
+    }
+
+    // Confirmación con GET de la sesión (REQ-012).
+    try {
+      const confirmada = await this.getChampSelectSession();
+      const accionConfirmada = confirmada
+        ? (confirmada.actions ?? [])
+            .flat()
+            .find((candidata) => candidata.id === accion.id) ?? null
+        : null;
+
+      if (accionConfirmada && accionConfirmada.championId !== championId) {
+        return {
+          success: false,
+          actionId: accion.id,
+          championId,
+          error: `La LCU no confirmó el hover: la acción ${accion.id} mantiene el campeón ${accionConfirmada.championId}.`,
+        };
+      }
+    } catch {
+      // Si la sesión desaparece entre el PATCH y el GET, el hover ya fue enviado.
+    }
+
+    registrarLog(`[ChampSelect] Hover aplicado sobre la acción ${accion.id} (campeón ${championId}).`);
+    return { success: true, actionId: accion.id, championId };
+  }
+
+  /**
+   * Obtiene el resumen de campeones de la LCU
+   * (`GET /lol-game-data/assets/v1/champion-summary.json`, REQ-013), que
+   * incluye lanzamientos recientes como Yunara (ID 804). Devuelve `[]` si el
+   * endpoint no está disponible.
+   */
+  async getChampionSummary(): Promise<ResumenCampeonLcu[]> {
+    try {
+      const datos = await this.http.request<unknown>('GET', ENDPOINTS_LCU.CHAMPION_SUMMARY);
+      return normalizarResumenCampeonesLcu(datos);
+    } catch (error) {
+      if (error instanceof ErrorPeticionLcu && error.codigoEstado === 404) {
+        return [];
+      }
+      throw error;
+    }
+  }
+
   /** Cambia el estado de conexión y notifica el cambio por evento. */
   private cambiarEstado(nuevo: LcuConnectionState): void {
     if (this.estado === nuevo) {
       return;
     }
     this.estado = nuevo;
+    this.actualizarPollingReadyCheck();
     this.emit(EVENTOS_LCU_CLIENT.ESTADO_CAMBIADO, nuevo);
+    this.emitirEstadoAutoAccept();
   }
 
   /** Devuelve si se detectó un problema de permisos en el proceso de League of Legends. */
@@ -756,12 +1042,24 @@ export class LcuClient extends EventEmitter implements ILcuClient {
     try {
       const datos = await this.http.request<unknown>('GET', ENDPOINTS_LCU.GAMEFLOW_PHASE);
       const fase = normalizarFaseGameflow(datos);
-      if (fase && fase !== this.fase) {
-        this.fase = fase;
-        this.emit(EVENTOS_LCU_CLIENT.GAMEFLOW_CAMBIADO, fase);
+      if (fase) {
+        this.actualizarFase(fase);
       }
     } catch {
       // La fase se actualizará con los eventos WebSocket cuando estén disponibles.
+    }
+  }
+
+  /** Actualiza la fase conocida, ajusta el polling de respaldo y notifica. */
+  private actualizarFase(fase: GameflowPhase): void {
+    const cambio = fase !== this.fase;
+    if (cambio) {
+      this.fase = fase;
+    }
+    this.actualizarPollingReadyCheck();
+    if (cambio) {
+      this.emit(EVENTOS_LCU_CLIENT.GAMEFLOW_CAMBIADO, fase);
+      this.emitirEstadoAutoAccept();
     }
   }
 
@@ -770,18 +1068,13 @@ export class LcuClient extends EventEmitter implements ILcuClient {
     switch (evento.uri) {
       case ENDPOINTS_LCU.GAMEFLOW_PHASE: {
         const fase = normalizarFaseGameflow(evento.data);
-        if (fase && fase !== this.fase) {
-          this.fase = fase;
-          this.emit(EVENTOS_LCU_CLIENT.GAMEFLOW_CAMBIADO, fase);
+        if (fase) {
+          this.actualizarFase(fase);
         }
         break;
       }
       case ENDPOINTS_LCU.READY_CHECK: {
-        const readyCheck = normalizarReadyCheck(evento.data);
-        this.autoAccept.manejarEvento(readyCheck);
-        if (readyCheck) {
-          this.emit(EVENTOS_LCU_CLIENT.READY_CHECK, readyCheck);
-        }
+        this.procesarReadyCheck(normalizarReadyCheck(evento.data), 'websocket');
         break;
       }
       case ENDPOINTS_LCU.CHAMP_SELECT_SESSION: {
@@ -791,6 +1084,118 @@ export class LcuClient extends EventEmitter implements ILcuClient {
       }
       default:
         break;
+    }
+  }
+
+  /**
+   * Centraliza el tratamiento de un ReadyCheck, venga del WebSocket o del
+   * polling de respaldo. Deduplica las actualizaciones equivalentes (mismo
+   * `state`/`playerResponse`) y alimenta al servicio de Auto-Accept.
+   */
+  private procesarReadyCheck(
+    readyCheck: ReadyCheckEvent | null,
+    origen: 'websocket' | 'polling'
+  ): void {
+    const hayCambio = !sonReadyChecksEquivalentes(this.ultimoReadyCheck, readyCheck);
+    this.autoAccept.manejarEvento(readyCheck);
+
+    if (hayCambio) {
+      this.ultimoReadyCheck = readyCheck;
+      if (readyCheck) {
+        registrarLog(
+          `[AutoAccept] ReadyCheck (${origen}): state=${readyCheck.state}, playerResponse=${readyCheck.playerResponse}, timer=${readyCheck.timer}s.`
+        );
+        this.emit(EVENTOS_LCU_CLIENT.READY_CHECK, readyCheck);
+      } else if (origen === 'polling') {
+        registrarLog('[AutoAccept] ReadyCheck finalizado (404 en polling).');
+      }
+      this.emitirEstadoAutoAccept();
+    }
+  }
+
+  /** Emite el estado vivo del Auto-Accept para los consumidores (UI/IPC). */
+  private emitirEstadoAutoAccept(): void {
+    this.emit(EVENTOS_LCU_CLIENT.AUTO_ACCEPT_STATUS, this.getAutoAcceptStatus());
+  }
+
+  /**
+   * Activa o desactiva el polling HTTP de respaldo del ReadyCheck según la fase
+   * actual (REQ-010): solo se ejecuta conectado y en `Matchmaking`/`ReadyCheck`.
+   */
+  private actualizarPollingReadyCheck(): void {
+    const debePollear =
+      this.activo && this.estado === 'connected' && esFaseConReadyCheck(this.fase);
+
+    if (debePollear && !this.pollingReadyCheckActivo) {
+      this.pollingReadyCheckActivo = true;
+      registrarLog(
+        `[AutoAccept] Polling de respaldo activado (fase ${this.fase}, intervalo ${this.opciones.intervaloPollingReadyCheckMs} ms).`
+      );
+      this.programarPollingReadyCheck();
+      this.emitirEstadoAutoAccept();
+      return;
+    }
+
+    if (!debePollear && this.pollingReadyCheckActivo) {
+      this.detenerPollingReadyCheck();
+      registrarLog('[AutoAccept] Polling de respaldo detenido.');
+      this.emitirEstadoAutoAccept();
+    }
+  }
+
+  /** Programa la siguiente consulta del polling de respaldo. */
+  private programarPollingReadyCheck(): void {
+    if (
+      !this.pollingReadyCheckActivo ||
+      !this.activo ||
+      this.estado !== 'connected' ||
+      !esFaseConReadyCheck(this.fase) ||
+      this.temporizadorPollingReadyCheck
+    ) {
+      return;
+    }
+    const temporizador = setTimeout(() => {
+      this.temporizadorPollingReadyCheck = null;
+      void this.ejecutarPollingReadyCheck();
+    }, this.opciones.intervaloPollingReadyCheckMs);
+    temporizador.unref?.();
+    this.temporizadorPollingReadyCheck = temporizador;
+  }
+
+  /** Ejecuta una consulta del polling y reprograma la siguiente. */
+  private async ejecutarPollingReadyCheck(): Promise<void> {
+    if (!this.activo || this.estado !== 'connected' || !esFaseConReadyCheck(this.fase)) {
+      this.actualizarPollingReadyCheck();
+      return;
+    }
+
+    try {
+      const datos = await this.http.request<unknown>('GET', ENDPOINTS_LCU.READY_CHECK);
+      this.procesarReadyCheck(normalizarReadyCheck(datos), 'polling');
+    } catch (error) {
+      if (error instanceof ErrorPeticionLcu && error.codigoEstado === 404) {
+        // Sin ReadyCheck activo: la fase puede seguir en Matchmaking.
+        this.procesarReadyCheck(null, 'polling');
+      } else if (!(error instanceof Error)) {
+        registrarLog(`[AutoAccept ERROR] Fallo inesperado en el polling de ReadyCheck: ${String(error)}`);
+      } else {
+        registrarLog(`[AutoAccept ERROR] Fallo en el polling de ReadyCheck: ${error.message}`);
+      }
+    } finally {
+      if (this.activo && this.estado === 'connected' && esFaseConReadyCheck(this.fase)) {
+        this.programarPollingReadyCheck();
+      } else {
+        this.actualizarPollingReadyCheck();
+      }
+    }
+  }
+
+  /** Cancela el temporizador del polling de respaldo y lo marca como inactivo. */
+  private detenerPollingReadyCheck(): void {
+    this.pollingReadyCheckActivo = false;
+    if (this.temporizadorPollingReadyCheck) {
+      clearTimeout(this.temporizadorPollingReadyCheck);
+      this.temporizadorPollingReadyCheck = null;
     }
   }
 

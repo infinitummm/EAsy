@@ -15,6 +15,12 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { CDN_URLS } from '@shared/constants';
+import {
+  getChampionById,
+  obtenerTodosLosCampeones,
+  registrarCampeones,
+  type ChampionInfo,
+} from '@shared/champions';
 
 /** Error de comunicación o contenido inválido del CDN de Data Dragon. */
 export class ErrorDataDragon extends Error {
@@ -71,6 +77,99 @@ export interface DatosHechizo {
   image: { full: string };
 }
 
+/** Entrada de `champion-summary.json` servida por la LCU / Community Dragon. */
+export interface ResumenCampeonCrudo {
+  id?: unknown;
+  name?: unknown;
+  alias?: unknown;
+  squarePortraitPath?: unknown;
+}
+
+/** Resultado de sincronizar el catálogo compartido de campeones (REQ-013). */
+export interface ResultadoSincronizacionCatalogo {
+  /** Total de campeones disponibles tras la fusión. */
+  total: number;
+  /** Campeones nuevos añadidos en esta sincronización. */
+  nuevos: number;
+  /** Versión de Data Dragon usada como fuente principal, si se pudo consultar. */
+  version: string | null;
+  /** Fuente que aportó el catálogo base (Data Dragon o contingencia). */
+  origenPrincipal: 'ddragon' | 'lcu' | 'communitydragon';
+  /** Fuente de contingencia usada para completar IDs ausentes en Data Dragon. */
+  fuenteFallback?: 'lcu' | 'communitydragon';
+}
+
+/** Convierte la respuesta de `champion.json` de Data Dragon al formato compartido. */
+export function convertirCampeonesDataDragon(datos: readonly DatosCampeon[]): ChampionInfo[] {
+  const campeones: ChampionInfo[] = [];
+
+  for (const dato of datos ?? []) {
+    const id = Number(dato?.key);
+    if (!Number.isInteger(id) || id <= 0) {
+      continue;
+    }
+    const nombre = typeof dato.name === 'string' ? dato.name.trim() : '';
+    if (!nombre) {
+      continue;
+    }
+    const archivo = typeof dato.image?.full === 'string' && dato.image.full ? dato.image.full : `${dato.id}.png`;
+    campeones.push({
+      id,
+      name: nombre,
+      key: typeof dato.id === 'string' && dato.id ? dato.id : String(id),
+      image: archivo,
+    });
+  }
+
+  return campeones;
+}
+
+/**
+ * Convierte `champion-summary.json` (LCU o Community Dragon) al formato
+ * compartido. Los iconos se resuelven vía Community Dragon (misma ruta que la
+ * LCU) para que los campeones ausentes en Data Dragon tengan retrato válido.
+ */
+export function convertirResumenCampeonesLcu(
+  crudo: unknown,
+  comunidadBase: string
+): ChampionInfo[] {
+  if (!Array.isArray(crudo)) {
+    return [];
+  }
+
+  const base = comunidadBase.replace(/\/+$/, '');
+  const campeones: ChampionInfo[] = [];
+
+  for (const entrada of crudo) {
+    if (!esObjeto(entrada)) {
+      continue;
+    }
+    const id = Number(entrada.id);
+    const nombre = typeof entrada.name === 'string' ? entrada.name.trim() : '';
+    if (!Number.isInteger(id) || id <= 0 || !nombre) {
+      continue;
+    }
+
+    const alias =
+      typeof entrada.alias === 'string' && entrada.alias.trim() ? entrada.alias.trim() : nombre;
+    const ruta =
+      typeof entrada.squarePortraitPath === 'string' ? entrada.squarePortraitPath.trim() : '';
+    const rutaComunidad = ruta
+      ? ruta.replace(/^\/lol-game-data\/assets/, '/plugins/rcp-be-lol-game-data/global/default')
+      : `/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/${id}.png`;
+
+    campeones.push({
+      id,
+      name: nombre,
+      key: alias,
+      image: `${alias}.png`,
+      iconUrl: `${base}${rutaComunidad.startsWith('/') ? rutaComunidad : `/${rutaComunidad}`}`,
+    });
+  }
+
+  return campeones;
+}
+
 export interface OpcionesDataDragonService {
   /** Idioma del CDN (por defecto `es_ES`). */
   idioma?: string;
@@ -86,6 +185,14 @@ export interface OpcionesDataDragonService {
   directorioCache?: string | null;
   /** Vigencia de `versions.json` en caché (ms). Por defecto 1 hora. */
   ttlVersionMs?: number;
+  /**
+   * Fuente del `champion-summary.json` de la LCU (REQ-013). Permite incorporar
+   * campeones recién lanzados (p. ej. Yunara, ID 804) ausentes en Data Dragon.
+   * Normalmente se cablea a `LcuClient.getChampionSummary()`.
+   */
+  obtenerResumenCampeonesLcu?: () => Promise<unknown>;
+  /** URL del resumen de campeones de Community Dragon (contingencia). */
+  urlResumenCampeonesComunidad?: string;
 }
 
 const TTL_VERSION_POR_DEFECTO_MS = 60 * 60 * 1000;
@@ -113,6 +220,8 @@ export class DataDragonService {
   private readonly fetchImpl: typeof fetch;
   private readonly directorioCache: string | null;
   private readonly ttlVersionMs: number;
+  private readonly obtenerResumenCampeonesLcu?: () => Promise<unknown>;
+  private readonly urlResumenCampeonesComunidad: string;
   private readonly cacheMemoria = new Map<string, unknown>();
   private versionActual: string | null = null;
 
@@ -124,6 +233,10 @@ export class DataDragonService {
     this.fetchImpl = opciones.fetchImpl ?? fetch;
     this.directorioCache = opciones.directorioCache ?? null;
     this.ttlVersionMs = opciones.ttlVersionMs ?? TTL_VERSION_POR_DEFECTO_MS;
+    this.obtenerResumenCampeonesLcu = opciones.obtenerResumenCampeonesLcu;
+    this.urlResumenCampeonesComunidad =
+      opciones.urlResumenCampeonesComunidad ??
+      `${this.comunidadBase.replace(/\/+$/, '')}/plugins/rcp-be-lol-game-data/global/default/v1/champion-summary.json`;
   }
 
   // ==========================================
@@ -176,6 +289,88 @@ export class DataDragonService {
   /** Hechizos de invocador de la versión indicada. */
   async obtenerHechizos(version?: string): Promise<DatosHechizo[]> {
     return this.cargarRecurso('summoner.json', version, extraerValoresDeData<DatosHechizo>);
+  }
+
+  // ==========================================
+  // Catálogo dinámico de campeones (REQ-013)
+  // ==========================================
+
+  /** Devuelve el catálogo actual (Data Dragon + contingencias ya fusionadas). */
+  obtenerCatalogoCampeones(): ChampionInfo[] {
+    return obtenerTodosLosCampeones();
+  }
+
+  /**
+   * Sincroniza el catálogo compartido (`src/shared/champions.ts`).
+   *
+   * 1. Fuente principal: Data Dragon con la última versión disponible.
+   * 2. Contingencia: `champion-summary.json` de la LCU (incluye lanzamientos
+   *    recientes como Yunara, ID 804) y, si esta no está disponible, el mismo
+   *    recurso publicado por Community Dragon.
+   *
+   * Solo se incorporan desde la contingencia los IDs ausentes en Data Dragon,
+   * para no sobrescribir los nombres localizados de la fuente principal.
+   */
+  async sincronizarCatalogoCampeones(): Promise<ResultadoSincronizacionCatalogo> {
+    let version: string | null = null;
+    let ddragonOk = false;
+    let nuevos = 0;
+
+    try {
+      version = await this.obtenerVersionActual();
+      const campeones = convertirCampeonesDataDragon(await this.obtenerCampeones(version));
+      if (campeones.length > 0) {
+        nuevos += registrarCampeones(campeones);
+        ddragonOk = true;
+      }
+    } catch {
+      // Sin conexión a Data Dragon: se resolverá todo con la contingencia.
+    }
+
+    let fuenteFallback: 'lcu' | 'communitydragon' | undefined;
+
+    const fusionarContingencia = (
+      campeones: ChampionInfo[],
+      origen: 'lcu' | 'communitydragon'
+    ): void => {
+      const filtrados = ddragonOk ? campeones.filter((campeon) => !getChampionById(campeon.id)) : campeones;
+      if (filtrados.length > 0) {
+        nuevos += registrarCampeones(filtrados);
+      }
+      fuenteFallback = origen;
+    };
+
+    if (this.obtenerResumenCampeonesLcu) {
+      try {
+        const crudo = await this.obtenerResumenCampeonesLcu();
+        const campeones = convertirResumenCampeonesLcu(crudo, this.comunidadBase);
+        if (campeones.length > 0) {
+          fusionarContingencia(campeones, 'lcu');
+        }
+      } catch {
+        // LCU no disponible (cliente cerrado): se usa Community Dragon.
+      }
+    }
+
+    if (!fuenteFallback) {
+      try {
+        const crudo = await this.obtenerJson(this.urlResumenCampeonesComunidad);
+        const campeones = convertirResumenCampeonesLcu(crudo, this.comunidadBase);
+        if (campeones.length > 0) {
+          fusionarContingencia(campeones, 'communitydragon');
+        }
+      } catch {
+        // Sin contingencia disponible: se conserva la lista base estática.
+      }
+    }
+
+    return {
+      total: obtenerTodosLosCampeones().length,
+      nuevos,
+      version,
+      origenPrincipal: ddragonOk ? 'ddragon' : fuenteFallback ?? 'communitydragon',
+      fuenteFallback,
+    };
   }
 
   /** Limpia solo la caché en memoria (el disco, si existe, sigue disponible). */

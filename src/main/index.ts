@@ -1,6 +1,9 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { LcuClient, ChampSelectManager, RuneManager } from './lcu';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { registrarLcuIpc } from './ipc/lcuIpc';
 import { registrarSettingsIpc } from './ipc/settingsIpc';
 import { setupChampSelectIpc } from './ipc/champSelectIpc';

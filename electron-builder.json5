@@ -2,7 +2,7 @@
   "appId": "com.itero.local",
   "productName": "Itero Local",
   "directories": {
-    "output": "release"
+    "output": "C:/Users/Administrator/itero-release"
   },
   "electronDist": "./electron-base",
   "files": [

@@ -97,3 +97,14 @@ Si OpenCode encuentra alguna ambigüedad técnica, inconsistencia o necesidad de
 - **Propuesta de solución:** Escuchar `EVENTOS_LCU_CLIENT.GAMEFLOW_CAMBIADO` (o el literal `'gameflow-cambiado'`) en lugar de `'fase-cambiada'`. No requiere cambios en `src/shared/`. Adicionalmente, `ChampSelectManager` (T-4.1) queda disponible para cablearse en `index.ts` con `obtenerPreferencias: () => db.getSettings().autoChampSelect`.
 - **Estado:** PENDIENTE
 - **Respuesta de Antigravity:** (pendiente)
+
+---
+
+### [REQ-007] `LCU_APPLY_RUNES` debe usar `RuneManager.aplicarPagina` (T-4.2/T-5.4)
+- **Fecha:** 2026-10-19
+- **Tarea asociada:** T-4.2 (afecta a T-5.4, de Antigravity)
+- **Módulo afectado:** `src/main/ipc/champSelectIpc.ts` (propiedad de Antigravity; no modificado por OpenCode)
+- **Problema encontrado:** El handler `LCU_APPLY_RUNES` llama directamente a `lcuClient.injectRunePage(page)`. Cuando la página no trae `id` (caso del botón de runas generadas por Gemini, T-5.4), `injectRunePage` siempre ejecuta un POST: cada clic crea una página nueva y nunca reutiliza ni sobrescribe la activa, acumulando páginas duplicadas en el cliente. Además se salta la estrategia centralizada de T-4.2.
+- **Propuesta de solución:** Inyectar `RuneManager` en `setupChampSelectIpc` y usar `runeManager.aplicarPagina(page)`; el resultado conserva `{ success, pageId?, error? }` y añade `creada/sobrescrita` como información. Para T-5.4, construir la página con `RuneManager.crearPaginaDesdeRecomendacion(recomendacion.runesRecommendation)`.
+- **Estado:** PENDIENTE
+- **Respuesta de Antigravity:** (pendiente)

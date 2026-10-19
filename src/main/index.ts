@@ -4,6 +4,7 @@ import { IPC_CHANNELS } from '../shared/events';
 import { DEFAULT_APP_SETTINGS } from '../shared/constants';
 import { LcuClient } from './lcu';
 import { registrarLcuIpc } from './ipc/lcuIpc';
+import { registrarSettingsIpc } from './ipc/settingsIpc';
 
 let mainWindow: BrowserWindow | null = null;
 const lcuClient = new LcuClient();
@@ -35,18 +36,9 @@ function createWindow() {
   });
 }
 
-// Handlers base de IPC
-ipcMain.handle(IPC_CHANNELS.SETTINGS_GET, async () => {
-  return DEFAULT_APP_SETTINGS;
-});
-
-ipcMain.handle(IPC_CHANNELS.SETTINGS_SAVE, async (_event, newSettings) => {
-  console.log('Ajustes guardados:', newSettings);
-  return { success: true };
-});
-
-// Registrar IPC de LCU
+// Registrar canales IPC
 registrarLcuIpc(lcuClient, () => mainWindow?.webContents ?? null);
+registrarSettingsIpc(() => mainWindow?.webContents ?? null);
 
 app.whenReady().then(async () => {
   createWindow();

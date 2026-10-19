@@ -3,6 +3,7 @@ import { Shield, Swords, User, Settings, Play } from 'lucide-react';
 import type { LcuConnectionState, GameflowPhase, AppSettings, ReadyCheckEvent } from '../shared/types';
 import { DEFAULT_APP_SETTINGS } from '../shared/constants';
 import { DashboardView } from './views/DashboardView';
+import { SettingsView } from './views/SettingsView';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'champSelect' | 'matchups' | 'profile' | 'settings'>('dashboard');
@@ -183,7 +184,20 @@ export default function App() {
           />
         )}
 
-        {activeTab !== 'dashboard' && (
+        {activeTab === 'settings' && (
+          <SettingsView
+            settings={settings}
+            onSaveSettings={async (newSettings) => {
+              if (window.api) {
+                await window.api.saveSettings(newSettings);
+                const updated = await window.api.getSettings();
+                setSettings(updated);
+              }
+            }}
+          />
+        )}
+
+        {activeTab !== 'dashboard' && activeTab !== 'settings' && (
           <div className="max-w-4xl mx-auto py-12 text-center text-[#A09B8C]">
             <p className="text-lg font-medium text-[#F0E6D2]">Módulo en preparación</p>
             <p className="text-sm mt-1">Esta vista se activará en las siguientes fases del proyecto.</p>

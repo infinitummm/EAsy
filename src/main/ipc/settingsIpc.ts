@@ -1,44 +1,91 @@
 import { ipcMain, WebContents } from 'electron';
 import { IPC_CHANNELS } from '../../shared/events';
-import { DEFAULT_APP_SETTINGS, RIOT_RATE_LIMITS, GEMINI_RATE_LIMITS } from '../../shared/constants';
-import type { AppSettings, PlatformRouting, RegionalRouting } from '../../shared/types';
-import type { KeyHealthStatus } from '../../shared/contracts';
+import { DEFAULT_APP_SETTINGS } from '../../shared/constants';
+import type { AppSettings } from '../../shared/types';
+import type { KeyHealthStatus, IDatabaseService, ISecurityService, IRiotApiClient } from '../../shared/contracts';
+import { GeminiService } from '../ai/GeminiService';
 
-// Estado en memoria de ajustes y cuotas mientras no esté montada la BD completa
-let appSettings: AppSettings = { ...DEFAULT_APP_SETTINGS };
-let riotCallCountShort = 0;
-let riotCallCountLong = 0;
-let geminiCallCount = 0;
+let memoriaSettings: AppSettings = { ...DEFAULT_APP_SETTINGS };
 
 /**
  * Registra los canales IPC para la gestión de ajustes, claves de API y monitor de cuotas.
  */
-export function registrarSettingsIpc(getWebContents: () => WebContents | null): void {
+export function registrarSettingsIpc(
+  getWebContents: () => WebContents | null,
+  dbService?: IDatabaseService,
+  securityService?: ISecurityService,
+  riotClient?: IRiotApiClient,
+  geminiService?: GeminiService
+): void {
   // 1. Obtener Ajustes
-  ipcMain.handle(IPC_CHANNELS.SETTINGS_GET, async () => {
-    return appSettings;
+  ipcMain.handle(IPC_CHANNELS.SETTINGS_GET, async (): Promise<AppSettings> => {
+    if (dbService) {
+      try {
+        const s = dbService.getSettings();
+        memoriaSettings = s;
+        return s;
+      } catch (err) {
+        console.warn('[SettingsIPC] Fallo al leer de SQLite, usando memoria:', err);
+      }
+    }
+    return memoriaSettings;
   });
 
   // 2. Guardar Ajustes
   ipcMain.handle(IPC_CHANNELS.SETTINGS_SAVE, async (_event, newSettings: Partial<AppSettings>) => {
-    appSettings = {
-      ...appSettings,
-      ...newSettings,
-      autoAccept: {
-        ...appSettings.autoAccept,
-        ...(newSettings.autoAccept || {}),
-      },
-      autoChampSelect: {
-        ...appSettings.autoChampSelect,
-        ...(newSettings.autoChampSelect || {}),
-      },
-      apiKeys: {
-        ...appSettings.apiKeys,
-        ...(newSettings.apiKeys || {}),
-      },
-    };
-    console.log('[SettingsIPC] Ajustes actualizados con éxito.');
-    return { success: true };
+    try {
+      memoriaSettings = {
+        ...memoriaSettings,
+        ...newSettings,
+        autoAccept: {
+          ...memoriaSettings.autoAccept,
+          ...(newSettings.autoAccept || {}),
+        },
+        autoChampSelect: {
+          ...memoriaSettings.autoChampSelect,
+          ...(newSettings.autoChampSelect || {}),
+        },
+        apiKeys: {
+          ...memoriaSettings.apiKeys,
+          ...(newSettings.apiKeys || {}),
+        },
+      };
+
+      // Si hay servicio de seguridad y claves en claro, cifrarlas
+      if (securityService && newSettings.apiKeys) {
+        if (newSettings.apiKeys.riotApiKeyEncrypted && !newSettings.apiKeys.riotApiKeyEncrypted.includes(':')) {
+          memoriaSettings.apiKeys.riotApiKeyEncrypted = securityService.encrypt(newSettings.apiKeys.riotApiKeyEncrypted);
+        }
+        if (newSettings.apiKeys.geminiApiKeyEncrypted && !newSettings.apiKeys.geminiApiKeyEncrypted.includes(':')) {
+          memoriaSettings.apiKeys.geminiApiKeyEncrypted = securityService.encrypt(newSettings.apiKeys.geminiApiKeyEncrypted);
+        }
+      }
+
+      // Si hay cliente Riot, actualizar clave
+      if (riotClient && newSettings.apiKeys?.riotApiKeyEncrypted) {
+        const clave = securityService && newSettings.apiKeys.riotApiKeyEncrypted.includes(':')
+          ? securityService.decrypt(newSettings.apiKeys.riotApiKeyEncrypted)
+          : newSettings.apiKeys.riotApiKeyEncrypted;
+        riotClient.setApiKey(clave);
+      }
+
+      // Si hay GeminiService, actualizar clave
+      if (geminiService && newSettings.apiKeys?.geminiApiKeyEncrypted) {
+        const clave = securityService && newSettings.apiKeys.geminiApiKeyEncrypted.includes(':')
+          ? securityService.decrypt(newSettings.apiKeys.geminiApiKeyEncrypted)
+          : newSettings.apiKeys.geminiApiKeyEncrypted;
+        geminiService.setApiKey(clave);
+      }
+
+      if (dbService) {
+        dbService.saveSettings(memoriaSettings);
+      }
+
+      return { success: true };
+    } catch (err: unknown) {
+      console.error('[SettingsIPC] Error al guardar ajustes:', err);
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
   });
 
   // 3. Validar Clave de Riot API
@@ -53,32 +100,28 @@ export function registrarSettingsIpc(getWebContents: () => WebContents | null): 
     }
 
     try {
-      // Probar contra endpoint de estado de Riot o Account
-      const testUrl = `https://americas.api.riotgames.com/riot/account/v1/accounts/by-riot-id/Riot/NA1`;
+      if (riotClient) {
+        riotClient.setApiKey(apiKey.trim());
+        const health = await riotClient.checkKeyHealth();
+        return health;
+      }
+
+      // Fallback si riotClient no estuviera inicializado
+      const testUrl = `https://la1.api.riotgames.com/lol/status/v4/platform-data`;
       const response = await fetch(testUrl, {
         headers: {
           'X-Riot-Token': apiKey.trim(),
         },
       });
 
-      const statusCode = response.status;
-      const isExpired = statusCode === 403;
-      const valid = statusCode === 200 || statusCode === 404; // 404 significa que la key es válida pero la cuenta de prueba no existe
-
-      const health: KeyHealthStatus = {
-        valid,
-        statusCode,
+      const isExpired = response.status === 401 || response.status === 403;
+      return {
+        valid: response.ok,
+        statusCode: response.status,
         isExpired,
         lastChecked: Date.now(),
       };
-
-      const wc = getWebContents();
-      if (wc && !wc.isDestroyed() && isExpired) {
-        wc.send(IPC_CHANNELS.RIOT_KEY_WARNING, health);
-      }
-
-      return health;
-    } catch (err) {
+    } catch {
       return {
         valid: false,
         statusCode: 500,
@@ -87,27 +130,4 @@ export function registrarSettingsIpc(getWebContents: () => WebContents | null): 
       };
     }
   });
-
-  // 4. Sincronizar Cuenta de Invocador
-  ipcMain.handle(
-    IPC_CHANNELS.RIOT_SYNC_ACCOUNT,
-    async (
-      _event,
-      params: { gameName: string; tagLine: string; platform: PlatformRouting; regional: RegionalRouting }
-    ) => {
-      console.log(`[SettingsIPC] Sincronizando cuenta ${params.gameName}#${params.tagLine}...`);
-      return { success: true };
-    }
-  );
-
-  // 5. Emitir periódicamente actualización de cuotas a la UI
-  setInterval(() => {
-    const wc = getWebContents();
-    if (wc && !wc.isDestroyed()) {
-      wc.send(IPC_CHANNELS.API_QUOTA_UPDATED, {
-        riotCount: riotCallCountShort,
-        geminiCount: geminiCallCount,
-      });
-    }
-  }, 5000);
 }

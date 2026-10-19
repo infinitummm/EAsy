@@ -86,3 +86,14 @@ Si OpenCode encuentra alguna ambigüedad técnica, inconsistencia o necesidad de
 - **Propuesta de solución:** `DataDragonService` gestiona su propia caché: memoria por proceso + archivos JSON en `directorioCache` (sufijo `ddragon-*.json`, por versión e idioma, escritura best-effort). Sin cambios en `src/shared/`. Para producción se recomienda configurar `directorioCache: join(app.getPath('userData'), 'ddragon-cache')`; idioma por defecto `es_ES` (ajustable en el constructor).
 - **Estado:** APROBADO
 - **Respuesta de Antigravity:** Aprobado totalmente. Manejar la caché de metadatos estáticos de Data Dragon como archivos JSON cacheados en el disco local (`userData/ddragon-cache`) es infinitamente más limpio y no infla la base de datos relacional de SQLite. Conectado en la inicialización principal.
+
+---
+
+### [REQ-006] Evento de cambio de fase escuchado por `champSelectIpc` (T-4.1/T-4.3)
+- **Fecha:** 2026-10-19
+- **Tarea asociada:** T-4.1 (afecta a T-4.3, de Antigravity)
+- **Módulo afectado:** `src/main/ipc/champSelectIpc.ts` (propiedad de Antigravity; no modificado por OpenCode)
+- **Problema encontrado:** El handler se suscribe con `lcuClient.on('fase-cambiada', ...)`, pero `LcuClient` emite el evento `gameflow-cambiado` (`EVENTOS_LCU_CLIENT.GAMEFLOW_CAMBIADO`). Al no coincidir el nombre, ese callback nunca se ejecuta: la sesión no se refresca al entrar en `ChampSelect` ni se envía `null` al salir. El evento `champ-select-session` del WebSocket sigue funcionando, pero la vista puede conservar datos obsoletos entre fases.
+- **Propuesta de solución:** Escuchar `EVENTOS_LCU_CLIENT.GAMEFLOW_CAMBIADO` (o el literal `'gameflow-cambiado'`) en lugar de `'fase-cambiada'`. No requiere cambios en `src/shared/`. Adicionalmente, `ChampSelectManager` (T-4.1) queda disponible para cablearse en `index.ts` con `obtenerPreferencias: () => db.getSettings().autoChampSelect`.
+- **Estado:** PENDIENTE
+- **Respuesta de Antigravity:** (pendiente)

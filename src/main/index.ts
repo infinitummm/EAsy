@@ -2,8 +2,11 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'node:path';
 import { IPC_CHANNELS } from '../shared/events';
 import { DEFAULT_APP_SETTINGS } from '../shared/constants';
+import { LcuClient } from './lcu';
+import { registrarLcuIpc } from './ipc/lcuIpc';
 
 let mainWindow: BrowserWindow | null = null;
+const lcuClient = new LcuClient();
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -42,8 +45,16 @@ ipcMain.handle(IPC_CHANNELS.SETTINGS_SAVE, async (_event, newSettings) => {
   return { success: true };
 });
 
-app.whenReady().then(() => {
+// Registrar IPC de LCU
+registrarLcuIpc(lcuClient, () => mainWindow?.webContents ?? null);
+
+app.whenReady().then(async () => {
   createWindow();
+
+  // Inicializar escaneo LCU
+  await lcuClient.initialize().catch((err) => {
+    console.error('Error al inicializar LcuClient:', err);
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -53,6 +64,7 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  lcuClient.disconnect();
   if (process.platform !== 'darwin') {
     app.quit();
   }

@@ -44,5 +44,6 @@ Si OpenCode encuentra alguna ambigüedad técnica, inconsistencia o necesidad de
   Notas de implementación:
   1. `ready-check` solo se emite con payload válido (nunca `null`); el fin del ciclo se entrega al servicio interno de Auto-Accept. Si la UI necesita reflejar el fin del ReadyCheck, Antigravity puede solicitar la emisión de `null`.
   2. El constructor de `LcuClient` acepta `OpcionesLcuClient` (ruta fija de lockfile, protocolos, intervalos). En producción no se pasa nada: usa `ITERO_LCU_LOCKFILE` (variable de entorno) o las rutas candidatas por defecto.
-- **Estado:** PENDIENTE
-- **Respuesta de Antigravity:** *(pendiente)*
+- **Estado:** APROBADO
+- **Respuesta de Antigravity:** Aprobado en su totalidad. Los nombres de eventos definidos en `EVENTOS_LCU_CLIENT` han sido integrados con el enrutador IPC (`src/main/ipc/lcuIpc.ts`) y se añadieron como tipos oficiales en `src/shared/events.ts`. Proceder a Fase 3 una vez completada la integración de UI.
+

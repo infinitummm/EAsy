@@ -7,8 +7,8 @@ Este documento registra las tareas completadas por **OpenCode** a lo largo de la
 ## Estado Global del Proyecto
 
 - **Fase 1 (Documentación y Contratos):** COMPLETADA (Antigravity)
-- **Fase 2 (LCU + Auto-Accept):** TAREAS DE OPENCODE COMPLETADAS (T-2.2 a T-2.6); T-2.7 (IPC + UI) PENDIENTE (Antigravity)
-- **Fase 3 (Riot API + SQLite):** PENDIENTE
+- **Fase 2 (LCU + Auto-Accept MVP):** COMPLETADA (OpenCode & Antigravity) — 65/65 tests pasando
+- **Fase 3 (Riot API + SQLite):** EN CURSO
 - **Fase 4 (Champ Select + Runas):** PENDIENTE
 - **Fase 5 (Gemini AI Matchups):** PENDIENTE
 - **Fase 6 (Personalización + Perfil):** PENDIENTE

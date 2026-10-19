@@ -34,7 +34,7 @@ Antes de escribir una sola línea de código, lee estos documentos en el siguien
   - `src/main/lcu/` (Conexión LCU, lockfile, WebSocket, Auto-Accept, Champ Select)
   - `src/main/ratelimit/` (Limitadores de tasa Token Bucket)
   - `src/main/riot/` (Cliente oficial Riot API, Data Dragon, parser Match-V5)
-  - `src/main/db/` (Capa SQLite con `better-sqlite3`, esquemas y repositorios)
+  - `src/main/db/` (Capa SQLite con `node:sqlite` o `better-sqlite3`, esquemas y repositorios)
   - `src/main/security/` (Cifrado simétrico AES-256-GCM para keys)
   - `tests/lcu/`, `tests/ratelimit/`, `tests/riot/`, `tests/db/`, `tests/security/`, `tests/mocks/`
   - `docs/REQUESTS.md` (Para registrar dudas o solicitudes de cambio de contrato)

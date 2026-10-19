@@ -15,11 +15,28 @@ Para una aplicación de escritorio local para *League of Legends* en Windows, se
 | **Velocidad de Pruebas Unitarias** | **Inmediata:** Vitest corre en memoria simulando Node.js con mocks instantáneos de red y archivos en TypeScript. | **Mixta:** Requiere tests separados en `cargo test` para Rust y Vitest para la UI. |
 
 ### 1.2. Decisión Arquitectónica
-Se selecciona **Electron + React + TypeScript + Vite + SQLite (`better-sqlite3`)**.
+Se selecciona **Electron + React + TypeScript + Vite + SQLite**.
 **Motivos determinantes:**
 1. Manejo nativo e indiscutible del certificado SSL autofirmado de la LCU API y WebSockets sin bloqueos de WebView.
 2. Homogeneidad del lenguaje (TypeScript de extremo a extremo), permitiendo contratos e interfaces compartidas e inviolables entre el backend de Node y el frontend de React.
 3. Máxima compatibilidad y velocidad de implementación para OpenCode, permitiendo centrarse en la robustez de los algoritmos de rate-limiting, parsing de partidas y sincronización sin batallar con compilaciones de Rust.
+
+### 1.3. Estrategia de Motor SQLite (Nativo vs Rebuild)
+El sistema soporta dos vías para la persistencia síncrona en SQLite:
+
+1. **`node:sqlite` (Recomendado y por Defecto):**
+   - Integrado de forma oficial y nativa en Node.js (desde v22.5.0) y en Electron 34+ / 44+.
+   - **Ventajas:** Cero dependencias C++, cero necesidad de Visual Studio C++ Build Tools o `node-gyp`. No sufre desajustes de ABI (`NODE_MODULE_VERSION`) entre Node y Electron.
+   - **Sintaxis:** Usa la clase `DatabaseSync` (`db.exec()`, `db.prepare().get()`, `db.prepare().run()`), idéntica conceptualmente a `better-sqlite3`.
+
+2. **`better-sqlite3` (Con Rebuild Nativo):**
+   - Si se prefiere usar `better-sqlite3`, requiere compilar el addon C++ para la versión de ABI de Electron.
+   - **Comando exacto de reconstrucción nativa:**
+     ```bash
+     npx @electron/rebuild -f -w better-sqlite3
+     ```
+     *(Requiere tener instalado Visual Studio con el workload "Desktop development with C++").*
+   - Si no se cuenta con Visual Studio Build Tools en la máquina de desarrollo, `node:sqlite` es la alternativa nativa equivalente sin fricciones.
 
 ---
 

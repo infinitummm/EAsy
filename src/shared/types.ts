@@ -280,6 +280,8 @@ export interface GeminiMatchupRecommendation {
   };
 }
 
+export type BuildRecommendation = GeminiMatchupRecommendation['buildRecommendation'];
+
 // ==========================================
 // Configuración de la Aplicación
 // ==========================================

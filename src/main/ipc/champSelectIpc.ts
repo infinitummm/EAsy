@@ -8,13 +8,15 @@ import { IPC_CHANNELS } from '../../shared/events';
 import { ILcuClient } from '../../shared/contracts';
 import { GeminiService } from '../ai/GeminiService';
 import { RuneManager } from '../lcu/RuneManager';
-import { RunePage, Role, ChampSelectSession, GameflowPhase } from '../../shared/types';
+import { ItemSetManager } from '../lcu/ItemSetManager';
+import { RunePage, Role, ChampSelectSession, GameflowPhase, BuildRecommendation } from '../../shared/types';
 
 export function setupChampSelectIpc(
   _mainWindow: BrowserWindow | null,
   lcuClient: ILcuClient,
   geminiService: GeminiService,
-  runeManager?: RuneManager
+  runeManager?: RuneManager,
+  itemSetManager?: ItemSetManager
 ): void {
   const difundir = (canal: string, ...args: unknown[]) => {
     const windows = BrowserWindow.getAllWindows();
@@ -40,6 +42,31 @@ export function setupChampSelectIpc(
           };
         }
         return await lcuClient.injectRunePage(page);
+      } catch (err: unknown) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : String(err)
+        };
+      }
+    }
+  );
+
+  // 1b. Inyección y guardado de Conjuntos de Objetos (Build / Item Sets) en disco y LCU
+  ipcMain.removeHandler(IPC_CHANNELS.LCU_APPLY_BUILD);
+  ipcMain.handle(
+    IPC_CHANNELS.LCU_APPLY_BUILD,
+    async (
+      _event,
+      params: { championId: number; title?: string; build: BuildRecommendation }
+    ): Promise<{ success: boolean; filePath?: string; lcuApplied?: boolean; error?: string }> => {
+      try {
+        if (itemSetManager) {
+          return await itemSetManager.aplicarBuild(params);
+        }
+        return {
+          success: false,
+          error: 'ItemSetManager no disponible en el proceso main.'
+        };
       } catch (err: unknown) {
         return {
           success: false,

@@ -1,7 +1,7 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { LcuClient, ChampSelectManager, RuneManager } from './lcu';
+import { LcuClient, ChampSelectManager, RuneManager, ItemSetManager } from './lcu';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { registrarLcuIpc } from './ipc/lcuIpc';
@@ -24,6 +24,10 @@ const lcuClient = new LcuClient({
   obtenerRutaManual: () => dbService?.getSettings().leagueInstallationPath,
 });
 const runeManager = new RuneManager(lcuClient);
+const itemSetManager = new ItemSetManager(
+  lcuClient,
+  () => dbService?.getSettings().leagueInstallationPath || 'C:\\Riot Games\\League of Legends'
+);
 const geminiService = new GeminiService();
 const riotClient = new RiotApiClient();
 const matchParser = new MatchParser();
@@ -155,7 +159,7 @@ app.whenReady().then(async () => {
 
   // 5. Registrar canales IPC con todas sus dependencias
   registrarLcuIpc(lcuClient, () => mainWindow?.webContents ?? null);
-  setupChampSelectIpc(null, lcuClient, geminiService, runeManager);
+  setupChampSelectIpc(null, lcuClient, geminiService, runeManager, itemSetManager);
   registrarSettingsIpc(
     () => mainWindow?.webContents ?? null,
     dbService || undefined,

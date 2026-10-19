@@ -94,18 +94,26 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <header className="flex justify-between items-center border-b border-[#1E282D] pb-4">
+    <div className="max-w-5xl mx-auto space-y-6">
+      <header className="flex justify-between items-center border-b border-[#1B3B6F]/70 pb-4">
         <div>
-          <h2 className="text-2xl font-bold text-[#F0E6D2]">Ajustes & Claves de API</h2>
-          <p className="text-sm text-[#A09B8C]">Gestión de credenciales cifradas y parámetros del sistema</p>
+          <div className="inline-block px-2.5 py-0.5 mb-1.5 bg-[#00D4FF]/15 border border-[#00D4FF]/40 text-[#00F0FF] text-[10px] font-black tracking-widest uppercase transform -skew-x-6">
+            SYSTEM PREFERENCES // CONFIG
+          </div>
+          <h2 className="text-2xl font-black text-white tracking-wide flex items-center space-x-2">
+            <span>AJUSTES & CLAVES DE API</span>
+            <span className="text-[#00D4FF] font-mono text-sm">// P3R</span>
+          </h2>
+          <p className="text-xs text-[#6F92BF] font-mono mt-0.5">Gestión de credenciales cifradas (AES-256) y parámetros del sistema</p>
         </div>
         <button
           onClick={handleSaveAll}
-          className="flex items-center space-x-2 bg-[#C89B3C] hover:bg-[#D8AB4C] text-black font-bold px-5 py-2 rounded transition shadow-md"
+          className="flex items-center space-x-2 bg-gradient-to-r from-[#00D4FF] to-[#0088FF] hover:from-[#00F0FF] hover:to-[#0077FF] text-[#030813] font-black text-xs uppercase tracking-widest px-5 py-2.5 rounded shadow-[0_0_15px_rgba(0,212,255,0.4)] transition transform -skew-x-6 active:scale-95"
         >
-          {savedSuccess ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-          <span>{savedSuccess ? '¡Guardado!' : 'Guardar Ajustes'}</span>
+          <div className="transform skew-x-6 flex items-center space-x-2">
+            {savedSuccess ? <Check className="w-4 h-4 text-[#030813]" /> : <Save className="w-4 h-4 text-[#030813]" />}
+            <span>{savedSuccess ? '¡GUARDADO!' : 'GUARDAR AJUSTES'}</span>
+          </div>
         </button>
       </header>
 

@@ -34,15 +34,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onRefreshLcu,
 }) => {
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <header className="flex justify-between items-center border-b border-[#1E282D] pb-4">
+    <div className="max-w-5xl mx-auto space-y-6">
+      <header className="flex justify-between items-center border-b border-[#1B3B6F]/70 pb-4">
         <div>
-          <h2 className="text-2xl font-bold text-[#F0E6D2]">Dashboard Principal</h2>
-          <p className="text-sm text-[#A09B8C]">Resumen de conexión y automatizaciones activas</p>
+          <div className="inline-block px-2.5 py-0.5 mb-1.5 bg-[#00D4FF]/15 border border-[#00D4FF]/40 text-[#00F0FF] text-[10px] font-black tracking-widest uppercase transform -skew-x-6">
+            SYSTEM STATUS // LIVE HUD
+          </div>
+          <h2 className="text-2xl font-black text-white tracking-wide flex items-center space-x-2">
+            <span>DASHBOARD PRINCIPAL</span>
+            <span className="text-[#00D4FF] font-mono text-sm">// P3R</span>
+          </h2>
+          <p className="text-xs text-[#6F92BF] font-mono mt-0.5">Sincronización en vivo con League of Legends y motor de IA</p>
         </div>
-        <div className="flex items-center space-x-2 text-xs text-[#0AC8B9] bg-[#0A282D] px-3 py-1.5 rounded border border-[#0AC8B9]/30">
-          <CheckCircle2 className="w-4 h-4" />
-          <span>100% Local & Seguro</span>
+        <div className="flex items-center space-x-2 text-xs text-[#00FFB2] bg-[#040C1A] px-3.5 py-1.5 rounded border border-[#00FFB2]/40 shadow-[0_0_12px_rgba(0,255,178,0.2)] transform -skew-x-6">
+          <div className="transform skew-x-6 flex items-center space-x-2">
+            <CheckCircle2 className="w-4 h-4 text-[#00FFB2]" />
+            <span className="font-mono font-bold tracking-wider">100% LOCAL & SEGURO</span>
+          </div>
         </div>
       </header>
 
@@ -68,127 +76,131 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* Tarjeta de Estado del Cliente League of Legends */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-[#111823] p-5 rounded-lg border border-[#1E282D] flex items-center space-x-4">
+        <div className="bg-[#08152B]/95 p-5 rounded-xl border border-[#1B3B6F] flex items-center space-x-4 shadow-[0_8px_30px_rgba(0,0,0,0.4)]">
           <div
-            className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+            className={`w-12 h-12 rounded flex items-center justify-center transform -skew-x-6 ${
               lcuState === 'connected'
-                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                ? 'bg-[#00FFB2]/15 text-[#00FFB2] border border-[#00FFB2]/50 shadow-[0_0_12px_rgba(0,255,178,0.3)]'
                 : lcuState === 'connecting'
-                ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
-                : 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
+                ? 'bg-[#FFD700]/15 text-[#FFD700] border border-[#FFD700]/50 shadow-[0_0_12px_rgba(255,215,0,0.3)]'
+                : 'bg-[#FF2E63]/15 text-[#FF2E63] border border-[#FF2E63]/50 shadow-[0_0_12px_rgba(255,46,99,0.3)]'
             }`}
           >
-            {lcuState === 'connected' ? (
-              <Wifi className="w-6 h-6" />
-            ) : (
-              <WifiOff className="w-6 h-6" />
-            )}
+            <div className="transform skew-x-6">
+              {lcuState === 'connected' ? (
+                <Wifi className="w-6 h-6" />
+              ) : (
+                <WifiOff className="w-6 h-6" />
+              )}
+            </div>
           </div>
           <div>
-            <div className="text-xs text-[#A09B8C]">Conexión LCU (Cliente Oficial)</div>
-            <div className="text-lg font-bold text-[#F0E6D2] capitalize">
+            <div className="text-[10px] text-[#6F92BF] font-mono uppercase tracking-wider">CONEXIÓN LCU // CLIENTE</div>
+            <div className="text-base font-black text-white capitalize mt-0.5">
               {lcuState === 'connected'
                 ? 'Conectado a LeagueClient'
                 : lcuState === 'connecting'
-                ? 'Buscando cliente...'
+                ? 'Sincronizando cliente...'
                 : 'Cliente Cerrado / Desconectado'}
             </div>
-            <div className="text-xs text-[#6B7280]">
-              Protocolo: HTTPS autofirmado + WebSocket
+            <div className="text-xs text-[#5078A8] font-mono mt-0.5">
+              Protocolo: HTTPS TLS/SSL + WebSocket
             </div>
           </div>
         </div>
 
-        <div className="bg-[#111823] p-5 rounded-lg border border-[#1E282D] flex items-center space-x-4">
-          <div className="w-12 h-12 rounded-lg bg-[#C89B3C]/10 text-[#C89B3C] border border-[#C89B3C]/30 flex items-center justify-center">
-            <Clock className="w-6 h-6" />
+        <div className="bg-[#08152B]/95 p-5 rounded-xl border border-[#1B3B6F] flex items-center space-x-4 shadow-[0_8px_30px_rgba(0,0,0,0.4)]">
+          <div className="w-12 h-12 rounded bg-[#00D4FF]/15 text-[#00D4FF] border border-[#00D4FF]/50 flex items-center justify-center transform -skew-x-6 shadow-[0_0_12px_rgba(0,212,255,0.3)]">
+            <div className="transform skew-x-6">
+              <Clock className="w-6 h-6" />
+            </div>
           </div>
           <div>
-            <div className="text-xs text-[#A09B8C]">Fase de Gameflow Detectada</div>
-            <div className="text-lg font-bold font-mono text-[#C89B3C]">{gameflow}</div>
-            <div className="text-xs text-[#6B7280]">
-              Monitoreo continuo en tiempo real
+            <div className="text-[10px] text-[#6F92BF] font-mono uppercase tracking-wider">FASE DE GAMEFLOW</div>
+            <div className="text-lg font-black font-mono text-[#00F0FF] mt-0.5">{gameflow}</div>
+            <div className="text-xs text-[#5078A8] font-mono mt-0.5">
+              Monitoreo continuo segundo a segundo
             </div>
           </div>
         </div>
       </div>
 
-      {/* Panel de Diagnóstico en Vivo Main ↔ Renderer (Requisito 2) */}
-      <div className="bg-[#0D1520] p-4 rounded-lg border border-[#1E282D] space-y-3 shadow-inner">
-        <div className="flex items-center justify-between border-b border-[#1E282D] pb-2">
+      {/* Panel de Diagnóstico en Vivo Main ↔ Renderer */}
+      <div className="bg-[#08152B]/95 p-5 rounded-xl border border-[#1B3B6F] space-y-3 shadow-[0_8px_30px_rgba(0,0,0,0.4)]">
+        <div className="flex items-center justify-between border-b border-[#1B3B6F]/70 pb-2.5">
           <div className="flex items-center space-x-2">
-            <span className={`w-2.5 h-2.5 rounded-full ${mainLcuState === 'connected' ? 'bg-emerald-400 animate-pulse' : 'bg-cyan-400'}`}></span>
-            <h3 className="text-sm font-bold text-[#F0E6D2]">Diagnóstico en Vivo: Comunicación Main ↔ Renderer IPC</h3>
+            <span className={`w-2.5 h-2.5 rounded-full ${mainLcuState === 'connected' ? 'bg-[#00FFB2] animate-pulse shadow-[0_0_8px_#00FFB2]' : 'bg-[#00D4FF]'}`}></span>
+            <h3 className="text-xs font-mono font-black text-white uppercase tracking-wider">DIAGNÓSTICO EN VIVO // MAIN ↔ RENDERER IPC</h3>
           </div>
           <button
             onClick={onRefreshLcu}
-            className="px-2.5 py-1 text-xs font-semibold rounded bg-[#1E2328] hover:bg-[#2A3038] text-[#C89B3C] border border-[#C89B3C]/40 transition"
+            className="px-3 py-1 text-xs font-black uppercase tracking-wider rounded bg-[#040C1A] hover:bg-[#00D4FF]/20 text-[#00F0FF] border border-[#00D4FF]/40 transition transform -skew-x-6"
           >
-            🔄 Sincronizar Ahora
+            <span className="transform skew-x-6 inline-block">🔄 Sincronizar Ahora</span>
           </button>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono">
-          <div className="bg-[#111823] p-2.5 rounded border border-[#1E282D]">
-            <div className="text-[#A09B8C] text-[10px] uppercase">Estado en Main</div>
-            <div className={`mt-1 font-bold ${mainLcuState === 'connected' ? 'text-emerald-400' : mainLcuState === 'connecting' ? 'text-amber-400' : 'text-rose-400'}`}>
+          <div className="bg-[#040C1A] p-3 rounded border border-[#1B3B6F]">
+            <div className="text-[#6F92BF] text-[10px] uppercase font-bold">Estado en Main</div>
+            <div className={`mt-1 font-black ${mainLcuState === 'connected' ? 'text-[#00FFB2]' : mainLcuState === 'connecting' ? 'text-[#FFD700]' : 'text-[#FF2E63]'}`}>
               {mainLcuState}
             </div>
           </div>
 
-          <div className="bg-[#111823] p-2.5 rounded border border-[#1E282D]">
-            <div className="text-[#A09B8C] text-[10px] uppercase">Estado en Renderer (IPC)</div>
-            <div className={`mt-1 font-bold ${lcuState === 'connected' ? 'text-emerald-400' : lcuState === 'connecting' ? 'text-amber-400' : 'text-rose-400'}`}>
+          <div className="bg-[#040C1A] p-3 rounded border border-[#1B3B6F]">
+            <div className="text-[#6F92BF] text-[10px] uppercase font-bold">Estado en Renderer</div>
+            <div className={`mt-1 font-black ${lcuState === 'connected' ? 'text-[#00FFB2]' : lcuState === 'connecting' ? 'text-[#FFD700]' : 'text-[#FF2E63]'}`}>
               {lcuState}
             </div>
           </div>
 
-          <div className="bg-[#111823] p-2.5 rounded border border-[#1E282D]">
-            <div className="text-[#A09B8C] text-[10px] uppercase">Puerto LCU</div>
-            <div className="mt-1 font-bold text-[#F0E6D2]">
+          <div className="bg-[#040C1A] p-3 rounded border border-[#1B3B6F]">
+            <div className="text-[#6F92BF] text-[10px] uppercase font-bold">Puerto LCU</div>
+            <div className="mt-1 font-black text-white">
               {lcuPort ? lcuPort : 'No detectado'}
             </div>
           </div>
 
-          <div className="bg-[#111823] p-2.5 rounded border border-[#1E282D]">
-            <div className="text-[#A09B8C] text-[10px] uppercase">Último Evento IPC</div>
-            <div className="mt-1 text-gray-300 truncate" title={`${lastIpcEvent} (${lastIpcTimestamp})`}>
+          <div className="bg-[#040C1A] p-3 rounded border border-[#1B3B6F]">
+            <div className="text-[#6F92BF] text-[10px] uppercase font-bold">Último Evento IPC</div>
+            <div className="mt-1 text-[#A8C8F0] truncate" title={`${lastIpcEvent} (${lastIpcTimestamp})`}>
               {lastIpcTimestamp} • {lastIpcEvent}
             </div>
           </div>
         </div>
 
-        <div className="bg-[#111823] p-2.5 rounded border border-[#1E282D] text-xs">
-          <span className="text-[#A09B8C] font-semibold">Último error de conexión: </span>
-          <span className={lastConnectionError ? 'text-rose-400 font-mono' : 'text-emerald-400 font-mono'}>
+        <div className="bg-[#040C1A] p-3 rounded border border-[#1B3B6F] text-xs">
+          <span className="text-[#6F92BF] font-mono uppercase font-bold">Último error de conexión: </span>
+          <span className={lastConnectionError ? 'text-[#FF85A2] font-mono' : 'text-[#00FFB2] font-mono'}>
             {lastConnectionError || 'Ninguno (conexión saludable)'}
           </span>
         </div>
       </div>
 
       {/* Tarjeta de Control de Auto-Accept */}
-      <div className="bg-[#111823] p-6 rounded-lg border border-[#1E282D] shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-[#08152B]/95 p-6 rounded-xl border border-[#1B3B6F] shadow-[0_8px_30px_rgba(0,0,0,0.4)] flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h3 className="text-lg font-semibold text-[#F0E6D2] flex items-center space-x-2">
+          <h3 className="text-base font-black text-white flex items-center space-x-2 tracking-wide uppercase">
             <span>Auto-Accept de Partidas</span>
             {autoAcceptEnabled ? (
-              <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono">
+              <span className="text-[10px] bg-[#00FFB2]/20 text-[#00FFB2] border border-[#00FFB2]/40 px-2 py-0.5 rounded font-mono font-bold">
                 ACTIVO
               </span>
             ) : (
-              <span className="text-xs bg-gray-500/20 text-gray-400 px-2 py-0.5 rounded font-mono">
+              <span className="text-[10px] bg-[#5078A8]/20 text-[#6F92BF] border border-[#1B3B6F] px-2 py-0.5 rounded font-mono font-bold">
                 INACTIVO
               </span>
             )}
           </h3>
-          <p className="text-sm text-[#A09B8C] mt-1">
-            Detecta automáticamente la fase de Ready Check y acepta la partida respetando un retardo configurable para simular comportamiento humano.
+          <p className="text-xs text-[#6F92BF] font-mono mt-1 leading-relaxed">
+            Detecta automáticamente la fase de Ready Check y acepta la partida respetando un retardo para simular comportamiento humano.
           </p>
 
           <div className="mt-4 flex items-center space-x-4">
-            <div className="flex items-center space-x-3 text-xs text-[#F0E6D2]">
-              <span>Retardo:</span>
-              <span className="font-mono bg-[#1E2328] px-2 py-1 rounded text-[#C89B3C] font-bold">
+            <div className="flex items-center space-x-3 text-xs text-white">
+              <span className="font-mono text-[#6F92BF]">Retardo:</span>
+              <span className="font-mono bg-[#040C1A] border border-[#1B3B6F] px-2 py-1 rounded text-[#00F0FF] font-black">
                 {autoAcceptDelay}s
               </span>
               <input
@@ -198,11 +210,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 step="1"
                 value={autoAcceptDelay}
                 onChange={(e) => onChangeDelay(Number(e.target.value))}
-                className="accent-[#C89B3C] cursor-pointer w-36"
+                className="accent-[#00D4FF] cursor-pointer w-36"
               />
             </div>
-            <span className="text-xs text-[#6B7280]">
-              (Rango seguro: 0 - 8 segundos)
+            <span className="text-[11px] text-[#5078A8] font-mono">
+              (Rango seguro: 0 - 8s)
             </span>
           </div>
         </div>
@@ -210,13 +222,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div>
           <button
             onClick={onToggleAutoAccept}
-            className={`px-6 py-3 rounded font-semibold text-sm transition shadow-lg ${
+            className={`px-5 py-2.5 rounded font-black text-xs uppercase tracking-widest transition shadow-lg transform -skew-x-6 active:scale-95 ${
               autoAcceptEnabled
-                ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+                ? 'bg-gradient-to-r from-[#00D4FF] to-[#0077FF] hover:from-[#00F0FF] hover:to-[#0088FF] text-[#030813] shadow-[0_0_15px_rgba(0,212,255,0.4)]'
+                : 'bg-[#040C1A] hover:bg-[#0E2242] text-[#6F92BF] border border-[#1B3B6F]'
             }`}
           >
-            {autoAcceptEnabled ? 'Desactivar Auto-Accept' : 'Activar Auto-Accept'}
+            <span className="transform skew-x-6 inline-block">
+              {autoAcceptEnabled ? 'Desactivar Auto-Accept' : 'Activar Auto-Accept'}
+            </span>
           </button>
         </div>
       </div>

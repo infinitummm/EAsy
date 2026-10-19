@@ -41,6 +41,7 @@ export const IPC_CHANNELS = {
   LCU_SELECT_FOLDER: 'lcu:select-folder',
   LCU_SET_AUTO_ACCEPT: 'lcu:set-auto-accept',
   LCU_APPLY_RUNES: 'lcu:apply-runes',
+  LCU_APPLY_BUILD: 'lcu:apply-build',
   RIOT_VALIDATE_KEY: 'riot:validate-key',
   RIOT_SYNC_ACCOUNT: 'riot:sync-account',
   RIOT_GET_PROFILE: 'riot:get-profile',
@@ -58,6 +59,11 @@ export interface IpcInvokeHandlers {
   [IPC_CHANNELS.LCU_SELECT_FOLDER]: () => Promise<string | null>;
   [IPC_CHANNELS.LCU_SET_AUTO_ACCEPT]: (params: { enabled: boolean; delaySeconds: number }) => Promise<void>;
   [IPC_CHANNELS.LCU_APPLY_RUNES]: (page: RunePage) => Promise<{ success: boolean; error?: string }>;
+  [IPC_CHANNELS.LCU_APPLY_BUILD]: (params: {
+    championId: number;
+    title?: string;
+    build: any;
+  }) => Promise<{ success: boolean; filePath?: string; error?: string }>;
   [IPC_CHANNELS.RIOT_VALIDATE_KEY]: (apiKey: string) => Promise<KeyHealthStatus>;
   [IPC_CHANNELS.RIOT_SYNC_ACCOUNT]: (params: {
     gameName: string;

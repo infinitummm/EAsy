@@ -149,13 +149,47 @@ export class RuneManager {
     };
   }
 
+  /**
+   * Sanitiza los stat shards para que cumplan con la Temporada 14+ de League of Legends.
+   * Evita enviar IDs obsoletos como 5002 (Armadura) o 5003 (Resistencia Mágica)
+   * que hacen que el cliente de LoL muestre un aviso de advertencia (runas incompletas).
+   */
+  public sanitizarPerks(perks: number[]): number[] {
+    if (!Array.isArray(perks) || perks.length !== 9) {
+      return perks;
+    }
+    const resultado = [...perks];
+
+    // Slot 1 (Ofensivo - índice 6): Fuerza Adaptable (5008), Vel. Ataque (5005), Aceleración (5007)
+    const validosSlot1 = [5008, 5005, 5007];
+    if (!validosSlot1.includes(resultado[6])) {
+      resultado[6] = 5008;
+    }
+
+    // Slot 2 (Flexible - índice 7): Fuerza Adaptable (5008), Vel. Movimiento (5010), Vida Progresiva (5001)
+    const validosSlot2 = [5008, 5010, 5001];
+    if (!validosSlot2.includes(resultado[7])) {
+      resultado[7] = 5008;
+    }
+
+    // Slot 3 (Defensivo - índice 8): Vida Plana (5011), Tenacidad (5013), Vida Progresiva (5001)
+    // 5002 (Armor) y 5003 (MR) fueron eliminados por Riot en el parche 14.2.
+    const validosSlot3 = [5011, 5013, 5001];
+    if (!validosSlot3.includes(resultado[8])) {
+      resultado[8] = 5011; // Vida plana (+65 HP)
+    }
+
+    return resultado;
+  }
+
   /** Completa nombre y estado activo antes de validar y enviar la página. */
   private normalizarPagina(pagina: RunePage): RunePage {
     const nombre = typeof pagina?.name === 'string' ? pagina.name.trim() : '';
+    const rawPerks = Array.isArray(pagina?.selectedPerkIds) ? [...pagina.selectedPerkIds] : [];
     return {
       ...pagina,
       name: nombre || this.nombrePaginaPorDefecto,
-      selectedPerkIds: Array.isArray(pagina?.selectedPerkIds) ? [...pagina.selectedPerkIds] : [],
+      selectedPerkIds: this.sanitizarPerks(rawPerks),
       current: true,
     };
   }

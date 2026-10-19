@@ -301,6 +301,50 @@ export class GeminiService {
     role: Role;
     patch: string;
   }): GeminiMatchupRecommendation {
+    // Si es Ashe (ID 22) o un tirador
+    if (params.championId === 22) {
+      return {
+        championId: params.championId,
+        opponentChampionId: params.opponentId,
+        assignedRole: params.role,
+        patchVersion: params.patch,
+        difficultyRating: 5,
+        matchupSummary: 'Matchup de rango y control de distancia. Utiliza la W para desgastar a tu rival y aprovecha tu ventaja de rango con ataques básicos continuos.',
+        runesRecommendation: {
+          primaryStyleId: 8000, // Precisión
+          subStyleId: 8300,     // Inspiración
+          // PtA (8005), Claridad mental (9101), Linaje (9103), Golpe de gracia (8014), Calzado mágico (8304), Velocidad de aproximación (8410), Vel. Ataque (5005), Fuerza Adaptable (5008), Vida Plana (5011)
+          selectedPerkIds: [8005, 9101, 9103, 8014, 8304, 8410, 5005, 5008, 5011],
+          rationale: 'Presión con Ataque para intercambios rápidos con la Q activa y Velocidad de Aproximación para perseguir con la ralentización pasiva.'
+        },
+        buildRecommendation: {
+          startingItems: [1055, 2003], // Espada de Doran + Poción
+          coreItems: [6672, 3085, 3031], // Matakrakens + Huracán de Runaan + Filo Infinito
+          situationalItems: [
+            { itemId: 3026, condition: 'Ángel Guardián frente a iniciaciones y asesinos físicos' },
+            { itemId: 3036, condition: 'Recuerdos de Lord Dominik frente a composiciones de tanques' },
+            { itemId: 3139, condition: 'Cimitarra Mercurial para limpiar aturdimientos y CC fuerte' }
+          ],
+          rationale: 'Build óptima de velocidad de ataque y daño crítico continuo con efectos de impacto.'
+        },
+        skillOrder: {
+          priority: ['W', 'Q', 'E', 'R'],
+          firstThreeLevels: ['W', 'Q', 'W'],
+          rationale: 'Maximiza la W para control de oleadas y rango de hostigamiento seguro.'
+        },
+        earlyGameStrategy: {
+          waveManagement: 'Empuja lentamente para conseguir la ventaja de nivel 2 y mantén la presión sin sobreextenderte.',
+          tradingPlan: 'Lanza la W y asesta 2 ataques básicos antes de retroceder.',
+          levelSpikes: ['Nivel 2 con W + Q', 'Nivel 6 para iniciar con la Flecha de Cristal Encantada']
+        },
+        threatAnalysis: {
+          enemyThreats: ['Cuidado con el burst enemigo si se acorta la distancia o tras quedar bajo efectos de control.'],
+          winCondition: 'Mantener espaciado perfecto en peleas grupales y habilitar cazadas con la R.'
+        }
+      };
+    }
+
+    // Configuración balanceada por defecto con stat shards 100% legales de Season 14
     return {
       championId: params.championId,
       opponentChampionId: params.opponentId,
@@ -311,7 +355,8 @@ export class GeminiService {
       runesRecommendation: {
         primaryStyleId: 8000, // Precisión
         subStyleId: 8400,     // Valor
-        selectedPerkIds: [8005, 9111, 9104, 8014, 8446, 8451, 5008, 5008, 5002],
+        // Stat shards legales S14: 5008 (Adaptive), 5008 (Adaptive), 5011 (Vida plana +65 HP)
+        selectedPerkIds: [8005, 9111, 9104, 8014, 8446, 8451, 5008, 5008, 5011],
         rationale: 'Página balanceada de ataque continuado y mitigación en línea.'
       },
       buildRecommendation: {

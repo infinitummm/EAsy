@@ -13,6 +13,19 @@ export default {
           hextech: '#0AC8B9',
           navy: '#091428',
           card: '#1E2328'
+        },
+        p3r: {
+          blue: '#00D4FF',
+          neon: '#00F0FF',
+          deep: '#030813',
+          dark: '#061021',
+          navy: '#0A1830',
+          card: '#0D2040',
+          cardHover: '#132C57',
+          border: '#1B3B6F',
+          borderGlow: '#00D4FF88',
+          accent: '#FFD700',
+          crimson: '#FF2E63'
         }
       }
     },

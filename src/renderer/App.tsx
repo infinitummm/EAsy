@@ -126,118 +126,97 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen w-screen bg-[#091428] text-gray-200">
-      {/* Barra Lateral de Navegación */}
-      <aside className="w-64 bg-[#0A1428] border-r border-[#1E282D] flex flex-col justify-between p-4">
+    <div className="flex h-screen w-screen bg-[#030813] text-[#D0E2FF] select-none p3r-bg-pattern">
+      {/* Barra Lateral de Navegación Estilo Persona 3 Reload */}
+      <aside className="w-64 bg-gradient-to-b from-[#061021] via-[#08152B] to-[#040C1A] border-r border-[#1B3B6F]/80 flex flex-col justify-between p-4 shadow-[4px_0_24px_rgba(0,0,0,0.6)] z-20">
         <div>
-          {/* Logo / Título */}
-          <div className="flex items-center space-x-3 px-2 py-3 mb-6 border-b border-[#1E282D]">
-            <div className="w-8 h-8 rounded bg-gradient-to-br from-[#C89B3C] to-[#785A28] flex items-center justify-center font-bold text-black shadow">
-              IT
+          {/* Logo / Header P3R */}
+          <div className="relative mb-6 pb-4 border-b border-[#1B3B6F]/60">
+            <div className="flex items-center space-x-3 px-1">
+              <div className="w-9 h-9 rounded bg-gradient-to-br from-[#00D4FF] to-[#0055FF] flex items-center justify-center font-black text-[#030813] shadow-[0_0_14px_rgba(0,212,255,0.6)] transform -skew-x-6 text-sm">
+                <span className="transform skew-x-6 tracking-tighter">P3R</span>
+              </div>
+              <div>
+                <h1 className="font-black text-white text-base tracking-wider flex items-center space-x-1">
+                  <span>ITERO</span>
+                  <span className="text-[#00D4FF] text-xs font-mono font-bold tracking-widest">// RELOAD</span>
+                </h1>
+                <p className="text-[10px] text-[#5A82B5] font-mono tracking-widest uppercase">Tactical AI Assistant</p>
+              </div>
             </div>
-            <div>
-              <h1 className="font-bold text-[#F0E6D2] text-sm tracking-wider">ITERO LOCAL</h1>
-              <p className="text-xs text-[#A09B8C]">League Assistant</p>
-            </div>
+            {/* Glowing cyan line indicator */}
+            <div className="absolute -bottom-[1px] left-0 w-24 h-[2px] bg-[#00D4FF] shadow-[0_0_8px_#00D4FF]" />
           </div>
 
-          {/* Menú de Navegación */}
-          <nav className="space-y-1">
-            <button
-              onClick={() => setActiveTab('dashboard')}
-              className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded text-sm font-medium transition ${
-                activeTab === 'dashboard'
-                  ? 'bg-[#1E2328] text-[#C89B3C] border-l-2 border-[#C89B3C]'
-                  : 'text-[#A09B8C] hover:bg-[#111A24] hover:text-[#F0E6D2]'
-              }`}
-            >
-              <Shield className="w-4 h-4" />
-              <span>Dashboard</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('champSelect')}
-              className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded text-sm font-medium transition ${
-                activeTab === 'champSelect'
-                  ? 'bg-[#1E2328] text-[#C89B3C] border-l-2 border-[#C89B3C]'
-                  : 'text-[#A09B8C] hover:bg-[#111A24] hover:text-[#F0E6D2]'
-              }`}
-            >
-              <Play className="w-4 h-4" />
-              <span>Champ Select</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('matchups')}
-              className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded text-sm font-medium transition ${
-                activeTab === 'matchups'
-                  ? 'bg-[#1E2328] text-[#C89B3C] border-l-2 border-[#C89B3C]'
-                  : 'text-[#A09B8C] hover:bg-[#111A24] hover:text-[#F0E6D2]'
-              }`}
-            >
-              <Swords className="w-4 h-4" />
-              <span>Matchups & Builds</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('profile')}
-              className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded text-sm font-medium transition ${
-                activeTab === 'profile'
-                  ? 'bg-[#1E2328] text-[#C89B3C] border-l-2 border-[#C89B3C]'
-                  : 'text-[#A09B8C] hover:bg-[#111A24] hover:text-[#F0E6D2]'
-              }`}
-            >
-              <User className="w-4 h-4" />
-              <span>Mi Perfil</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('settings')}
-              className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded text-sm font-medium transition ${
-                activeTab === 'settings'
-                  ? 'bg-[#1E2328] text-[#C89B3C] border-l-2 border-[#C89B3C]'
-                  : 'text-[#A09B8C] hover:bg-[#111A24] hover:text-[#F0E6D2]'
-              }`}
-            >
-              <Settings className="w-4 h-4" />
-              <span>Ajustes & Keys</span>
-            </button>
+          {/* Menú de Navegación Slanted P3R */}
+          <nav className="space-y-1.5">
+            {[
+              { id: 'dashboard', label: 'DASHBOARD', icon: Shield },
+              { id: 'champSelect', label: 'CHAMP SELECT', icon: Play },
+              { id: 'matchups', label: 'MATCHUPS & BUILDS', icon: Swords },
+              { id: 'profile', label: 'MI PERFIL', icon: User },
+              { id: 'settings', label: 'AJUSTES & KEYS', icon: Settings },
+            ].map((tab) => {
+              const isActive = activeTab === tab.id;
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`w-full group relative flex items-center space-x-3 px-3.5 py-2.5 rounded-sm text-xs font-bold tracking-wider transition-all duration-200 transform -skew-x-6 ${
+                    isActive
+                      ? 'bg-gradient-to-r from-[#00D4FF]/25 via-[#0088FF]/15 to-transparent text-[#00F0FF] border-l-4 border-[#00D4FF] shadow-[0_0_16px_rgba(0,212,255,0.25)]'
+                      : 'text-[#6F92BF] hover:text-[#E0F0FF] hover:bg-[#0E2242]/50 hover:border-l-2 hover:border-[#00D4FF]/50'
+                  }`}
+                >
+                  <div className="transform skew-x-6 flex items-center space-x-3">
+                    <Icon className={`w-4 h-4 transition-transform group-hover:scale-110 ${isActive ? 'text-[#00D4FF]' : 'text-[#5078A8]'}`} />
+                    <span>{tab.label}</span>
+                  </div>
+                  {isActive && (
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-[#00D4FF] rounded-full shadow-[0_0_6px_#00D4FF] animate-pulse" />
+                  )}
+                </button>
+              );
+            })}
           </nav>
         </div>
 
         {/* Estado LCU en el footer de la barra lateral */}
-        <div className="bg-[#111823] p-3 rounded border border-[#1E282D]">
+        <div className="bg-[#08152B]/90 p-3.5 rounded border border-[#1B3B6F] shadow-lg relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-8 h-8 bg-gradient-to-bl from-[#00D4FF]/10 to-transparent pointer-events-none" />
           <div className="flex items-center justify-between text-xs mb-1.5">
-            <span className="text-[#A09B8C]">Cliente LoL:</span>
+            <span className="text-[#648CB8] font-mono text-[11px] uppercase tracking-wider">LCU CLIENT:</span>
             <span
-              className={`font-semibold flex items-center space-x-1 ${
+              className={`font-bold flex items-center text-[11px] ${
                 lcuState === 'connected'
-                  ? 'text-emerald-400'
+                  ? 'text-[#00FFB2]'
                   : lcuState === 'connecting'
-                  ? 'text-amber-400'
-                  : 'text-rose-400'
+                  ? 'text-[#FFD700]'
+                  : 'text-[#FF2E63]'
               }`}
             >
               <span
-                className={`w-2 h-2 rounded-full mr-1 ${
+                className={`w-2 h-2 rounded-full mr-1.5 ${
                   lcuState === 'connected'
-                    ? 'bg-emerald-400 animate-pulse'
+                    ? 'bg-[#00FFB2] shadow-[0_0_8px_#00FFB2] animate-pulse'
                     : lcuState === 'connecting'
-                    ? 'bg-amber-400'
-                    : 'bg-rose-400'
+                    ? 'bg-[#FFD700] shadow-[0_0_8px_#FFD700]'
+                    : 'bg-[#FF2E63] shadow-[0_0_8px_#FF2E63]'
                 }`}
               />
-              {lcuState === 'connected' ? 'Conectado' : lcuState === 'connecting' ? 'Buscando...' : 'Desconectado'}
+              {lcuState === 'connected' ? 'ONLINE' : lcuState === 'connecting' ? 'SYNCING...' : 'OFFLINE'}
             </span>
           </div>
-          <div className="text-xs text-[#6B7280]">
-            Fase: <span className="text-[#F0E6D2] font-mono">{gameflow}</span>
+          <div className="text-[11px] text-[#5078A8] font-mono flex items-center justify-between border-t border-[#1B3B6F]/60 pt-1.5 mt-1">
+            <span>GAMEFLOW:</span>
+            <span className="text-[#00D4FF] font-semibold">{gameflow}</span>
           </div>
         </div>
       </aside>
 
       {/* Contenido Principal */}
-      <main className="flex-1 overflow-y-auto p-8 bg-[#0B1320]">
+      <main className="flex-1 overflow-y-auto p-8 bg-[#040B17]/95">
         {isPermissionError && (
           <div className="mb-6 p-4 rounded bg-amber-950/40 border border-amber-600/50 flex items-start space-x-3 text-amber-200 text-sm shadow-md">
             <span className="text-xl shrink-0">⚠️</span>

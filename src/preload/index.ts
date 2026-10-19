@@ -29,6 +29,8 @@ export const api = {
     ipcRenderer.invoke(IPC_CHANNELS.LCU_SET_AUTO_ACCEPT, params),
   applyRunes: (page: RunePage): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.LCU_APPLY_RUNES, page),
+  applyBuild: (params: { championId: number; title?: string; build: any }): Promise<{ success: boolean; filePath?: string; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.LCU_APPLY_BUILD, params),
 
   // Riot API
   validateKey: (apiKey: string) => ipcRenderer.invoke(IPC_CHANNELS.RIOT_VALIDATE_KEY, apiKey),

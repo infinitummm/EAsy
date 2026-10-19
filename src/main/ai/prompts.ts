@@ -46,7 +46,7 @@ El resultado debe ser un JSON que cumpla EXACTAMENTE con esta estructura de tipo
   "runesRecommendation": {
     "primaryStyleId": <ID numérico de la rama primaria, ej. 8000 Precisión, 8100 Dominación, 8200 Brujería, 8300 Inspiración, 8400 Valor>,
     "subStyleId": <ID numérico de la rama secundaria>,
-    "selectedPerkIds": [<array de exactamente 9 números enteros: 1 keystone + 3 primarias + 2 secundarias + 3 stat shards>],
+    "selectedPerkIds": [<array de exactamente 9 números enteros: 1 keystone + 3 primarias + 2 secundarias + 3 stat shards. IMPORTANTE: en temporada 14 los stat shards son: Slot 1: 5008/5005/5007; Slot 2: 5008/5010/5001; Slot 3: 5011/5013/5001. NUNCA uses 5002 ni 5003 porque están eliminados del juego>],
     "rationale": "<justificación táctica de esta elección de runas para este matchup específico en español>"
   },
   "buildRecommendation": {

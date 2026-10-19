@@ -5,9 +5,10 @@
 
 import { ipcMain, BrowserWindow } from 'electron';
 import { IPC_CHANNELS } from '../../shared/events';
+import { ILcuClient } from '../../shared/contracts';
 import { GeminiService } from '../ai/GeminiService';
 import { RuneManager } from '../lcu/RuneManager';
-import { RunePage, Role } from '../../shared/types';
+import { RunePage, Role, ChampSelectSession, GameflowPhase } from '../../shared/types';
 
 export function setupChampSelectIpc(
   mainWindow: BrowserWindow,
@@ -57,14 +58,14 @@ export function setupChampSelectIpc(
   );
 
   // 3. Re-emisión de sesión de Champ Select cuando LCU emita eventos
-  lcuClient.on('champ-select-session', (session) => {
+  lcuClient.on('champ-select-session', (session: ChampSelectSession | null) => {
     if (!mainWindow.isDestroyed()) {
       mainWindow.webContents.send(IPC_CHANNELS.LCU_CHAMP_SELECT_SESSION, session);
     }
   });
 
   // Re-emisión periódica o al cambiar de fase
-  lcuClient.on('gameflow-cambiado', async (phase) => {
+  lcuClient.on('gameflow-cambiado', async (phase: GameflowPhase | string) => {
     if (phase === 'ChampSelect') {
       try {
         const session = await lcuClient.getChampSelectSession();

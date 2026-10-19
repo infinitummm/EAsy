@@ -1,17 +1,23 @@
 /**
  * Servicio de Inteligencia Artificial utilizando Google Gemini API.
- * Implementa cola de peticiones, caché local, reintentos con backoff exponencial y salida tipada.
+ * Implementa cola de peticiones, validación con Data Dragon, reintentos con backoff exponencial,
+ * reintento correctivo ante fallos de validación y soporte de forzado de refresco.
  * Propiedad exclusiva de ANTIGRAVITY.
  */
 
 import { GeminiMatchupRecommendation, Role } from '../../shared/types';
 import { IDatabaseService } from '../../shared/contracts';
-import { buildMatchupPrompt, validateGeminiMatchupResponse } from './prompts';
+import { buildMatchupPrompt, buildCorrectionPrompt, validateGeminiMatchupResponse } from './prompts';
+import { getAccurateFallbackRecommendation } from '../../shared/buildDatabase';
+import { DataDragonTranslator, RawGeminiRecommendation } from '../riot/DataDragonTranslator';
+import { registrarLog } from '../lcu/LcuDetector';
 
 export interface GeminiServiceOptions {
   apiKey?: string;
   model?: string;
+  fallbackModel?: string;
   dbService?: IDatabaseService;
+  translator?: DataDragonTranslator;
   baseUrl?: string;
   maxRetries?: number;
   initialBackoffMs?: number;
@@ -21,27 +27,31 @@ export interface GeminiServiceOptions {
 export class GeminiService {
   private apiKey: string;
   private model: string;
+  private fallbackModel: string;
   private dbService?: IDatabaseService;
+  private translator?: DataDragonTranslator;
   private baseUrl: string;
   private maxRetries: number;
   private initialBackoffMs: number;
   private requestTimeoutMs: number;
 
-  // Caché en memoria para uso cuando SQLite aún no esté disponible o como L1
+  // Caché en memoria L1
   private memoryCache = new Map<string, { data: GeminiMatchupRecommendation; expiresAt: number }>();
 
-  // Cola y limitación de tasa simple para free-tier (15 RPM -> 1 request cada 4000ms mínimo)
+  // Limitación de tasa simple para free-tier
   private lastRequestTime = 0;
-  private minIntervalMs = 4000;
+  private minIntervalMs = 2500;
 
   constructor(options: GeminiServiceOptions = {}) {
     this.apiKey = options.apiKey || '';
-    this.model = options.model || 'gemini-1.5-flash';
+    this.model = options.model || 'gemini-3.5-flash';
+    this.fallbackModel = options.fallbackModel || 'gemini-3.1-flash-lite';
     this.dbService = options.dbService;
+    this.translator = options.translator;
     this.baseUrl = options.baseUrl || 'https://generativelanguage.googleapis.com/v1beta';
-    this.maxRetries = options.maxRetries ?? 3;
+    this.maxRetries = options.maxRetries ?? 2;
     this.initialBackoffMs = options.initialBackoffMs ?? 1500;
-    this.requestTimeoutMs = options.requestTimeoutMs ?? 15000;
+    this.requestTimeoutMs = options.requestTimeoutMs ?? 25000;
   }
 
   public setApiKey(key: string): void {
@@ -50,6 +60,10 @@ export class GeminiService {
 
   public setDatabaseService(db: IDatabaseService): void {
     this.dbService = db;
+  }
+
+  public setTranslator(translator: DataDragonTranslator): void {
+    this.translator = translator;
   }
 
   public getModel(): string {
@@ -64,14 +78,14 @@ export class GeminiService {
    * Genera la clave única de caché para un enfrentamiento en un parche específico.
    */
   public generateCacheKey(championId: number, opponentId: number, role: Role, patch: string): string {
-    // Normalizar parche (ej: "14.20.1" -> "14.20")
     const patchParts = patch.split('.');
     const shortPatch = patchParts.length >= 2 ? `${patchParts[0]}.${patchParts[1]}` : patch;
     return `matchup:${championId}:${opponentId}:${role}:${shortPatch}`;
   }
 
   /**
-   * Obtiene la recomendación táctica para un enfrentamiento, consultando primero la caché.
+   * Obtiene la recomendación táctica para un enfrentamiento.
+   * Si forceRefresh es true, se ignora completamente la caché y se consulta a Gemini.
    */
   public async getMatchupAdvice(params: {
     championId: number;
@@ -82,50 +96,71 @@ export class GeminiService {
     patch: string;
     allies?: number[];
     enemies?: number[];
+    forceRefresh?: boolean;
   }): Promise<GeminiMatchupRecommendation> {
     const cacheKey = this.generateCacheKey(params.championId, params.opponentId, params.role, params.patch);
 
-    // 1. Consultar caché L1 en memoria
-    const memEntry = this.memoryCache.get(cacheKey);
-    if (memEntry && memEntry.expiresAt > Date.now()) {
-      return memEntry.data;
-    }
+    if (!params.forceRefresh) {
+      // 1. Consultar caché L1 en memoria
+      const memEntry = this.memoryCache.get(cacheKey);
+      if (memEntry && memEntry.expiresAt > Date.now()) {
+        registrarLog(`[GeminiService] Matchup ${cacheKey} obtenido de caché en memoria L1.`);
+        return memEntry.data;
+      }
 
-    // 2. Consultar base de datos SQLite (si está disponible)
-    if (this.dbService) {
-      try {
-        const cached = this.dbService.getMatchupCache(cacheKey);
-        if (cached) {
-          this.memoryCache.set(cacheKey, { data: cached, expiresAt: Date.now() + 86400 * 1000 });
-          return cached;
+      // 2. Consultar base de datos SQLite
+      if (this.dbService) {
+        try {
+          const cached = this.dbService.getMatchupCache(cacheKey);
+          if (cached) {
+            // Asegurar que nunca devolvemos un fallback guardado previamente por error
+            if (cached.source !== 'fallback') {
+              this.memoryCache.set(cacheKey, { data: cached, expiresAt: Date.now() + 86400 * 1000 });
+              registrarLog(`[GeminiService] Matchup ${cacheKey} obtenido de SQLite.`);
+              return cached;
+            }
+          }
+        } catch {
+          // Continuar si la BD falla
         }
-      } catch (err) {
-        // Continuar si la BD no responde
       }
+    } else {
+      registrarLog(`[GeminiService] Forzado de refresco solicitado para ${cacheKey}. Ignorando caché.`);
+      this.memoryCache.delete(cacheKey);
     }
 
-    // 3. Si no hay clave de API configurada, retornar recomendación por defecto / de contingencia
+    // 3. Si no hay clave de API configurada, retornar recomendación de contingencia sin cachear
     if (!this.apiKey) {
-      return this.createFallbackRecommendation(params);
+      registrarLog(`[GeminiService] Sin API Key configurada. Devolviendo recomendación de contingencia.`);
+      return this.createFallbackRecommendation(params, 'Sin Gemini API Key configurada. Configúrala en Ajustes.');
     }
 
-    // 4. Invocar la API de Gemini con control de tasa y reintentos
-    const recommendation = await this.callGeminiWithRetry(params);
+    // 4. Invocar Gemini con traducción y validación de Data Dragon
+    try {
+      const recommendation = await this.callGeminiWithRetry(params);
 
-    // 5. Almacenar en caché (duración 7 días por parche)
-    const ttlSeconds = 7 * 24 * 3600;
-    this.memoryCache.set(cacheKey, { data: recommendation, expiresAt: Date.now() + ttlSeconds * 1000 });
+      // 5. Almacenar en caché SOLO si es una recomendación válida de IA (TTL: 24 horas = 86400 s)
+      if (recommendation.source === 'gemini') {
+        const ttlSeconds = 86400;
+        this.memoryCache.set(cacheKey, { data: recommendation, expiresAt: Date.now() + ttlSeconds * 1000 });
 
-    if (this.dbService) {
-      try {
-        this.dbService.setMatchupCache(cacheKey, recommendation, ttlSeconds);
-        this.dbService.recordApiCall('GEMINI', `/models/${this.model}:generateContent`, 200);
-      } catch (err) {
-        // Silenciar error de persistencia
+        if (this.dbService) {
+          try {
+            this.dbService.setMatchupCache(cacheKey, recommendation, ttlSeconds);
+            this.dbService.recordApiCall('GEMINI', `/models/${recommendation.modelUsed || this.model}:generateContent`, 200);
+            registrarLog(`[GeminiService] Matchup ${cacheKey} generado con éxito y cacheado por 24h.`);
+          } catch (err) {
+            registrarLog(`[GeminiService] Error persistiendo en SQLite: ${err}`);
+          }
+        }
       }
-    }
 
-    return recommendation;
+      return recommendation;
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      registrarLog(`[GeminiService ERROR] Fallo generando recomendación con Gemini: ${errMsg}`);
+      return this.createFallbackRecommendation(params, `Error en Gemini API: ${errMsg}`);
+    }
   }
 
   /**
@@ -153,19 +188,18 @@ export class GeminiService {
   }
 
   /**
-   * Ejecuta la llamada REST con backoff exponencial y limitación de tasa.
+   * Realiza la llamada HTTP a Gemini con el modelo especificado.
    */
-  private async callGeminiWithRetry(params: {
-    championId: number;
-    championName?: string;
-    opponentId: number;
-    opponentName?: string;
-    role: Role;
-    patch: string;
-    allies?: number[];
-    enemies?: number[];
-  }): Promise<GeminiMatchupRecommendation> {
-    const { systemInstruction, userPrompt } = buildMatchupPrompt(params);
+  private async executeGeminiRequest(
+    modelName: string,
+    systemInstruction: string,
+    userPrompt: string
+  ): Promise<{ status: number; text?: string; error?: string }> {
+    await this.respectRateLimit();
+
+    const url = `${this.baseUrl}/models/${modelName}:generateContent?key=${this.apiKey}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.requestTimeoutMs);
 
     const payload = {
       systemInstruction: {
@@ -185,82 +219,168 @@ export class GeminiService {
       }
     };
 
-    let attempt = 0;
-    let delay = this.initialBackoffMs;
+    try {
+      registrarLog(`[GeminiService] Llamando a ${modelName}. Tamaño de prompt: ${userPrompt.length} chars...`);
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
 
-    while (attempt <= this.maxRetries) {
-      try {
-        // Respetar intervalo mínimo para evitar 429
-        await this.respectRateLimit();
+      clearTimeout(timeoutId);
+      const status = response.status;
 
-        const url = `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), this.requestTimeoutMs);
+      if (response.ok) {
+        const json = await response.json() as {
+          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+        };
+        const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+        registrarLog(`[GeminiService] Respuesta exitosa de ${modelName} (HTTP ${status}).`);
+        return { status, text: rawText };
+      }
 
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-          signal: controller.signal
-        });
+      const errorText = await response.text();
+      registrarLog(`[GeminiService HTTP ERROR] ${modelName} devolvió ${status}: ${errorText.substring(0, 200)}`);
+      return { status, error: errorText };
+    } catch (err: unknown) {
+      clearTimeout(timeoutId);
+      const msg = err instanceof Error ? err.message : String(err);
+      registrarLog(`[GeminiService NETWORK ERROR] en ${modelName}: ${msg}`);
+      return { status: 0, error: msg };
+    }
+  }
 
-        clearTimeout(timeoutId);
+  /**
+   * Ejecuta la llamada REST con backoff exponencial, fallback de modelo y validación Data Dragon.
+   */
+  private async callGeminiWithRetry(params: {
+    championId: number;
+    championName?: string;
+    opponentId: number;
+    opponentName?: string;
+    role: Role;
+    patch: string;
+    allies?: number[];
+    enemies?: number[];
+  }): Promise<GeminiMatchupRecommendation> {
+    const { systemInstruction, userPrompt } = buildMatchupPrompt(params);
 
-        if (response.ok) {
-          const json = await response.json() as {
-            candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-          };
+    // Lista de modelos a probar: modelo principal (ej: gemini-3.5-flash), luego fallback (gemini-3.1-flash-lite)
+    const modelsToTry = [this.model];
+    if (this.fallbackModel && this.fallbackModel !== this.model) {
+      modelsToTry.push(this.fallbackModel);
+    }
 
-          const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (!rawText) {
-            throw new Error('Gemini respondió sin candidatos de texto válidos.');
-          }
+    let lastError = '';
 
-          const parsed = this.cleanAndParseJson(rawText);
-          if (validateGeminiMatchupResponse(parsed)) {
-            return parsed as GeminiMatchupRecommendation;
-          } else {
-            throw new Error('El JSON devuelto por Gemini no cumple el contrato de GeminiMatchupRecommendation.');
-          }
-        }
+    for (const modelToUse of modelsToTry) {
+      let attempt = 0;
+      let delay = this.initialBackoffMs;
 
-        // Manejo de errores HTTP
-        const statusCode = response.status;
-        if (this.dbService) {
+      while (attempt <= this.maxRetries) {
+        const reqResult = await this.executeGeminiRequest(modelToUse, systemInstruction, userPrompt);
+
+        if (reqResult.text) {
+          let parsed: unknown;
           try {
-            this.dbService.recordApiCall('GEMINI', `/models/${this.model}:generateContent`, statusCode);
-          } catch {}
+            parsed = this.cleanAndParseJson(reqResult.text);
+          } catch (parseErr) {
+            lastError = `JSON inválido devuelto por ${modelToUse}`;
+            attempt++;
+            continue;
+          }
+
+          // Si disponemos de DataDragonTranslator, traducir y validar nombres a IDs oficiales
+          if (this.translator) {
+            try {
+              await this.translator.initialize(params.patch);
+              const validRes = this.translator.translateAndValidate(parsed as RawGeminiRecommendation);
+
+              if (validRes.valid && validRes.recommendation) {
+                const rec = validRes.recommendation;
+                rec.source = 'gemini';
+                rec.modelUsed = modelToUse;
+                rec.generatedAt = new Date().toISOString();
+                rec.debugInfo = {
+                  rawPrompt: userPrompt,
+                  rawResponse: reqResult.text,
+                  validationStatus: 'Validado con Data Dragon exitosamente',
+                  resolvedRunes: validRes.resolvedRunes,
+                  resolvedItems: validRes.resolvedItems
+                };
+                return rec;
+              }
+
+              // Si falló la validación inicial, realizar un ÚNICO reintento correctivo con prompt enfocado
+              registrarLog(`[GeminiService] Validación Data Dragon falló: ${validRes.error}. Ejecutando reintento correctivo...`);
+              const correction = buildCorrectionPrompt({
+                originalPrompt: userPrompt,
+                rawResponseText: reqResult.text,
+                validationError: validRes.error || 'Nombres de runas u objetos no reconocidos'
+              });
+
+              const retryResult = await this.executeGeminiRequest(modelToUse, correction.systemInstruction, correction.userPrompt);
+              if (retryResult.text) {
+                try {
+                  const retryParsed = this.cleanAndParseJson(retryResult.text);
+                  const retryValid = this.translator.translateAndValidate(retryParsed as RawGeminiRecommendation);
+                  if (retryValid.valid && retryValid.recommendation) {
+                    const rec = retryValid.recommendation;
+                    rec.source = 'gemini';
+                    rec.modelUsed = modelToUse;
+                    rec.generatedAt = new Date().toISOString();
+                    rec.debugInfo = {
+                      rawPrompt: correction.userPrompt,
+                      rawResponse: retryResult.text,
+                      validationStatus: 'Corregido y validado tras reintento',
+                      resolvedRunes: retryValid.resolvedRunes,
+                      resolvedItems: retryValid.resolvedItems
+                    };
+                    registrarLog(`[GeminiService] Reintento correctivo exitoso con ${modelToUse}.`);
+                    return rec;
+                  }
+                } catch {}
+              }
+            } catch (translErr) {
+              registrarLog(`[GeminiService] Error en traductor: ${translErr}`);
+            }
+          }
+
+          // Si no hay traductor pero pasa la validación directa
+          if (validateGeminiMatchupResponse(parsed)) {
+            const rec = parsed as GeminiMatchupRecommendation;
+            rec.source = 'gemini';
+            rec.modelUsed = modelToUse;
+            rec.generatedAt = new Date().toISOString();
+            rec.debugInfo = {
+              rawPrompt: userPrompt,
+              rawResponse: reqResult.text,
+              validationStatus: 'Validación estructural directa aprobada'
+            };
+            return rec;
+          }
         }
 
-        // Si es 429 (Rate Limit) o 5xx (Server Error), reintentar con backoff
-        if (statusCode === 429 || (statusCode >= 500 && statusCode < 600)) {
+        // Manejo de errores de cuota o servidor (429, 500, 503)
+        if (reqResult.status === 429 || (reqResult.status >= 500 && reqResult.status < 600)) {
           attempt++;
-          if (attempt > this.maxRetries) {
-            break;
-          }
-          // Backoff exponencial con jitter aleatorio (±20%)
+          if (attempt > this.maxRetries) break;
           const jitter = delay * (0.8 + Math.random() * 0.4);
           await this.sleep(jitter);
           delay *= 2;
           continue;
         }
 
-        // Errores no reintentables (ej. 400 Bad Request, 403 Forbidden)
-        const errorText = await response.text();
-        throw new Error(`Error en llamada a Gemini (${statusCode}): ${errorText}`);
-
-      } catch (err: unknown) {
-        attempt++;
-        if (attempt > this.maxRetries) {
-          // Último recurso ante fallo continuo: fallback
-          return this.createFallbackRecommendation(params);
-        }
-        await this.sleep(delay);
-        delay *= 2;
+        // Si es 404 (modelo no disponible) u otro error no recuperable, saltar al siguiente modelo
+        lastError = reqResult.error || `HTTP ${reqResult.status}`;
+        break;
       }
     }
 
-    return this.createFallbackRecommendation(params);
+    // Si fallaron todos los modelos y reintentos, generar recomendación honesta de contingencia
+    registrarLog(`[GeminiService] Todos los intentos de IA fallaron. Motivo: ${lastError}`);
+    return this.createFallbackRecommendation(params, `Fallo en IA: ${lastError || 'Modelo no disponible'}`);
   }
 
   /**
@@ -293,94 +413,26 @@ export class GeminiService {
   }
 
   /**
-   * Crea una recomendación estructurada básica de contingencia en caso de que no haya key o no haya red.
+   * Crea una recomendación estructurada de contingencia claramente identificada.
+   * NUNCA se debe persistir en la base de datos de caché.
    */
-  public createFallbackRecommendation(params: {
-    championId: number;
-    opponentId: number;
-    role: Role;
-    patch: string;
-  }): GeminiMatchupRecommendation {
-    // Si es Ashe (ID 22) o un tirador
-    if (params.championId === 22) {
-      return {
-        championId: params.championId,
-        opponentChampionId: params.opponentId,
-        assignedRole: params.role,
-        patchVersion: params.patch,
-        difficultyRating: 5,
-        matchupSummary: 'Matchup de rango y control de distancia. Utiliza la W para desgastar a tu rival y aprovecha tu ventaja de rango con ataques básicos continuos.',
-        runesRecommendation: {
-          primaryStyleId: 8000, // Precisión
-          subStyleId: 8300,     // Inspiración
-          // PtA (8005), Claridad mental (9101), Linaje (9103), Golpe de gracia (8014), Calzado mágico (8304), Velocidad de aproximación (8410), Vel. Ataque (5005), Fuerza Adaptable (5008), Vida Plana (5011)
-          selectedPerkIds: [8005, 9101, 9103, 8014, 8304, 8410, 5005, 5008, 5011],
-          rationale: 'Presión con Ataque para intercambios rápidos con la Q activa y Velocidad de Aproximación para perseguir con la ralentización pasiva.'
-        },
-        buildRecommendation: {
-          startingItems: [1055, 2003], // Espada de Doran + Poción
-          coreItems: [6672, 3085, 3031], // Matakrakens + Huracán de Runaan + Filo Infinito
-          situationalItems: [
-            { itemId: 3026, condition: 'Ángel Guardián frente a iniciaciones y asesinos físicos' },
-            { itemId: 3036, condition: 'Recuerdos de Lord Dominik frente a composiciones de tanques' },
-            { itemId: 3139, condition: 'Cimitarra Mercurial para limpiar aturdimientos y CC fuerte' }
-          ],
-          rationale: 'Build óptima de velocidad de ataque y daño crítico continuo con efectos de impacto.'
-        },
-        skillOrder: {
-          priority: ['W', 'Q', 'E', 'R'],
-          firstThreeLevels: ['W', 'Q', 'W'],
-          rationale: 'Maximiza la W para control de oleadas y rango de hostigamiento seguro.'
-        },
-        earlyGameStrategy: {
-          waveManagement: 'Empuja lentamente para conseguir la ventaja de nivel 2 y mantén la presión sin sobreextenderte.',
-          tradingPlan: 'Lanza la W y asesta 2 ataques básicos antes de retroceder.',
-          levelSpikes: ['Nivel 2 con W + Q', 'Nivel 6 para iniciar con la Flecha de Cristal Encantada']
-        },
-        threatAnalysis: {
-          enemyThreats: ['Cuidado con el burst enemigo si se acorta la distancia o tras quedar bajo efectos de control.'],
-          winCondition: 'Mantener espaciado perfecto en peleas grupales y habilitar cazadas con la R.'
-        }
-      };
-    }
-
-    // Configuración balanceada por defecto con stat shards 100% legales de Season 14
+  public createFallbackRecommendation(
+    params: {
+      championId: number;
+      opponentId: number;
+      role: Role;
+      patch: string;
+    },
+    reason: string = 'Recomendación base estándar del parche.'
+  ): GeminiMatchupRecommendation {
+    const fallback = getAccurateFallbackRecommendation(params);
     return {
-      championId: params.championId,
-      opponentChampionId: params.opponentId,
-      assignedRole: params.role,
-      patchVersion: params.patch,
-      difficultyRating: 5,
-      matchupSummary: 'Recomendación base estándar del parche. Configura tu Gemini API Key en Ajustes para análisis táctico avanzado en tiempo real con IA.',
-      runesRecommendation: {
-        primaryStyleId: 8000, // Precisión
-        subStyleId: 8400,     // Valor
-        // Stat shards legales S14: 5008 (Adaptive), 5008 (Adaptive), 5011 (Vida plana +65 HP)
-        selectedPerkIds: [8005, 9111, 9104, 8014, 8446, 8451, 5008, 5008, 5011],
-        rationale: 'Página balanceada de ataque continuado y mitigación en línea.'
-      },
-      buildRecommendation: {
-        startingItems: [1055, 2003], // Espada de Doran + Poción
-        coreItems: [3078, 3053, 3156],
-        situationalItems: [
-          { itemId: 3026, condition: 'Frente a daño explosivo físico o iniciaciones enemigas' },
-          { itemId: 3157, condition: 'Frente a campeones con burst mágico' }
-        ],
-        rationale: 'Build estándar equilibrada de daño sostenido y resistencia.'
-      },
-      skillOrder: {
-        priority: ['Q', 'E', 'W', 'R'],
-        firstThreeLevels: ['Q', 'E', 'W'],
-        rationale: 'Orden convencional de maximización de daño principal.'
-      },
-      earlyGameStrategy: {
-        waveManagement: 'Mantén la oleada equilibrada o cerca de tu torre en los primeros 3 niveles.',
-        tradingPlan: 'Busca intercambios cortos cuando el rival gaste sus enfriamientos principales.',
-        levelSpikes: ['Nivel 2 con ventaja de súbditos', 'Nivel 6 para ejecutar combo completo']
-      },
-      threatAnalysis: {
-        enemyThreats: ['Cuidado con ganks del jungla rival en el minuto 3:30.'],
-        winCondition: 'Farmear de forma consistente, asegurar el primer dragón y ganar peleas por objetivos.'
+      ...fallback,
+      source: 'fallback',
+      fallbackReason: reason,
+      generatedAt: new Date().toISOString(),
+      debugInfo: {
+        validationStatus: `Fallback activo: ${reason}`
       }
     };
   }

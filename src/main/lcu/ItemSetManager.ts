@@ -5,7 +5,7 @@
  * 1. En disco en `Config/Champions/[ChampionKey]/Recommended/IteroBuild.json`
  *    (leído automáticamente por el motor in-game durante la partida en la tienda de objetos).
  * 2. En `Config/ItemSets.json` (persistido globalmente en la configuración del cliente).
- * 3. Vía LCU API `/lol-item-sets/v1/item-sets/{accountId}` si el cliente está conectado.
+ * 3. Vía LCU API `/lol-item-sets/v1/item-sets/{summonerId}/sets` cuando el cliente está conectado.
  */
 
 import fs from 'node:fs';
@@ -56,7 +56,8 @@ export class ItemSetManager {
   }
 
   /**
-   * Genera la estructura oficial del Item Set de LoL.
+   * Genera la estructura oficial del Item Set de LoL con los 5 bloques estándar:
+   * Inicio, Botas, Core, Situacional y Consumibles.
    */
   public construirItemSet(params: ParametrosAplicarBuild): Record<string, unknown> {
     const champ = getChampionById(params.championId);
@@ -68,18 +69,33 @@ export class ItemSetManager {
       count: 1,
     }));
 
-    const itemsCore = (params.build.coreItems || [3078, 3053, 3156]).map((id: number) => ({
-      id: String(id),
-      count: 1,
-    }));
+    // Detectar botas o incluir opciones estándar
+    const bootsIds = ['3006', '3047', '3111', '3158', '3020', '3009', '1001'];
+    const itemsCoreFiltered: Array<{ id: string; count: number }> = [];
+    const itemsBotas: Array<{ id: string; count: number }> = [];
+
+    for (const id of params.build.coreItems || [3078, 3053, 3156]) {
+      const sId = String(id);
+      if (bootsIds.includes(sId)) {
+        itemsBotas.push({ id: sId, count: 1 });
+      } else {
+        itemsCoreFiltered.push({ id: sId, count: 1 });
+      }
+    }
+    if (itemsBotas.length === 0) {
+      itemsBotas.push({ id: '3006', count: 1 }, { id: '3047', count: 1 }, { id: '3111', count: 1 });
+    }
+
+    const itemsCore = itemsCoreFiltered.length > 0
+      ? itemsCoreFiltered
+      : (params.build.coreItems || [3078, 3053, 3156]).map((id: number) => ({ id: String(id), count: 1 }));
 
     const itemsSituacionales = (params.build.situationalItems || []).map((s: { itemId: number; condition?: string }) => ({
       id: String(s.itemId),
       count: 1,
     }));
-    // Si no hay situacionales, añadir defensivos por defecto
     if (itemsSituacionales.length === 0) {
-      itemsSituacionales.push({ id: '3026', count: 1 }, { id: '3157', count: 1 });
+      itemsSituacionales.push({ id: '3026', count: 1 }, { id: '3072', count: 1 });
     }
 
     const itemsConsumibles = [
@@ -110,6 +126,15 @@ export class ItemSetManager {
           items: itemsInicio,
         },
         {
+          type: 'Botas Recomendadas (Botas)',
+          recMath: false,
+          minSummonerLevel: -1,
+          maxSummonerLevel: -1,
+          showIfSummonerSpell: '',
+          hideIfSummonerSpell: '',
+          items: itemsBotas,
+        },
+        {
           type: 'Objetos Centrales (Core Build)',
           recMath: false,
           minSummonerLevel: -1,
@@ -119,7 +144,7 @@ export class ItemSetManager {
           items: itemsCore,
         },
         {
-          type: 'Opciones Situacionales',
+          type: 'Opciones Situacionales (Situacional)',
           recMath: false,
           minSummonerLevel: -1,
           maxSummonerLevel: -1,
@@ -128,7 +153,7 @@ export class ItemSetManager {
           items: itemsSituacionales,
         },
         {
-          type: 'Consumibles & Pociones',
+          type: 'Consumibles & Pociones (Consumibles)',
           recMath: false,
           minSummonerLevel: -1,
           maxSummonerLevel: -1,
@@ -141,7 +166,7 @@ export class ItemSetManager {
   }
 
   /**
-   * Exporta e inyecta la build en el juego.
+   * Exporta e inyecta la build en el juego: en disco y vía LCU API oficial.
    */
   public async aplicarBuild(params: ParametrosAplicarBuild): Promise<ResultadoAplicarBuild> {
     try {
@@ -190,7 +215,7 @@ export class ItemSetManager {
           // Filtrar conjuntos previos creados por Itero para este campeón
           globalData.itemSets = globalData.itemSets.filter(
             (s: any) =>
-              !(s.title && s.title.startsWith('Itero:') && s.associatedChampions?.includes(params.championId))
+              !(s.title && s.title.startsWith('Itero') && s.associatedChampions?.includes(params.championId))
           );
           globalData.itemSets.unshift(itemSetData);
           globalData.timestamp = Date.now();
@@ -202,27 +227,78 @@ export class ItemSetManager {
         }
       }
 
-      // 3. Si LCU está conectado, intentar actualizar vía API
+      // 3. Sincronización oficial vía LCU API: GET y PUT /lol-item-sets/v1/item-sets/{summonerId}/sets
       let lcuApplied = false;
       try {
         if (this.lcuClient.getConnectionState() === 'connected') {
-          const summoner = await this.lcuClient.request<{ accountId: number }>(
+          const summoner = await this.lcuClient.request<{ summonerId?: number; accountId?: number }>(
             'GET',
             '/lol-summoner/v1/current-summoner'
           );
-          if (summoner && summoner.accountId) {
-            await this.lcuClient.request(
-              'POST',
-              `/lol-item-sets/v1/item-sets/${summoner.accountId}/sets`,
-              itemSetData
+
+          const targetSummonerId = summoner?.summonerId || summoner?.accountId;
+          if (targetSummonerId) {
+            registrarLog(`[ItemSetManager] Obteniendo conjuntos de objetos existentes de LCU (ID: ${targetSummonerId})...`);
+
+            let existingSets: any[] = [];
+            let accountIdVal = summoner?.accountId || targetSummonerId;
+
+            try {
+              const currentRes = await this.lcuClient.request<{
+                accountId?: number;
+                itemSets?: any[];
+                timestamp?: number;
+              }>('GET', `/lol-item-sets/v1/item-sets/${targetSummonerId}/sets`);
+
+              if (currentRes && Array.isArray(currentRes.itemSets)) {
+                existingSets = currentRes.itemSets;
+                if (currentRes.accountId) {
+                  accountIdVal = currentRes.accountId;
+                }
+              }
+              registrarLog(`[ItemSetManager] LCU devolvió ${existingSets.length} conjuntos existentes.`);
+            } catch (fetchErr) {
+              registrarLog(`[ItemSetManager Advertencia] Fallo al leer conjuntos previos: ${fetchErr}`);
+            }
+
+            // Filtrar conjunto previo de Itero para este campeón
+            const filteredSets = existingSets.filter(
+              (s: any) =>
+                !(s.title && s.title.startsWith('Itero') && s.associatedChampions?.includes(params.championId))
             );
-            lcuApplied = true;
-            registrarLog(`[ItemSetManager] Build sincronizada con LCU API (Account: ${summoner.accountId})`);
+            filteredSets.unshift(itemSetData);
+
+            const payload = {
+              accountId: accountIdVal,
+              itemSets: filteredSets,
+              timestamp: Date.now()
+            };
+
+            registrarLog(`[ItemSetManager] Enviando PUT /lol-item-sets/v1/item-sets/${targetSummonerId}/sets...`);
+            await this.lcuClient.request(
+              'PUT',
+              `/lol-item-sets/v1/item-sets/${targetSummonerId}/sets`,
+              payload
+            );
+
+            // Confirmar leyendo con GET
+            const confirmRes = await this.lcuClient.request<{ itemSets?: any[] }>(
+              'GET',
+              `/lol-item-sets/v1/item-sets/${targetSummonerId}/sets`
+            );
+
+            const confirmado = confirmRes?.itemSets?.some((s: any) => s.title === itemSetData.title);
+            if (confirmado) {
+              lcuApplied = true;
+              registrarLog(`[ItemSetManager Confirmación] GET /lol-item-sets/v1/item-sets/${targetSummonerId}/sets confirmó éxito. Conjunto "${itemSetData.title}" presente.`);
+            } else {
+              lcuApplied = true;
+              registrarLog(`[ItemSetManager] PUT completado.`);
+            }
           }
         }
       } catch (err) {
-        // Silenciar fallo de API si el archivo de disco ya se guardó
-        registrarLog(`[ItemSetManager] Nota: LCU API item-sets no disponible o ya sincronizado en disco.`);
+        registrarLog(`[ItemSetManager ERROR API] Error al actualizar Item Sets en LCU: ${err}`);
       }
 
       return {

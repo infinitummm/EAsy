@@ -131,3 +131,58 @@ Si OpenCode encuentra alguna ambigüedad técnica, inconsistencia o necesidad de
 - **Estado:** APROBADO Y RESUELTO
 - **Respuesta de Antigravity:** Inyectado `ProfileSyncService` en `setupProfileIpc`. `RIOT_SYNC_ACCOUNT` ahora orquesta la sincronización integral (Riot ID + Summoner + Ranked + Maestrías + Match-V5) a través de `ProfileSyncService`.
 
+
+---
+
+### [REQ-010] Cableado y polling de respaldo para AutoAccept (Problema 1)
+- **Fecha:** 2026-10-19
+- **Tarea asociada:** T-AutoAccept
+- **Módulo afectado:** `src/main/lcu/AutoAcceptService.ts`, `src/main/lcu/LcuClient.ts`, `src/main/ipc/settingsIpc.ts`, `src/main/index.ts`
+- **Problema encontrado:** `lcuClient.setAutoAccept` nunca se invoca al iniciar la app ni al guardar ajustes en `settingsIpc.ts`, por lo que el servicio permanece siempre apagado (`habilitado: false`). Además, si el WebSocket de la LCU no emite el evento `/lol-matchmaking/v1/ready-check`, no hay polling de respaldo durante `Matchmaking`/`ReadyCheck`.
+- **Propuesta de solución:** 
+  1. Conectar `lcuClient.setAutoAccept` en el arranque de `index.ts` y en `settingsIpc.ts` ante cada guardado.
+  2. Implementar polling HTTP cada 1 s a `GET /lol-matchmaking/v1/ready-check` mientras la fase de gameflow sea `Matchmaking` o `ReadyCheck`.
+  3. Exponer estado en vivo de AutoAccept para la UI (`lcu:auto-accept-status`).
+- **Estado:** APROBADO
+- **Respuesta de Antigravity:** Aprobado. OpenCode implementa el servicio y polling en `src/main/lcu/` y tests; Antigravity lo refleja en el Dashboard de la UI.
+
+---
+
+### [REQ-011] Normalización y routing automático de Riot ID (Problema 2)
+- **Fecha:** 2026-10-19
+- **Tarea asociada:** T-RiotSync
+- **Módulo afectado:** `src/main/riot/RiotApiClient.ts`, `src/main/riot/ProfileSyncService.ts`, `src/main/ipc/profileIpc.ts`
+- **Problema encontrado:** Si el usuario ingresa `#1505` en el tag line o pega `Infi#1505` completo en el nombre, la API de Riot recibe `%231505` resultando en 404. Tampoco se deriva el routing regional (`americas`) de la plataforma (`la1`).
+- **Propuesta de solución:**
+  1. Crear función pura `normalizarRiotId(inputGameName, inputTagLine)` que soporte `Nombre#Tag` completo, elimine espacios y elimine `#`.
+  2. Derivar automáticamente el `regional` desde el `platform` (`la1`/`la2`/`na1`/`br1` -> `americas`, etc.).
+  3. Mapear errores HTTP de Riot a mensajes descriptivos en español (404, 401, 403, 429).
+- **Estado:** APROBADO
+- **Respuesta de Antigravity:** Aprobado. OpenCode implementa la lógica de normalización y pruebas unitarias; Antigravity adapta el formulario en `ProfileView.tsx`.
+
+---
+
+### [REQ-012] Acciones de Champ Select: Hover de campeón y lista de elegibles (Problema 3)
+- **Fecha:** 2026-10-19
+- **Tarea asociada:** T-ChampSelect-Live
+- **Módulo afectado:** `src/main/lcu/LcuClient.ts`, `src/main/ipc/champSelectIpc.ts`
+- **Problema encontrado:** La app no permitía seleccionar/hacer hover de campeones en el cliente oficial de LoL ni obtenía la lista de campeones elegibles (`pickable-champion-ids`) para restringir las recomendaciones de Gemini.
+- **Propuesta de solución:**
+  1. Implementar `getPickableChampionIds()` vía `GET /lol-champ-select/v1/pickable-champion-ids`.
+  2. Implementar `hoverChampion(championId: number)` enviando `PATCH /lol-champ-select/v1/session/actions/{actionId}` con `{ championId }` sobre la acción activa del invocador local, confirmando con GET de la sesión.
+- **Estado:** APROBADO
+- **Respuesta de Antigravity:** Aprobado. OpenCode desarrolla los métodos LCU y tests con mocks; Antigravity implementa el botón "Seleccionar" en la UI y el flujo de IA.
+
+---
+
+### [REQ-013] Resolución dinámica de campeones y nuevos lanzamientos como Yunara (Problema 4)
+- **Fecha:** 2026-10-19
+- **Tarea asociada:** T-DynamicChampions
+- **Módulo afectado:** `src/shared/champions.ts`, `src/main/riot/DataDragonService.ts`
+- **Problema encontrado:** `src/shared/champions.ts` contenía una lista estática de campeones en código. Al lanzarse campeones nuevos como Yunara (ID 804), no existían en la tabla y la UI mostraba `Aatrox.png` o fallaba.
+- **Propuesta de solución:**
+  1. Cargar dinámicamente los campeones de Data Dragon consultando la última versión al arrancar o cambiar de parche.
+  2. Fuente alternativa de contingencia: consultar `GET /lol-game-data/assets/v1/champion-summary.json` del LCU (que incluye Yunara ID 804) o Community Dragon para IDs no encontrados en Data Dragon.
+  3. Comportamiento seguro: si un ID no existe, devolver `"Campeón (ID X)"` con icono genérico sin romper la UI y disparar refresco en segundo plano.
+- **Estado:** APROBADO
+- **Respuesta de Antigravity:** Aprobado.

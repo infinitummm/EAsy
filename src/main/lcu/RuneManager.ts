@@ -15,6 +15,7 @@
 import type { ILcuClient } from '@shared/contracts';
 import type { GeminiMatchupRecommendation, RunePage } from '@shared/types';
 import { ENDPOINTS_LCU, validarPaginaRunas } from './LcuClient';
+import { registrarLog } from './LcuDetector';
 
 /** Opciones de construcción del gestor de runas. */
 export interface OpcionesRuneManager {
@@ -81,6 +82,24 @@ export class RuneManager {
     return paginas.find((pagina) => pagina.current === true) ?? null;
   }
 
+  /** Activa la página de runas indicada en el cliente oficial de LoL y confirma con GET. */
+  async seleccionarPaginaComoActiva(pageId: number): Promise<boolean> {
+    try {
+      registrarLog(`[RuneManager] Activando página ${pageId} vía PUT /lol-perks/v1/currentpage...`);
+      await this.lcu.request<unknown>('PUT', '/lol-perks/v1/currentpage', pageId);
+      try {
+        const activa = await this.lcu.request<any>('GET', '/lol-perks/v1/currentpage');
+        if (activa && activa.id === pageId) {
+          registrarLog(`[RuneManager Confirmación] GET /lol-perks/v1/currentpage confirmó página activa: ID ${activa.id} ("${activa.name}").`);
+        }
+      } catch {}
+      return true;
+    } catch (err) {
+      registrarLog(`[RuneManager Advertencia] Fallo al activar página ${pageId}: ${err}`);
+      return false;
+    }
+  }
+
   /**
    * Aplica una página de runas: la valida, decide si sobrescribir la activa o
    * crear una nueva y delega la petición en `ILcuClient.injectRunePage`.
@@ -95,23 +114,48 @@ export class RuneManager {
 
     // 1. Identificador explícito: sobrescritura directa sin listar páginas.
     if (candidata.id !== undefined) {
-      return this.inyectar(candidata, false);
+      return await this.inyectar(candidata, false);
     }
 
     try {
-      // 2. Sin id: sobrescribir la activa si el gestor lo permite.
-      if (this.sobrescribirActiva) {
-        const activa = (await this.obtenerPaginas()).find(
-          (existente) => existente.current === true && existente.id !== undefined
-        );
+      const paginas = await this.obtenerPaginas();
 
+      // 2. Si hay una página activa y editable, sobrescribirla
+      if (this.sobrescribirActiva) {
+        const activa = paginas.find(
+          (p) => p.current === true && (p as any).isEditable !== false && p.id !== undefined
+        );
         if (activa?.id !== undefined) {
-          return this.inyectar({ ...candidata, id: activa.id }, false);
+          return await this.inyectar({ ...candidata, id: activa.id }, false);
         }
       }
 
-      // 3. Sin página activa sobrescribible: crear una nueva.
-      return this.inyectar({ ...candidata, id: undefined }, true);
+      // 3. Si ya existe una página previa creada por Itero que sea editable, sobrescribirla
+      const paginaIteroPrevia = paginas.find(
+        (p) => (p as any).isEditable !== false && p.id !== undefined && p.name && p.name.startsWith('Itero')
+      );
+      if (paginaIteroPrevia?.id !== undefined) {
+        return await this.inyectar({ ...candidata, id: paginaIteroPrevia.id }, false);
+      }
+
+      // 4. Intentar crear una nueva página si no se ha llegado al límite de 8 páginas
+      const paginasEditables = paginas.filter((p) => (p as any).isEditable !== false);
+      if (paginasEditables.length < 8) {
+        const resCrear = await this.inyectar({ ...candidata, id: undefined }, true);
+        if (resCrear.success) {
+          return resCrear;
+        }
+      }
+
+      // 5. Si se alcanzó el límite de páginas de Riot (máx 8) o la creación falló:
+      // Sobrescribir la primera página editable para no bloquear la partida del usuario
+      const primeraEditable = paginasEditables[0] || paginas.find((p) => (p as any).isEditable !== false && p.id !== undefined);
+      if (primeraEditable?.id !== undefined) {
+        return await this.inyectar({ ...candidata, id: primeraEditable.id }, false);
+      }
+
+      // 6. Último recurso: intentar creación directa
+      return await this.inyectar({ ...candidata, id: undefined }, true);
     } catch (error) {
       return {
         success: false,

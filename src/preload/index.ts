@@ -27,6 +27,12 @@ export const api = {
     ipcRenderer.invoke(IPC_CHANNELS.LCU_SELECT_FOLDER),
   setAutoAccept: (params: { enabled: boolean; delaySeconds: number }): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.LCU_SET_AUTO_ACCEPT, params),
+  getAutoAcceptStatus: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.LCU_GET_AUTO_ACCEPT_STATUS),
+  getPickableChampions: (): Promise<number[]> =>
+    ipcRenderer.invoke(IPC_CHANNELS.LCU_GET_PICKABLE_CHAMPIONS),
+  hoverChampion: (championId: number): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.LCU_HOVER_CHAMPION, championId),
   applyRunes: (page: RunePage): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.LCU_APPLY_RUNES, page),
   applyBuild: (params: { championId: number; title?: string; build: any }): Promise<{ success: boolean; filePath?: string; error?: string }> =>
@@ -38,9 +44,16 @@ export const api = {
     ipcRenderer.invoke(IPC_CHANNELS.RIOT_SYNC_ACCOUNT, params),
   getProfile: (puuid: string) => ipcRenderer.invoke(IPC_CHANNELS.RIOT_GET_PROFILE, puuid),
 
-  // Gemini AI Matchup
-  getMatchupAdvice: (params: { championId: number; opponentId: number; role: Role; patch: string; allies: number[]; enemies: number[] }) =>
+  // Gemini AI Matchup & Draft
+  getMatchupAdvice: (params: { championId: number; opponentId: number; role: Role; patch: string; allies: number[]; enemies: number[]; forceRefresh?: boolean }) =>
     ipcRenderer.invoke(IPC_CHANNELS.AI_GET_MATCHUP_ADVICE, params),
+  getDraftRecommendations: (params: { role: Role; patch: string; allies: number[]; enemies: number[]; bans: number[]; pickableChampionIds?: number[]; forceRefresh?: boolean }) =>
+    ipcRenderer.invoke(IPC_CHANNELS.AI_GET_DRAFT_RECOMMENDATIONS, params),
+
+  // Data Dragon Patch & Reload
+  getPatchVersion: (): Promise<string> => ipcRenderer.invoke(IPC_CHANNELS.DDRAGON_GET_PATCH),
+  refreshDataDragon: (): Promise<{ patch: string; championsCount: number }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.DDRAGON_REFRESH_DATA),
 
   // Suscripción a Eventos de Main
   on: (channel: string, callback: (...args: any[]) => void) => {

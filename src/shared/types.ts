@@ -278,6 +278,19 @@ export interface GeminiMatchupRecommendation {
     enemyThreats: string[];
     winCondition: string;
   };
+  source?: 'gemini' | 'fallback';
+  modelUsed?: string;
+  generatedAt?: string;
+  fallbackReason?: string;
+  debugInfo?: {
+    rawPrompt?: string;
+    rawResponse?: string;
+    validationStatus?: string;
+    resolvedRunes?: Array<{ requested: string; resolvedId: number }>;
+    resolvedItems?: Array<{ requested: string; resolvedId: number }>;
+    runesHttpStatus?: number;
+    itemSetsHttpStatus?: number;
+  };
 }
 
 export type BuildRecommendation = GeminiMatchupRecommendation['buildRecommendation'];
@@ -357,5 +370,61 @@ export interface LcuStateInfo {
   port?: number;
   lastError?: string;
   lastUpdated?: string;
+}
+
+// ==========================================
+// Estado de Auto-Accept en vivo
+// ==========================================
+export interface AutoAcceptStatusInfo {
+  enabled: boolean;
+  delaySeconds: number;
+  humanVariance: boolean;
+  lastAction: string;
+  lastActionTimestamp?: number;
+}
+
+// ==========================================
+// Recomendaciones de Draft / Champ Select en vivo
+// ==========================================
+export interface PickRecommendationItem {
+  championId: number;
+  championName: string;
+  role: Role;
+  fitReason: string;
+  threatMitigation?: string;
+  synergyReason?: string;
+  localWinrate?: number;
+  localMatches?: number;
+  isNewChampion?: boolean;
+}
+
+export interface RecommendedBanItem {
+  championId: number;
+  championName: string;
+  reason: string;
+}
+
+export interface DraftPickRecommendations {
+  assignedRole: Role;
+  picks: PickRecommendationItem[];
+  recommendedBans?: RecommendedBanItem[];
+  allyCompAnalysis?: {
+    damageProfile: 'AD_HEAVY' | 'AP_HEAVY' | 'BALANCED';
+    hasFrontline: boolean;
+    hasEngage: boolean;
+    hasHardCc: boolean;
+    summary: string;
+  };
+  enemyThreats?: string[];
+  source: 'ai' | 'fallback';
+  modelUsed?: string;
+  generatedAt?: number;
+  fallbackReason?: string;
+  debugInfo?: {
+    rawPrompt?: string;
+    rawResponse?: string;
+    validated?: boolean;
+    lcuStatus?: string;
+  };
 }
 

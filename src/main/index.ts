@@ -16,6 +16,7 @@ import { RiotApiClient } from './riot/RiotApiClient';
 import { MatchParser } from './riot/MatchParser';
 import { ProfileSyncService } from './riot/ProfileSyncService';
 import { DataDragonService } from './riot/DataDragonService';
+import { DataDragonTranslator } from './riot/DataDragonTranslator';
 import { DEFAULT_APP_SETTINGS } from '../shared/constants';
 import { IPC_CHANNELS } from '../shared/events';
 
@@ -128,12 +129,16 @@ app.whenReady().then(async () => {
     console.warn('[Main] Advertencia inicializando DatabaseService:', err);
   }
 
-  // 3. Inicializar servicio de Data Dragon con caché en disco
+  // 3. Inicializar servicio de Data Dragon con caché en disco y traductor
   try {
     const ddragonCacheDir = path.join(userDataDir, 'ddragon-cache');
     dataDragonService = new DataDragonService({ directorioCache: ddragonCacheDir });
-    // Carga no bloqueante de versión inicial
-    dataDragonService.obtenerVersionActual().catch(() => {});
+    const dataDragonTranslator = new DataDragonTranslator(dataDragonService);
+    geminiService.setTranslator(dataDragonTranslator);
+    // Carga no bloqueante de versión inicial y diccionarios
+    dataDragonTranslator.initialize().catch((err) => {
+      console.warn('[Main] Advertencia inicializando DataDragonTranslator:', err);
+    });
   } catch (err) {
     console.warn('[Main] Advertencia inicializando DataDragonService:', err);
   }
@@ -159,7 +164,7 @@ app.whenReady().then(async () => {
 
   // 5. Registrar canales IPC con todas sus dependencias
   registrarLcuIpc(lcuClient, () => mainWindow?.webContents ?? null);
-  setupChampSelectIpc(null, lcuClient, geminiService, runeManager, itemSetManager);
+  setupChampSelectIpc(null, lcuClient, geminiService, runeManager, itemSetManager, dataDragonService || undefined);
   registrarSettingsIpc(
     () => mainWindow?.webContents ?? null,
     dbService || undefined,

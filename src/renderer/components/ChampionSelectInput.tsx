@@ -72,9 +72,9 @@ export const ChampionSelectInput: React.FC<ChampionSelectInputProps> = ({
         type="button"
         disabled={disabled}
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full flex items-center justify-between bg-neutral-950 border ${
-          isOpen ? 'border-indigo-500 ring-1 ring-indigo-500' : 'border-neutral-800 hover:border-neutral-700'
-        } rounded-lg px-3 py-2 text-sm text-white focus:outline-none transition-all shadow-sm`}
+        className={`w-full flex items-center justify-between bg-[#0A111F] border ${
+          isOpen ? 'border-[#0070EB] ring-1 ring-[#0070EB]' : 'border-[#1E355B] hover:border-[#2A4878]'
+        } rounded px-3 py-2 text-sm text-white focus:outline-none transition-all shadow-sm`}
       >
         <div className="flex items-center space-x-2.5 truncate">
           {selectedChamp ? (
@@ -82,39 +82,38 @@ export const ChampionSelectInput: React.FC<ChampionSelectInputProps> = ({
               <img
                 src={getChampionIconUrl(selectedChamp.image, patchVersion)}
                 alt={selectedChamp.name}
-                className="w-6 h-6 rounded-md object-cover border border-neutral-700 flex-shrink-0"
+                className="w-6 h-6 rounded object-cover border border-[#1E355B] flex-shrink-0"
                 onError={(e) => {
-                  // Fallback si no carga la imagen
                   (e.target as HTMLElement).style.display = 'none';
                 }}
               />
-              <span className="font-medium text-white truncate">{selectedChamp.name}</span>
+              <span className="font-semibold text-white truncate">{selectedChamp.name}</span>
             </>
           ) : (
-            <span className="text-neutral-500">Seleccionar campeón...</span>
+            <span className="text-[#64748B]">Seleccionar campeón...</span>
           )}
         </div>
         <ChevronDown
-          className={`w-4 h-4 text-neutral-400 transition-transform duration-200 flex-shrink-0 ml-2 ${
-            isOpen ? 'rotate-180 text-indigo-400' : ''
+          className={`w-4 h-4 text-[#94A3B8] transition-transform duration-200 flex-shrink-0 ml-2 ${
+            isOpen ? 'rotate-180 text-[#0070EB]' : ''
           }`}
         />
       </button>
 
       {/* Dropdown flotante con buscador y listado */}
       {isOpen && (
-        <div className="absolute z-50 mt-1.5 w-full min-w-[240px] max-w-[320px] bg-neutral-900 border border-neutral-750 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+        <div className="absolute z-[100] mt-1.5 w-full min-w-[240px] max-w-[320px] bg-[#0D192D] border border-[#1E355B] rounded-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
           {/* Campo de búsqueda */}
-          <div className="p-2 border-b border-neutral-800 bg-neutral-950/80">
+          <div className="p-2 border-b border-[#1E355B] bg-[#0A111F]">
             <div className="relative flex items-center">
-              <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2.5 pointer-events-none" />
+              <Search className="w-3.5 h-3.5 text-[#64748B] absolute left-2.5 pointer-events-none" />
               <input
                 ref={searchInputRef}
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Escribe el nombre del champ..."
-                className="w-full bg-neutral-900 border border-neutral-800 rounded-md pl-8 pr-7 py-1.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500"
+                placeholder="Buscar campeón..."
+                className="w-full bg-[#0D192D] border border-[#1E355B] rounded pl-8 pr-7 py-1.5 text-xs text-white placeholder-[#64748B] focus:outline-none focus:border-[#0070EB]"
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') {
                     setIsOpen(false);
@@ -127,7 +126,7 @@ export const ChampionSelectInput: React.FC<ChampionSelectInputProps> = ({
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2 text-neutral-500 hover:text-white"
+                  className="absolute right-2 text-[#64748B] hover:text-white"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -145,23 +144,23 @@ export const ChampionSelectInput: React.FC<ChampionSelectInputProps> = ({
                     key={champ.id}
                     type="button"
                     onClick={() => handleSelect(champ)}
-                    className={`w-full flex items-center space-x-2.5 px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
+                    className={`w-full flex items-center space-x-2.5 px-2.5 py-1.5 rounded text-xs transition-colors ${
                       isSelected
-                        ? 'bg-indigo-600/20 text-indigo-300 font-semibold border border-indigo-500/30'
-                        : 'text-neutral-300 hover:bg-neutral-800/80 hover:text-white'
+                        ? 'bg-[#0070EB]/20 text-white font-semibold border border-[#0070EB]/50'
+                        : 'text-[#CBD5E1] hover:bg-[#1E355B]/60 hover:text-white'
                     }`}
                   >
                     <img
                       src={getChampionIconUrl(champ.image, patchVersion)}
                       alt={champ.name}
-                      className="w-5 h-5 rounded object-cover border border-neutral-700/60 flex-shrink-0"
+                      className="w-5 h-5 rounded object-cover border border-[#1E355B] flex-shrink-0"
                       onError={(e) => {
                         (e.target as HTMLElement).style.display = 'none';
                       }}
                     />
                     <span className="truncate text-left flex-1">{champ.name}</span>
                     {isSelected && (
-                      <span className="text-[10px] uppercase font-bold text-indigo-400 bg-indigo-950/60 px-1.5 py-0.5 rounded border border-indigo-800/40">
+                      <span className="text-[10px] uppercase font-bold text-[#60A5FA] bg-[#0070EB]/20 px-1.5 py-0.5 rounded border border-[#0070EB]/40">
                         Elegido
                       </span>
                     )}
@@ -169,7 +168,7 @@ export const ChampionSelectInput: React.FC<ChampionSelectInputProps> = ({
                 );
               })
             ) : (
-              <div className="py-4 text-center text-xs text-neutral-500">
+              <div className="py-4 text-center text-xs text-[#64748B]">
                 No se encontró "{searchQuery}"
               </div>
             )}

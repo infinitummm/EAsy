@@ -126,29 +126,27 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen w-screen bg-[#030813] text-[#D0E2FF] select-none p3r-bg-pattern">
+    <div className="flex h-screen w-screen bg-[#08101E] text-[#E2E8F0] select-none p3r-bg-pattern">
       {/* Barra Lateral de Navegación Estilo Persona 3 Reload */}
-      <aside className="w-64 bg-gradient-to-b from-[#061021] via-[#08152B] to-[#040C1A] border-r border-[#1B3B6F]/80 flex flex-col justify-between p-4 shadow-[4px_0_24px_rgba(0,0,0,0.6)] z-20">
+      <aside className="w-64 bg-[#0A111F] border-r border-[#1E355B] flex flex-col justify-between p-4 shadow-xl z-20">
         <div>
           {/* Logo / Header P3R */}
-          <div className="relative mb-6 pb-4 border-b border-[#1B3B6F]/60">
+          <div className="relative mb-6 pb-4 border-b border-[#1E355B]">
             <div className="flex items-center space-x-3 px-1">
-              <div className="w-9 h-9 rounded bg-gradient-to-br from-[#00D4FF] to-[#0055FF] flex items-center justify-center font-black text-[#030813] shadow-[0_0_14px_rgba(0,212,255,0.6)] transform -skew-x-6 text-sm">
-                <span className="transform skew-x-6 tracking-tighter">P3R</span>
+              <div className="w-9 h-9 rounded bg-[#0070EB] flex items-center justify-center font-bold text-white transform -skew-x-6 text-sm">
+                <span className="transform skew-x-6 tracking-wider">IT</span>
               </div>
               <div>
-                <h1 className="font-black text-white text-base tracking-wider flex items-center space-x-1">
+                <h1 className="font-bold text-white text-base tracking-wider flex items-center space-x-1">
                   <span>ITERO</span>
-                  <span className="text-[#00D4FF] text-xs font-mono font-bold tracking-widest">// RELOAD</span>
+                  <span className="text-[#60A5FA] text-xs font-mono font-semibold">LOCAL</span>
                 </h1>
-                <p className="text-[10px] text-[#5A82B5] font-mono tracking-widest uppercase">Tactical AI Assistant</p>
+                <p className="text-[10px] text-[#94A3B8] font-medium tracking-wide uppercase">Asistente de LoL</p>
               </div>
             </div>
-            {/* Glowing cyan line indicator */}
-            <div className="absolute -bottom-[1px] left-0 w-24 h-[2px] bg-[#00D4FF] shadow-[0_0_8px_#00D4FF]" />
           </div>
 
-          {/* Menú de Navegación Slanted P3R */}
+          {/* Menú de Navegación P3R */}
           <nav className="space-y-1.5">
             {[
               { id: 'dashboard', label: 'DASHBOARD', icon: Shield },
@@ -163,19 +161,16 @@ export default function App() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`w-full group relative flex items-center space-x-3 px-3.5 py-2.5 rounded-sm text-xs font-bold tracking-wider transition-all duration-200 transform -skew-x-6 ${
+                  className={`w-full group relative flex items-center space-x-3 px-3.5 py-2.5 rounded-sm text-xs font-bold tracking-wider transition-all duration-150 transform -skew-x-6 ${
                     isActive
-                      ? 'bg-gradient-to-r from-[#00D4FF]/25 via-[#0088FF]/15 to-transparent text-[#00F0FF] border-l-4 border-[#00D4FF] shadow-[0_0_16px_rgba(0,212,255,0.25)]'
-                      : 'text-[#6F92BF] hover:text-[#E0F0FF] hover:bg-[#0E2242]/50 hover:border-l-2 hover:border-[#00D4FF]/50'
+                      ? 'bg-[#0070EB] text-white border-l-4 border-white shadow-md'
+                      : 'text-[#94A3B8] hover:text-white hover:bg-[#1E355B]/40 hover:border-l-2 hover:border-[#0070EB]'
                   }`}
                 >
                   <div className="transform skew-x-6 flex items-center space-x-3">
-                    <Icon className={`w-4 h-4 transition-transform group-hover:scale-110 ${isActive ? 'text-[#00D4FF]' : 'text-[#5078A8]'}`} />
+                    <Icon className={`w-4 h-4 transition-transform group-hover:scale-105 ${isActive ? 'text-white' : 'text-[#64748B]'}`} />
                     <span>{tab.label}</span>
                   </div>
-                  {isActive && (
-                    <span className="absolute right-2 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-[#00D4FF] rounded-full shadow-[0_0_6px_#00D4FF] animate-pulse" />
-                  )}
                 </button>
               );
             })}
@@ -183,40 +178,39 @@ export default function App() {
         </div>
 
         {/* Estado LCU en el footer de la barra lateral */}
-        <div className="bg-[#08152B]/90 p-3.5 rounded border border-[#1B3B6F] shadow-lg relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-8 h-8 bg-gradient-to-bl from-[#00D4FF]/10 to-transparent pointer-events-none" />
+        <div className="bg-[#0D192D] p-3.5 rounded border border-[#1E355B] shadow-lg">
           <div className="flex items-center justify-between text-xs mb-1.5">
-            <span className="text-[#648CB8] font-mono text-[11px] uppercase tracking-wider">LCU CLIENT:</span>
+            <span className="text-[#94A3B8] text-[11px] uppercase tracking-wider font-semibold">CLIENTE LOL:</span>
             <span
               className={`font-bold flex items-center text-[11px] ${
                 lcuState === 'connected'
-                  ? 'text-[#00FFB2]'
+                  ? 'text-[#10B981]'
                   : lcuState === 'connecting'
-                  ? 'text-[#FFD700]'
-                  : 'text-[#FF2E63]'
+                  ? 'text-[#F5A623]'
+                  : 'text-[#D92546]'
               }`}
             >
               <span
                 className={`w-2 h-2 rounded-full mr-1.5 ${
                   lcuState === 'connected'
-                    ? 'bg-[#00FFB2] shadow-[0_0_8px_#00FFB2] animate-pulse'
+                    ? 'bg-[#10B981]'
                     : lcuState === 'connecting'
-                    ? 'bg-[#FFD700] shadow-[0_0_8px_#FFD700]'
-                    : 'bg-[#FF2E63] shadow-[0_0_8px_#FF2E63]'
+                    ? 'bg-[#F5A623]'
+                    : 'bg-[#D92546]'
                 }`}
               />
               {lcuState === 'connected' ? 'ONLINE' : lcuState === 'connecting' ? 'SYNCING...' : 'OFFLINE'}
             </span>
           </div>
-          <div className="text-[11px] text-[#5078A8] font-mono flex items-center justify-between border-t border-[#1B3B6F]/60 pt-1.5 mt-1">
+          <div className="text-[11px] text-[#64748B] flex items-center justify-between border-t border-[#1E355B] pt-1.5 mt-1">
             <span>GAMEFLOW:</span>
-            <span className="text-[#00D4FF] font-semibold">{gameflow}</span>
+            <span className="text-white font-semibold font-mono">{gameflow}</span>
           </div>
         </div>
       </aside>
 
       {/* Contenido Principal */}
-      <main className="flex-1 overflow-y-auto p-8 bg-[#040B17]/95">
+      <main className="flex-1 overflow-y-auto p-8 bg-[#08101E]">
         {isPermissionError && (
           <div className="mb-6 p-4 rounded bg-amber-950/40 border border-amber-600/50 flex items-start space-x-3 text-amber-200 text-sm shadow-md">
             <span className="text-xl shrink-0">⚠️</span>

@@ -16,7 +16,8 @@ export function setupChampSelectIpc(
   lcuClient: ILcuClient,
   geminiService: GeminiService,
   runeManager?: RuneManager,
-  itemSetManager?: ItemSetManager
+  itemSetManager?: ItemSetManager,
+  dataDragonService?: any
 ): void {
   const difundir = (canal: string, ...args: unknown[]) => {
     const windows = BrowserWindow.getAllWindows();
@@ -27,21 +28,39 @@ export function setupChampSelectIpc(
     }
   };
 
-  // 1. Inyección de runas al cliente LoL vía LCU API (con soporte de sobrescritura activa)
+  // 1. Inyección de runas al cliente LoL vía LCU API (con soporte de sobrescritura y activación forzada)
   ipcMain.removeHandler(IPC_CHANNELS.LCU_APPLY_RUNES);
   ipcMain.handle(
     IPC_CHANNELS.LCU_APPLY_RUNES,
     async (_event, page: RunePage): Promise<{ success: boolean; pageId?: number; error?: string }> => {
       try {
+        let pageId: number | undefined;
+        let success = false;
+        let error: string | undefined;
+
         if (runeManager) {
           const res = await runeManager.aplicarPagina(page);
-          return {
-            success: res.success,
-            pageId: res.pageId,
-            error: res.error
-          };
+          success = res.success;
+          pageId = res.pageId;
+          error = res.error;
+
+          if (success && pageId !== undefined) {
+            await runeManager.seleccionarPaginaComoActiva(pageId);
+          }
+        } else {
+          const res = await lcuClient.injectRunePage(page);
+          success = res.success;
+          pageId = res.pageId;
+          error = res.error;
+
+          if (success && pageId !== undefined) {
+            try {
+              await lcuClient.request('PUT', '/lol-perks/v1/currentpage', pageId);
+            } catch {}
+          }
         }
-        return await lcuClient.injectRunePage(page);
+
+        return { success, pageId, error };
       } catch (err: unknown) {
         return {
           success: false,
@@ -76,7 +95,20 @@ export function setupChampSelectIpc(
     }
   );
 
-  // 2. Consulta de recomendación táctica y de matchup con Gemini AI
+  // 2. Consulta de parche actual detectado en Data Dragon
+  ipcMain.removeHandler(IPC_CHANNELS.DDRAGON_GET_PATCH);
+  ipcMain.handle(IPC_CHANNELS.DDRAGON_GET_PATCH, async (): Promise<string> => {
+    try {
+      if (dataDragonService) {
+        return await dataDragonService.obtenerVersionActual();
+      }
+      return '16.20.1';
+    } catch {
+      return '16.20.1';
+    }
+  });
+
+  // 3. Consulta de recomendación táctica y de matchup con Gemini AI
   ipcMain.removeHandler(IPC_CHANNELS.AI_GET_MATCHUP_ADVICE);
   ipcMain.handle(
     IPC_CHANNELS.AI_GET_MATCHUP_ADVICE,
@@ -89,6 +121,7 @@ export function setupChampSelectIpc(
         patch: string;
         allies: number[];
         enemies: number[];
+        forceRefresh?: boolean;
       }
     ) => {
       return await geminiService.getMatchupAdvice(params);

@@ -43,7 +43,15 @@ export class ErrorPeticionLcu extends Error {
     public readonly cuerpo: string,
     public readonly endpoint: string
   ) {
-    super(`La petición LCU a "${endpoint}" falló con estado HTTP ${codigoEstado}.`);
+    let detalle = '';
+    try {
+      const parsed = JSON.parse(cuerpo);
+      detalle = parsed.message || parsed.errorCode || '';
+    } catch {
+      detalle = cuerpo ? cuerpo.slice(0, 100) : '';
+    }
+    const extra = detalle ? ` (${detalle})` : '';
+    super(`La petición LCU a "${endpoint}" falló con estado HTTP ${codigoEstado}${extra}.`);
     this.name = 'ErrorPeticionLcu';
   }
 }

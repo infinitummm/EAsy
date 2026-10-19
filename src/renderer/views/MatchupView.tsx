@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { GeminiMatchupRecommendation, Role, RunePage } from '../../shared/types';
 import { BuildVisualizer } from '../components/BuildVisualizer';
 import { ChampionSelectInput } from '../components/ChampionSelectInput';
 import { getChampionName, getChampionIconUrl } from '../../shared/champions';
+import { getAccurateFallbackRecommendation } from '../../shared/buildDatabase';
 
 interface MatchupViewProps {
   initialChampionId?: number;
@@ -10,39 +11,70 @@ interface MatchupViewProps {
   initialRole?: Role;
   patchVersion?: string;
   autoRun?: boolean;
+  onOpponentChange?: (opponentId: number) => void;
 }
 
 export const MatchupView: React.FC<MatchupViewProps> = ({
-  initialChampionId = 266, // Aatrox
+  initialChampionId = 0,
   initialOpponentId = 24,  // Jax
   initialRole = 'TOP',
-  patchVersion = '14.20.1',
-  autoRun = false
+  patchVersion = '16.20.1',
+  autoRun = false,
+  onOpponentChange
 }) => {
   const [championId, setChampionId] = useState<number>(initialChampionId);
   const [opponentId, setOpponentId] = useState<number>(initialOpponentId);
   const [role, setRole] = useState<Role>(initialRole);
+  const [activePatch, setActivePatch] = useState<string>(patchVersion || '16.20.1');
+  const [isManualOpponent, setIsManualOpponent] = useState<boolean>(false);
   const [loading, setLoading] = useState(false);
   const [recommendation, setRecommendation] = useState<GeminiMatchupRecommendation | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [autoImportEnabled, setAutoImportEnabled] = useState<boolean>(true);
   const [importStatus, setImportStatus] = useState<'idle' | 'importing' | 'success' | 'error'>('idle');
   const [importMsg, setImportMsg] = useState<string>('');
+  const [showDebug, setShowDebug] = useState<boolean>(false);
 
   const lastAnalyzedKeyRef = useRef<string>('');
 
-  // Sincronizar props cuando el cliente de LoL actualiza la selección
+  // Obtener el parche real detectado por Data Dragon al montar
+  useEffect(() => {
+    if (window.api && window.api.getPatchVersion) {
+      window.api.getPatchVersion().then((detected) => {
+        if (detected) {
+          setActivePatch(detected);
+        }
+      }).catch(() => {});
+    }
+  }, []);
+
+  // Sincronizar campeón propio
   useEffect(() => {
     if (initialChampionId && initialChampionId > 0 && initialChampionId !== championId) {
       setChampionId(initialChampionId);
     }
   }, [initialChampionId]);
 
+  // Sincronizar rival predicho SOLO si el usuario no fijó manualmente uno
   useEffect(() => {
-    if (initialOpponentId && initialOpponentId > 0 && initialOpponentId !== opponentId) {
+    if (!isManualOpponent && initialOpponentId && initialOpponentId > 0 && initialOpponentId !== opponentId) {
       setOpponentId(initialOpponentId);
     }
-  }, [initialOpponentId]);
+  }, [initialOpponentId, isManualOpponent]);
+
+  const handleOpponentChange = (newOpponentId: number) => {
+    setOpponentId(newOpponentId);
+    setIsManualOpponent(true);
+    onOpponentChange?.(newOpponentId);
+  };
+
+  const handleResetOpponent = () => {
+    setIsManualOpponent(false);
+    if (initialOpponentId) {
+      setOpponentId(initialOpponentId);
+      onOpponentChange?.(initialOpponentId);
+    }
+  };
 
   useEffect(() => {
     if (initialRole && initialRole !== role) {
@@ -76,7 +108,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
 
       if (runeRes.success && buildRes.success) {
         setImportStatus('success');
-        setImportMsg('¡Runas oficiales y Build importadas al cliente de LoL!');
+        setImportMsg('¡Runas oficiales activadas y Build importada a la Colección de LoL!');
         setTimeout(() => setImportStatus('idle'), 6000);
       } else if (runeRes.success) {
         setImportStatus('success');
@@ -94,8 +126,13 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
     }
   };
 
-  const fetchAdvice = async (targetChamp = championId, targetOpponent = opponentId, targetRole = role) => {
-    if (loading) return;
+  const fetchAdvice = async (
+    targetChamp = championId,
+    targetOpponent = opponentId,
+    targetRole = role,
+    forceRefresh = false
+  ) => {
+    if (loading || targetChamp <= 0 || targetOpponent <= 0) return;
     setLoading(true);
     setError(null);
 
@@ -109,49 +146,18 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
           championId: targetChamp,
           opponentId: targetOpponent,
           role: targetRole,
-          patch: patchVersion,
+          patch: activePatch,
           allies: [],
-          enemies: []
+          enemies: [],
+          forceRefresh
         });
       } else {
-        // Mock fallback seguro Season 14 (5008, 5008, 5011)
-        res = {
+        res = getAccurateFallbackRecommendation({
           championId: targetChamp,
-          opponentChampionId: targetOpponent,
-          assignedRole: targetRole,
-          patchVersion,
-          difficultyRating: 7,
-          matchupSummary: 'Enfrentamiento de desgaste. Mantén la distancia con tus habilidades y castiga los enfriamientos del rival.',
-          runesRecommendation: {
-            primaryStyleId: 8000,
-            subStyleId: 8400,
-            selectedPerkIds: [8010, 9111, 9104, 8299, 8446, 8453, 5008, 5008, 5011],
-            rationale: 'Conquistador para sostener peleas largas y mitigación secundaria en Valor.'
-          },
-          buildRecommendation: {
-            startingItems: [1055, 2003],
-            coreItems: [3078, 6631, 3053],
-            situationalItems: [
-              { itemId: 3026, condition: 'Frente a daño explosivo adverso' },
-              { itemId: 3156, condition: 'Frente a campeones con alto burst mágico' }
-            ],
-            rationale: 'Daño continuo con aceleración de habilidad y resistencias para aguantar all-in.'
-          },
-          skillOrder: {
-            priority: ['Q', 'E', 'W', 'R'],
-            firstThreeLevels: ['Q', 'E', 'W'],
-            rationale: 'Prioriza tu habilidad de rango y daño principal en la fase de líneas.'
-          },
-          earlyGameStrategy: {
-            waveManagement: 'Controla la oleada cerca de tu torre en los primeros 3 niveles.',
-            tradingPlan: 'Espera a que el rival gaste su habilidad clave antes de iniciar un tradeo largo.',
-            levelSpikes: ['Nivel 2 con ventaja de súbditos', 'Nivel 6 para ejecutar combo completo']
-          },
-          threatAnalysis: {
-            enemyThreats: ['Peligro de ganks tempranos del jungla rival'],
-            winCondition: 'Conseguir ventaja de oro en línea y forzar peleas en objetivos neutrales.'
-          }
-        };
+          opponentId: targetOpponent,
+          role: targetRole,
+          patch: activePatch
+        });
       }
 
       setRecommendation(res);
@@ -172,77 +178,74 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
     if (autoRun && championId > 0 && opponentId > 0) {
       const key = `${championId}-${opponentId}-${role}`;
       if (key !== lastAnalyzedKeyRef.current) {
-        fetchAdvice(championId, opponentId, role);
+        fetchAdvice(championId, opponentId, role, false);
       }
     }
   }, [autoRun, championId, opponentId, role]);
 
   const getDifficultyColor = (diff: number) => {
-    if (diff <= 3) return { bg: 'bg-[#00FFB2]', text: 'text-[#00FFB2]', label: 'FAVORABLE' };
-    if (diff <= 6) return { bg: 'bg-[#FFD700]', text: 'text-[#FFD700]', label: 'EQUILIBRADO' };
-    if (diff <= 8) return { bg: 'bg-[#FF8800]', text: 'text-[#FF8800]', label: 'DESAFIANTE' };
-    return { bg: 'bg-[#FF2E63]', text: 'text-[#FF2E63]', label: 'MUY DIFÍCIL' };
+    if (diff <= 3) return { bg: 'bg-[#10B981]', text: 'text-[#10B981]', label: 'FAVORABLE' };
+    if (diff <= 6) return { bg: 'bg-[#F5A623]', text: 'text-[#F5A623]', label: 'EQUILIBRADO' };
+    if (diff <= 8) return { bg: 'bg-[#F97316]', text: 'text-[#F97316]', label: 'DESAFIANTE' };
+    return { bg: 'bg-[#D92546]', text: 'text-[#D92546]', label: 'MUY DIFÍCIL' };
   };
-
-  const currentRunePage: RunePage = recommendation
-    ? {
-        name: `Itero: ${getChampionName(recommendation.championId)} vs ${getChampionName(recommendation.opponentChampionId)}`,
-        primaryStyleId: recommendation.runesRecommendation.primaryStyleId,
-        subStyleId: recommendation.runesRecommendation.subStyleId,
-        selectedPerkIds: recommendation.runesRecommendation.selectedPerkIds,
-        current: true
-      }
-    : {
-        name: 'Itero: Runas IA',
-        primaryStyleId: 8000,
-        subStyleId: 8400,
-        selectedPerkIds: [8010, 9111, 9104, 8299, 8446, 8453, 5008, 5008, 5011],
-        current: true
-      };
 
   return (
     <div className="space-y-6">
       {/* Cabecera y Parámetros Estilo Persona 3 Reload */}
-      <div className="bg-[#08152B]/95 border border-[#1B3B6F] rounded-xl p-6 shadow-[0_8px_30px_rgba(0,0,0,0.5)] relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-bl from-[#00D4FF]/10 to-transparent pointer-events-none" />
-        
+      <div className="bg-[#0D192D] border border-[#1E355B] rounded-xl p-6 shadow-xl relative">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <div className="inline-block px-2.5 py-0.5 mb-2 bg-[#00D4FF]/15 border border-[#00D4FF]/40 text-[#00F0FF] text-[10px] font-black tracking-widest uppercase transform -skew-x-6">
-              TACTICAL INTEL // P3R
+            <div className="inline-block px-2 py-0.5 mb-2 bg-[#0070EB] text-white text-[10px] font-bold tracking-wider uppercase transform -skew-x-6">
+              ANÁLISIS TÁCTICO
             </div>
-            <h2 className="text-xl font-black text-white flex items-center space-x-2 tracking-wide">
-              <span>ANÁLISIS DE ENFRENTAMIENTO</span>
-              <span className="text-[#00D4FF] font-mono text-sm">// GEMINI AI</span>
+            <h2 className="text-xl font-bold text-white tracking-wide">
+              ENFRENTAMIENTO DIRECTO EN LÍNEA
             </h2>
-            <p className="text-xs text-[#6F92BF] mt-1 font-mono">
-              Build de objetos in-game, runas completas S14 y guía táctica sincronizada para el parche {patchVersion}.
+            <p className="text-xs text-[#94A3B8] mt-1">
+              Build de objetos in-game, runas completas y tácticas para el parche <span className="text-[#60A5FA] font-bold">{activePatch}</span>.
             </p>
           </div>
 
           <div className="flex items-center space-x-3">
             {/* Toggle de Auto-Importar */}
-            <label className="flex items-center space-x-2 cursor-pointer bg-[#040C1A] px-3 py-2 rounded border border-[#1B3B6F] hover:border-[#00D4FF]/60 transition">
+            <label className="flex items-center space-x-2 cursor-pointer bg-[#0A111F] px-3 py-2 rounded border border-[#1E355B] hover:border-[#2A4878] transition">
               <input
                 type="checkbox"
                 checked={autoImportEnabled}
                 onChange={(e) => setAutoImportEnabled(e.target.checked)}
-                className="w-4 h-4 accent-[#00D4FF] rounded cursor-pointer"
+                className="w-4 h-4 accent-[#0070EB] rounded cursor-pointer"
               />
-              <span className="text-xs font-bold text-[#A8C8F0] tracking-wider">
+              <span className="text-xs font-semibold text-[#E2E8F0]">
                 Auto-Importar a LoL
               </span>
             </label>
 
+            {/* Botón de Regenerar Análisis (fuerza llamada fresca a Gemini ignorando caché) */}
             <button
-              onClick={() => fetchAdvice()}
-              disabled={loading}
-              className="px-5 py-2.5 bg-gradient-to-r from-[#00D4FF] to-[#0077FF] hover:from-[#00F0FF] hover:to-[#0088FF] disabled:opacity-50 text-[#030813] font-black text-xs uppercase tracking-widest rounded shadow-[0_0_18px_rgba(0,212,255,0.4)] transition-all flex items-center justify-center space-x-2 transform -skew-x-6 active:scale-95"
+              onClick={() => fetchAdvice(championId, opponentId, role, true)}
+              disabled={loading || championId <= 0 || opponentId <= 0}
+              title="Ignora la caché y genera una consulta nueva a Gemini"
+              className="px-3.5 py-2.5 bg-[#11223F] hover:bg-[#1A335B] text-white disabled:opacity-40 font-bold text-xs uppercase tracking-wider rounded border border-[#1E355B] hover:border-[#0070EB] transition-all flex items-center space-x-1.5 transform -skew-x-6 active:scale-95"
+            >
+              <div className="transform skew-x-6 flex items-center space-x-1.5">
+                <svg className={`w-3.5 h-3.5 text-[#60A5FA] ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>REGENERAR</span>
+              </div>
+            </button>
+
+            {/* Botón Principal Analizar */}
+            <button
+              onClick={() => fetchAdvice(championId, opponentId, role, false)}
+              disabled={loading || championId <= 0 || opponentId <= 0}
+              className="px-5 py-2.5 bg-[#0070EB] hover:bg-[#005CE6] disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider rounded transition-all flex items-center justify-center space-x-2 transform -skew-x-6 active:scale-95 shadow-md"
             >
               <div className="transform skew-x-6 flex items-center space-x-2">
                 {loading ? (
                   <>
-                    <svg className="animate-spin h-4 w-4 text-[#030813]" fill="none" viewBox="0 0 24 24">
+                    <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
                     </svg>
@@ -250,7 +253,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
                   </>
                 ) : (
                   <>
-                    <svg className="w-4 h-4 text-[#030813]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
                     <span>ANALIZAR MATCHUP</span>
@@ -264,45 +267,56 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
         {/* Notificación de Estado de Inyección */}
         {importMsg && (
           <div
-            className={`mt-4 p-3 rounded text-xs font-bold flex items-center space-x-2 border transition-all ${
+            className={`mt-4 p-3 rounded text-xs font-semibold flex items-center space-x-2 border transition-all ${
               importStatus === 'success'
-                ? 'bg-[#00FFB2]/15 border-[#00FFB2]/60 text-[#00FFB2]'
+                ? 'bg-[#10B981]/15 border-[#10B981]/50 text-[#10B981]'
                 : importStatus === 'error'
-                ? 'bg-[#FF2E63]/15 border-[#FF2E63]/60 text-[#FF2E63]'
-                : 'bg-[#00D4FF]/15 border-[#00D4FF]/60 text-[#00D4FF]'
+                ? 'bg-[#D92546]/15 border-[#D92546]/50 text-[#F87171]'
+                : 'bg-[#0070EB]/15 border-[#0070EB]/50 text-[#60A5FA]'
             }`}
           >
             <span className="text-sm">
-              {importStatus === 'success' ? '⚡' : importStatus === 'error' ? '❌' : '⏳'}
+              {importStatus === 'success' ? '✓' : importStatus === 'error' ? '✕' : 'ℹ'}
             </span>
             <span>{importMsg}</span>
           </div>
         )}
 
         {/* Selector de Parámetros */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-5 pt-4 border-t border-[#1B3B6F]/60">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-5 pt-4 border-t border-[#1E355B]">
           <ChampionSelectInput
             label="Mi Campeón"
             value={championId}
             onChange={setChampionId}
-            patchVersion={patchVersion}
-          />
-
-          <ChampionSelectInput
-            label="Campeón Rival (Predicho / Bloqueado)"
-            value={opponentId}
-            onChange={setOpponentId}
-            patchVersion={patchVersion}
+            patchVersion={activePatch}
           />
 
           <div>
-            <label className="text-xs text-[#6F92BF] font-mono uppercase tracking-wider block mb-1">
+            <ChampionSelectInput
+              label={isManualOpponent ? "Campeón Rival (Manual)" : "Campeón Rival (Detectado)"}
+              value={opponentId}
+              onChange={handleOpponentChange}
+              patchVersion={activePatch}
+            />
+            {isManualOpponent && (
+              <button
+                type="button"
+                onClick={handleResetOpponent}
+                className="mt-1 text-[11px] text-[#60A5FA] hover:text-white underline inline-block"
+              >
+                ↺ Restablecer a rival automático
+              </button>
+            )}
+          </div>
+
+          <div>
+            <label className="text-xs text-[#94A3B8] font-medium block mb-1">
               Posición Asignada
             </label>
             <select
               value={role}
               onChange={(e) => setRole(e.target.value as Role)}
-              className="w-full bg-[#040C1A] border border-[#1B3B6F] rounded px-3 py-2 text-sm text-white font-semibold focus:outline-none focus:border-[#00D4FF]"
+              className="w-full bg-[#0A111F] border border-[#1E355B] rounded px-3 py-2 text-sm text-white font-semibold focus:outline-none focus:border-[#0070EB]"
             >
               <option value="TOP">TOP (Superior)</option>
               <option value="JUNGLE">JUNGLE (Jungla)</option>
@@ -315,51 +329,94 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
       </div>
 
       {error && (
-        <div className="bg-[#FF2E63]/15 border border-[#FF2E63]/50 p-4 rounded-xl text-xs text-[#FF85A2] font-mono">
+        <div className="bg-[#D92546]/15 border border-[#D92546]/50 p-4 rounded-xl text-xs text-[#F87171]">
           <strong>ERROR DE ANÁLISIS:</strong> {error}
         </div>
+      )}
+
+      {/* Banner de Proveniencia Transparente (Requirement 8) */}
+      {recommendation && (
+        recommendation.source === 'fallback' ? (
+          <div className="bg-[#D92546]/20 border-2 border-[#D92546] p-4 rounded-xl text-xs flex items-center justify-between gap-3 text-white">
+            <div className="flex items-center space-x-2.5">
+              <span className="text-xl">⚠️</span>
+              <div>
+                <span className="font-bold text-[#F87171] uppercase block text-sm">
+                  Sin análisis de IA: recomendación genérica de contingencia
+                </span>
+                <span className="text-[#CBD5E1] text-xs">
+                  Motivo: {recommendation.fallbackReason || 'Sin API Key configurada o error de validación en la respuesta del modelo.'}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={() => fetchAdvice(championId, opponentId, role, true)}
+              className="px-3 py-1.5 bg-[#D92546] hover:bg-[#B51E39] text-white font-bold text-[11px] uppercase rounded"
+            >
+              Reintentar con IA
+            </button>
+          </div>
+        ) : (
+          <div className="bg-[#10B981]/15 border border-[#10B981]/40 px-4 py-2.5 rounded-xl text-xs flex items-center justify-between text-white">
+            <div className="flex items-center space-x-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#10B981] animate-pulse"></span>
+              <span className="font-bold text-[#10B981] uppercase tracking-wide">
+                IA: {recommendation.modelUsed || 'Gemini 3.5 Flash'}
+              </span>
+              <span className="text-[#94A3B8]">
+                • Generado en vivo ({recommendation.generatedAt ? new Date(recommendation.generatedAt).toLocaleTimeString() : 'reciente'})
+              </span>
+            </div>
+            <button
+              onClick={() => setShowDebug(!showDebug)}
+              className="text-[11px] text-[#60A5FA] hover:text-white underline font-semibold"
+            >
+              {showDebug ? 'Ocultar Depuración IA ▲' : 'Ver Depuración IA ▼'}
+            </button>
+          </div>
+        )
       )}
 
       {/* Resultados de la Recomendación */}
       {recommendation ? (
         <div className="space-y-6">
           {/* Tarjeta de Dificultad, Resumen y Botón de Inyección */}
-          <div className="bg-[#08152B]/95 border border-[#1B3B6F] rounded-xl p-6 shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
+          <div className="bg-[#0D192D] border border-[#1E355B] rounded-xl p-6 shadow-xl">
             {/* Header visual del Enfrentamiento */}
-            <div className="flex items-center space-x-3 pb-4 mb-4 border-b border-[#1B3B6F]/70">
-              <div className="flex items-center space-x-3 bg-[#040C1A] px-3.5 py-2 rounded border border-[#00D4FF]/40 shadow-[0_0_12px_rgba(0,212,255,0.2)]">
+            <div className="flex items-center space-x-3 pb-4 mb-4 border-b border-[#1E355B]">
+              <div className="flex items-center space-x-3 bg-[#0A111F] px-3.5 py-2 rounded border border-[#0070EB]/60">
                 <img
-                  src={getChampionIconUrl(recommendation.championId, patchVersion)}
+                  src={getChampionIconUrl(recommendation.championId, activePatch)}
                   alt={getChampionName(recommendation.championId)}
-                  className="w-8 h-8 rounded object-cover border border-[#00D4FF]"
+                  className="w-8 h-8 rounded object-cover border border-[#0070EB]"
                   onError={(e) => {
                     (e.target as HTMLElement).style.display = 'none';
                   }}
                 />
                 <div>
-                  <span className="text-[10px] text-[#00D4FF] font-mono font-bold uppercase block">MI ELECCIÓN</span>
-                  <span className="font-black text-white text-sm">
+                  <span className="text-[10px] text-[#60A5FA] font-bold uppercase block">MI ELECCIÓN</span>
+                  <span className="font-bold text-white text-sm">
                     {getChampionName(recommendation.championId)}
                   </span>
                 </div>
               </div>
 
-              <div className="w-8 h-8 rounded-full bg-[#061021] border border-[#1B3B6F] flex items-center justify-center font-black text-xs text-[#5078A8]">
+              <div className="w-8 h-8 rounded bg-[#11223F] border border-[#1E355B] flex items-center justify-center font-bold text-xs text-[#94A3B8]">
                 VS
               </div>
 
-              <div className="flex items-center space-x-3 bg-[#040C1A] px-3.5 py-2 rounded border border-[#FF2E63]/40 shadow-[0_0_12px_rgba(255,46,99,0.2)]">
+              <div className="flex items-center space-x-3 bg-[#0A111F] px-3.5 py-2 rounded border border-[#D92546]/60">
                 <img
-                  src={getChampionIconUrl(recommendation.opponentChampionId, patchVersion)}
+                  src={getChampionIconUrl(recommendation.opponentChampionId, activePatch)}
                   alt={getChampionName(recommendation.opponentChampionId)}
-                  className="w-8 h-8 rounded object-cover border border-[#FF2E63]"
+                  className="w-8 h-8 rounded object-cover border border-[#D92546]"
                   onError={(e) => {
                     (e.target as HTMLElement).style.display = 'none';
                   }}
                 />
                 <div>
-                  <span className="text-[10px] text-[#FF2E63] font-mono font-bold uppercase block">RIVAL EN LÍNEA</span>
-                  <span className="font-black text-white text-sm">
+                  <span className="text-[10px] text-[#F87171] font-bold uppercase block">RIVAL EN LÍNEA</span>
+                  <span className="font-bold text-white text-sm">
                     {getChampionName(recommendation.opponentChampionId)}
                   </span>
                 </div>
@@ -368,18 +425,18 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
               <div>
-                <span className="text-xs font-mono font-bold text-[#6F92BF] uppercase tracking-wider">
+                <span className="text-xs font-semibold text-[#94A3B8] uppercase tracking-wider">
                   DIFICULTAD ESTIMADA DE LÍNEA
                 </span>
                 <div className="flex items-center space-x-3 mt-1">
-                  <span className="text-3xl font-black text-white tracking-tight">
+                  <span className="text-3xl font-bold text-white tracking-tight">
                     {recommendation.difficultyRating}
-                    <span className="text-base text-[#5078A8] font-normal"> / 10</span>
+                    <span className="text-base text-[#94A3B8] font-normal"> / 10</span>
                   </span>
                   <span
-                    className={`px-2.5 py-0.5 rounded text-xs font-black tracking-wider ${
+                    className={`px-2.5 py-0.5 rounded text-xs font-bold tracking-wider ${
                       getDifficultyColor(recommendation.difficultyRating).text
-                    } bg-[#040C1A] border border-current`}
+                    } bg-[#0A111F] border border-current`}
                   >
                     {getDifficultyColor(recommendation.difficultyRating).label}
                   </span>
@@ -390,10 +447,10 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
               <button
                 onClick={() => aplicarRunasYBuild(recommendation)}
                 disabled={importStatus === 'importing'}
-                className="px-5 py-3 rounded bg-gradient-to-r from-[#00D4FF] via-[#0088FF] to-[#0055FF] hover:from-[#00F0FF] hover:to-[#0066FF] text-[#030813] font-black text-xs uppercase tracking-widest shadow-[0_0_20px_rgba(0,212,255,0.5)] transition-all flex items-center space-x-2.5 transform -skew-x-6 active:scale-95"
+                className="px-5 py-3 rounded bg-[#0070EB] hover:bg-[#005CE6] text-white font-bold text-xs uppercase tracking-wider shadow-md transition-all flex items-center space-x-2 transform -skew-x-6 active:scale-95"
               >
                 <div className="transform skew-x-6 flex items-center space-x-2">
-                  <svg className="w-4 h-4 text-[#030813]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
                   <span>
@@ -406,7 +463,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
             </div>
 
             {/* Barra visual de dificultad */}
-            <div className="w-full bg-[#040C1A] rounded-full h-2 mb-5 overflow-hidden border border-[#1B3B6F]">
+            <div className="w-full bg-[#0A111F] rounded-full h-2 mb-5 overflow-hidden border border-[#1E355B]">
               <div
                 className={`h-2 rounded-full transition-all duration-700 ${
                   getDifficultyColor(recommendation.difficultyRating).bg
@@ -416,39 +473,39 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
             </div>
 
             {/* Resumen */}
-            <div className="bg-[#040C1A]/80 p-4 rounded border border-[#1B3B6F]/80">
-              <h4 className="text-xs font-mono font-bold text-[#00D4FF] uppercase tracking-wider mb-1 flex items-center space-x-1.5">
-                <span className="w-1.5 h-1.5 bg-[#00D4FF] rounded-full" />
+            <div className="bg-[#0A111F] p-4 rounded border border-[#1E355B]">
+              <h4 className="text-xs font-bold text-[#60A5FA] uppercase tracking-wider mb-1 flex items-center space-x-1.5">
+                <span className="w-1.5 h-1.5 bg-[#0070EB] rounded-full" />
                 <span>DINÁMICA DEL ENFRENTAMIENTO</span>
               </h4>
-              <p className="text-xs text-[#C8DCF5] leading-relaxed">
+              <p className="text-xs text-[#CBD5E1] leading-relaxed">
                 {recommendation.matchupSummary}
               </p>
             </div>
           </div>
 
           {/* Runas Recomendadas */}
-          <div className="bg-[#08152B]/95 border border-[#1B3B6F] rounded-xl p-6 shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#1B3B6F]/60">
-              <h3 className="text-sm font-black text-white flex items-center space-x-2 tracking-wide">
-                <span className="w-2 h-2 rounded-full bg-[#00D4FF] shadow-[0_0_8px_#00D4FF]"></span>
-                <span className="uppercase">Configuración de Runas Oficial (Temporada 14)</span>
+          <div className="bg-[#0D192D] border border-[#1E355B] rounded-xl p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#1E355B]">
+              <h3 className="text-sm font-bold text-white flex items-center space-x-2 tracking-wide">
+                <span className="w-2 h-2 rounded-full bg-[#0070EB]"></span>
+                <span className="uppercase">Configuración de Runas Oficial (Parche {activePatch})</span>
               </h3>
-              <span className="text-xs text-[#00D4FF] font-mono font-bold">
+              <span className="text-xs text-[#60A5FA] font-mono font-semibold">
                 Ramas: {recommendation.runesRecommendation.primaryStyleId} + {recommendation.runesRecommendation.subStyleId}
               </span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-[#040C1A] p-4 rounded border border-[#1B3B6F]">
-                <span className="text-[11px] font-mono text-[#6F92BF] uppercase tracking-wider block mb-2.5">
+              <div className="bg-[#0A111F] p-4 rounded border border-[#1E355B]">
+                <span className="text-[11px] text-[#94A3B8] uppercase tracking-wider block mb-2.5 font-semibold">
                   9 Perks Seleccionados (Sin Fragmentos Obsoletos)
                 </span>
                 <div className="flex flex-wrap gap-2">
                   {recommendation.runesRecommendation.selectedPerkIds.map((perkId, idx) => (
                     <span
                       key={idx}
-                      className="px-2.5 py-1 bg-[#091830] border border-[#1B3B6F] text-[#00F0FF] rounded text-xs font-mono font-bold"
+                      className="px-2.5 py-1 bg-[#11223F] border border-[#1E355B] text-white rounded text-xs font-mono font-bold"
                     >
                       {perkId}
                     </span>
@@ -456,11 +513,11 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
                 </div>
               </div>
 
-              <div className="bg-[#040C1A] p-4 rounded border border-[#1B3B6F] flex flex-col justify-center">
-                <span className="text-[11px] font-mono text-[#00D4FF] uppercase tracking-wider block mb-1">
+              <div className="bg-[#0A111F] p-4 rounded border border-[#1E355B] flex flex-col justify-center">
+                <span className="text-[11px] text-[#60A5FA] uppercase tracking-wider block mb-1 font-semibold">
                   Justificación Táctica
                 </span>
-                <p className="text-xs text-[#C8DCF5] leading-relaxed">
+                <p className="text-xs text-[#CBD5E1] leading-relaxed">
                   {recommendation.runesRecommendation.rationale}
                 </p>
               </div>
@@ -471,29 +528,29 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
           <BuildVisualizer
             build={recommendation.buildRecommendation}
             skillOrder={recommendation.skillOrder}
-            patch={patchVersion}
+            patch={activePatch}
           />
 
           {/* Estrategia de Early Game y Amenazas */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Early Game Plan */}
-            <div className="bg-[#08152B]/95 border border-[#1B3B6F] rounded-xl p-6 shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
-              <h3 className="text-xs font-mono font-black text-[#FFD700] uppercase tracking-wider mb-4 flex items-center space-x-2">
-                <span className="w-2 h-2 rounded-full bg-[#FFD700] shadow-[0_0_8px_#FFD700]"></span>
+            <div className="bg-[#0D192D] border border-[#1E355B] rounded-xl p-6 shadow-xl">
+              <h3 className="text-xs font-bold text-[#F5A623] uppercase tracking-wider mb-4 flex items-center space-x-2">
+                <span className="w-2 h-2 rounded-full bg-[#F5A623]"></span>
                 <span>Plan de Fase de Líneas (Early Game)</span>
               </h3>
               <div className="space-y-3 text-xs">
                 <div>
-                  <span className="text-[#6F92BF] font-mono font-bold uppercase block">Control de Oleadas:</span>
-                  <p className="text-[#C8DCF5] mt-0.5">{recommendation.earlyGameStrategy.waveManagement}</p>
+                  <span className="text-[#94A3B8] font-semibold uppercase block">Control de Oleadas:</span>
+                  <p className="text-[#CBD5E1] mt-0.5">{recommendation.earlyGameStrategy.waveManagement}</p>
                 </div>
                 <div>
-                  <span className="text-[#6F92BF] font-mono font-bold uppercase block">Intercambios (Tradeos):</span>
-                  <p className="text-[#C8DCF5] mt-0.5">{recommendation.earlyGameStrategy.tradingPlan}</p>
+                  <span className="text-[#94A3B8] font-semibold uppercase block">Intercambios (Tradeos):</span>
+                  <p className="text-[#CBD5E1] mt-0.5">{recommendation.earlyGameStrategy.tradingPlan}</p>
                 </div>
                 <div>
-                  <span className="text-[#6F92BF] font-mono font-bold uppercase block mb-1">Picos de Nivel:</span>
-                  <ul className="list-disc list-inside text-[#C8DCF5] space-y-0.5">
+                  <span className="text-[#94A3B8] font-semibold uppercase block mb-1">Picos de Nivel:</span>
+                  <ul className="list-disc list-inside text-[#CBD5E1] space-y-0.5">
                     {recommendation.earlyGameStrategy.levelSpikes.map((spike, idx) => (
                       <li key={idx}>{spike}</li>
                     ))}
@@ -503,35 +560,111 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
             </div>
 
             {/* Análisis de Amenazas y Condición de Victoria */}
-            <div className="bg-[#08152B]/95 border border-[#1B3B6F] rounded-xl p-6 shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
-              <h3 className="text-xs font-mono font-black text-[#FF2E63] uppercase tracking-wider mb-4 flex items-center space-x-2">
-                <span className="w-2 h-2 rounded-full bg-[#FF2E63] shadow-[0_0_8px_#FF2E63]"></span>
+            <div className="bg-[#0D192D] border border-[#1E355B] rounded-xl p-6 shadow-xl">
+              <h3 className="text-xs font-bold text-[#D92546] uppercase tracking-wider mb-4 flex items-center space-x-2">
+                <span className="w-2 h-2 rounded-full bg-[#D92546]"></span>
                 <span>Amenazas Críticas y Condición de Victoria</span>
               </h3>
               <div className="space-y-4 text-xs">
                 <div>
-                  <span className="text-[#6F92BF] font-mono font-bold uppercase block mb-1">Amenazas Principales:</span>
-                  <ul className="list-disc list-inside text-[#FF85A2] space-y-1">
+                  <span className="text-[#94A3B8] font-semibold uppercase block mb-1">Amenazas Principales:</span>
+                  <ul className="list-disc list-inside text-[#F87171] space-y-1">
                     {recommendation.threatAnalysis.enemyThreats.map((threat, idx) => (
                       <li key={idx}>{threat}</li>
                     ))}
                   </ul>
                 </div>
-                <div className="bg-[#040C1A] p-3 rounded border border-[#00D4FF]/30">
-                  <span className="text-[#00D4FF] font-mono font-bold uppercase block mb-1">Condición de Victoria:</span>
-                  <p className="text-[#C8DCF5]">{recommendation.threatAnalysis.winCondition}</p>
+                <div className="bg-[#0A111F] p-3 rounded border border-[#1E355B]">
+                  <span className="text-[#60A5FA] font-semibold uppercase block mb-1">Condición de Victoria:</span>
+                  <p className="text-[#CBD5E1]">{recommendation.threatAnalysis.winCondition}</p>
                 </div>
               </div>
             </div>
           </div>
+
+          {/* Panel Desplegable de Depuración IA (Requirement 8) */}
+          <div className="bg-[#0A111F] border border-[#1E355B] rounded-xl overflow-hidden shadow-md">
+            <button
+              onClick={() => setShowDebug(!showDebug)}
+              className="w-full px-5 py-3 text-left font-bold text-xs uppercase tracking-wider text-[#94A3B8] hover:text-white flex items-center justify-between bg-[#0D192D]/70 transition"
+            >
+              <div className="flex items-center space-x-2">
+                <span className="w-2 h-2 rounded-full bg-[#0070EB]"></span>
+                <span>Panel de Depuración y Trazabilidad IA</span>
+              </div>
+              <span className="text-sm">{showDebug ? '▲' : '▼'}</span>
+            </button>
+
+            {showDebug && (
+              <div className="p-5 space-y-4 text-xs font-mono border-t border-[#1E355B]">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-[#060D17] p-3 rounded border border-[#1E355B]">
+                    <span className="text-[#60A5FA] font-bold block mb-1">PROVENIENCIA Y MODELO:</span>
+                    <p className="text-white">Fuente: <span className="text-[#10B981] font-bold">{recommendation.source || 'gemini'}</span></p>
+                    <p className="text-white">Modelo: <span className="text-[#F5A623]">{recommendation.modelUsed || 'gemini-3.5-flash'}</span></p>
+                    <p className="text-white">Generado en: {recommendation.generatedAt || 'No registrado'}</p>
+                    <p className="text-white">Parche detectado: {activePatch}</p>
+                  </div>
+
+                  <div className="bg-[#060D17] p-3 rounded border border-[#1E355B]">
+                    <span className="text-[#60A5FA] font-bold block mb-1">ESTADO DE VALIDACIÓN:</span>
+                    <p className="text-[#10B981]">{recommendation.debugInfo?.validationStatus || 'Validado con Data Dragon'}</p>
+                    <p className="text-[#94A3B8] mt-1">Importación LoL: {importMsg || 'Listo'}</p>
+                  </div>
+                </div>
+
+                {recommendation.debugInfo?.resolvedRunes && (
+                  <div className="bg-[#060D17] p-3 rounded border border-[#1E355B]">
+                    <span className="text-[#60A5FA] font-bold block mb-1.5">TRADUCCIÓN DE RUNAS (Data Dragon):</span>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {recommendation.debugInfo.resolvedRunes.map((r, i) => (
+                        <div key={i} className="text-[11px] text-[#CBD5E1]">
+                          <span className="text-[#94A3B8]">{r.requested}:</span> <span className="text-[#F5A623] font-bold">{r.resolvedId}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {recommendation.debugInfo?.resolvedItems && (
+                  <div className="bg-[#060D17] p-3 rounded border border-[#1E355B]">
+                    <span className="text-[#60A5FA] font-bold block mb-1.5">TRADUCCIÓN DE OBJETOS (Data Dragon):</span>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {recommendation.debugInfo.resolvedItems.map((item, i) => (
+                        <div key={i} className="text-[11px] text-[#CBD5E1]">
+                          <span className="text-[#94A3B8]">{item.requested}:</span> <span className="text-[#10B981] font-bold">{item.resolvedId}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {recommendation.debugInfo?.rawResponse && (
+                  <div className="bg-[#060D17] p-3 rounded border border-[#1E355B]">
+                    <span className="text-[#60A5FA] font-bold block mb-1">RESPUESTA CRUDA DE GEMINI:</span>
+                    <pre className="max-h-48 overflow-y-auto p-2 bg-[#0A111F] rounded text-[11px] text-[#A5B4FC] whitespace-pre-wrap">
+                      {recommendation.debugInfo.rawResponse}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       ) : (
-        <div className="text-center py-12 bg-[#08152B]/50 border border-[#1B3B6F]/60 rounded-xl">
-          <svg className="w-12 h-12 text-[#5078A8] mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="text-center py-12 bg-[#0D192D] border border-[#1E355B] rounded-xl shadow-md">
+          <svg className="w-12 h-12 text-[#64748B] mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
           </svg>
-          <p className="text-[#6F92BF] text-sm">
-            En Selección de Campeón, las runas y la build se generarán y aplicarán <strong className="text-[#00D4FF]">automáticamente</strong> sin que tengas que configurarlas manualmente.
+          <p className="text-white text-sm font-semibold mb-1">
+            {championId > 0
+              ? `Presiona "ANALIZAR MATCHUP" para obtener runas y build para ${getChampionName(championId)}`
+              : 'Esperando selección de campeón'}
+          </p>
+          <p className="text-[#94A3B8] text-xs max-w-md mx-auto">
+            {championId > 0
+              ? 'Puedes analizar el enfrentamiento manualmente o permitir que Itero lo sincronice automáticamente.'
+              : 'Elige tu campeón en League of Legends o búscalo en el selector superior para calcular tu build y runas automáticamente.'}
           </p>
         </div>
       )}

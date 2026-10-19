@@ -43,7 +43,7 @@ describe('ItemSetManager - Generación y Exportación de Builds a LoL', () => {
     } catch {}
   });
 
-  it('debe construir un Item Set con estructura válida de LoL y 4 bloques', () => {
+  it('debe construir un Item Set con estructura válida de LoL y 5 bloques estándar', () => {
     const manager = new ItemSetManager(mockLcuClient, () => tempDir);
     const itemSet = manager.construirItemSet({
       championId: 22, // Ashe
@@ -60,20 +60,23 @@ describe('ItemSetManager - Generación y Exportación de Builds a LoL', () => {
     expect(itemSet.associatedChampions).toEqual([22]);
     expect(itemSet.type).toBe('custom');
     expect(Array.isArray(itemSet.blocks)).toBe(true);
-    expect((itemSet.blocks as any[]).length).toBe(4);
+    expect((itemSet.blocks as any[]).length).toBe(5);
 
     const blocks = itemSet.blocks as any[];
     expect(blocks[0].type).toContain('Iniciales');
     expect(blocks[0].items.map((i: any) => i.id)).toEqual(['1055', '2003']);
 
-    expect(blocks[1].type).toContain('Core');
-    expect(blocks[1].items.map((i: any) => i.id)).toEqual(['3078', '3085', '3031']);
+    expect(blocks[1].type).toContain('Botas');
+    expect(blocks[1].items.length).toBeGreaterThan(0);
 
-    expect(blocks[2].type).toContain('Situacionales');
-    expect(blocks[2].items.some((i: any) => i.id === '3026')).toBe(true);
+    expect(blocks[2].type).toContain('Core');
+    expect(blocks[2].items.map((i: any) => i.id)).toEqual(['3078', '3085', '3031']);
 
-    expect(blocks[3].type).toContain('Consumibles');
-    expect(blocks[3].items.some((i: any) => i.id === '2003')).toBe(true);
+    expect(blocks[3].type).toContain('Situacional');
+    expect(blocks[3].items.some((i: any) => i.id === '3026')).toBe(true);
+
+    expect(blocks[4].type).toContain('Consumibles');
+    expect(blocks[4].items.some((i: any) => i.id === '2003')).toBe(true);
   });
 
   it('debe exportar la build al disco en Config/Champions/[Key]/Recommended y en Config/ItemSets.json', async () => {

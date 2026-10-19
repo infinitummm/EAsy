@@ -23,12 +23,14 @@ import type {
   LcuCredentials,
   ReadyCheckEvent,
   RunePage,
+  LcuDetectionReport,
 } from '@shared/types';
 import { LCU_CONSTANTS } from '@shared/constants';
 import { buscarLockfile, leerLockfile, type ResultadoBusquedaLockfile } from './lockfile';
 import { ErrorPeticionLcu, LcuHttpClient, type MetodoHttp } from './LcuHttpClient';
 import { LcuWebSocket, type EventoLcu, type OpcionesLcuWebSocket } from './LcuWebSocket';
 import { AutoAcceptService, type OpcionesAutoAcceptService } from './AutoAcceptService';
+import { ejecutarDeteccionLcu } from './LcuDetector';
 
 /** Nombres de los eventos emitidos por `LcuClient`. */
 export const EVENTOS_LCU_CLIENT = {
@@ -38,6 +40,7 @@ export const EVENTOS_LCU_CLIENT = {
   CHAMP_SELECT_SESSION: 'champ-select-session',
   READY_CHECK_ACEPTADO: 'ready-check-aceptado',
   ERROR_LCU: 'error-lcu',
+  ERROR_PERMISOS: 'error-permisos',
 } as const;
 
 /** Endpoints de la LCU utilizados por el cliente. */
@@ -55,13 +58,15 @@ export const ENDPOINTS_LCU = {
 export interface OpcionesLcuClient extends Pick<OpcionesLcuWebSocket, 'reconectarAutomaticamente'> {
   /** Ruta fija del lockfile. Si se omite, se buscan las rutas candidatas por defecto. */
   rutaLockfile?: string;
+  /** Función para obtener la ruta manual configurada por el usuario dinámicamente. */
+  obtenerRutaManual?: () => string | undefined;
   /** Host de conexión. Por defecto `127.0.0.1`. */
   host?: string;
   /** Protocolo para las peticiones HTTP. Por defecto `https` (el real de la LCU). */
   protocoloHttp?: 'https' | 'http';
   /** Protocolo para el WebSocket. Por defecto `wss` (el real de la LCU). */
   protocoloWs?: 'wss' | 'ws';
-  /** Intervalo entre comprobaciones del lockfile en milisegundos. Por defecto `LCU_CONSTANTS.POLLING_INTERVAL_LOCKFILE_MS`. */
+  /** Intervalo entre comprobaciones del lockfile en milisegundos. Por defecto 3000 ms. */
   intervaloDeteccionMs?: number;
   /** Espera entre intentos de reconexión del WebSocket. Por defecto `LCU_CONSTANTS.RECONNECT_BACKOFF_MS`. */
   intervaloReconexionMs?: number;
@@ -147,7 +152,7 @@ export class LcuClient extends EventEmitter implements ILcuClient {
       | 'timeoutConexionWsMs'
       | 'reconectarAutomaticamente'
     >
-  > & { rutaLockfile?: string };
+  > & { rutaLockfile?: string; obtenerRutaManual?: () => string | undefined };
 
   private readonly http: LcuHttpClient;
   private readonly ws: LcuWebSocket;
@@ -156,6 +161,8 @@ export class LcuClient extends EventEmitter implements ILcuClient {
   private estado: LcuConnectionState = 'disconnected';
   private fase: GameflowPhase = 'None';
   private credenciales: LcuCredentials | null = null;
+  private errorPermisos = false;
+  private ultimoReporte: LcuDetectionReport | null = null;
   private activo = false;
   private conexionEnCurso = false;
   private temporizadorDeteccion: NodeJS.Timeout | null = null;
@@ -164,10 +171,11 @@ export class LcuClient extends EventEmitter implements ILcuClient {
     super();
     this.opciones = {
       rutaLockfile: opciones.rutaLockfile,
+      obtenerRutaManual: opciones.obtenerRutaManual,
       host: opciones.host ?? '127.0.0.1',
       protocoloHttp: opciones.protocoloHttp ?? 'https',
       protocoloWs: opciones.protocoloWs ?? 'wss',
-      intervaloDeteccionMs: opciones.intervaloDeteccionMs ?? LCU_CONSTANTS.POLLING_INTERVAL_LOCKFILE_MS,
+      intervaloDeteccionMs: opciones.intervaloDeteccionMs ?? 3000,
       intervaloReconexionMs: opciones.intervaloReconexionMs ?? LCU_CONSTANTS.RECONNECT_BACKOFF_MS,
       timeoutHttpMs: opciones.timeoutHttpMs ?? 10_000,
       timeoutConexionWsMs: opciones.timeoutConexionWsMs ?? 10_000,
@@ -325,32 +333,68 @@ export class LcuClient extends EventEmitter implements ILcuClient {
     this.emit(EVENTOS_LCU_CLIENT.ESTADO_CAMBIADO, nuevo);
   }
 
-  /** Busca el lockfile configurado (ruta fija o rutas candidatas por defecto). */
-  private async buscarLockfileActual(): Promise<ResultadoBusquedaLockfile | null> {
-    if (this.opciones.rutaLockfile) {
-      try {
-        const credenciales = await leerLockfile(this.opciones.rutaLockfile);
-        return { ruta: this.opciones.rutaLockfile, credenciales };
-      } catch {
-        return null;
-      }
-    }
-    return buscarLockfile();
+  /** Devuelve si se detectó un problema de permisos en el proceso de League of Legends. */
+  getIsPermissionError(): boolean {
+    return this.errorPermisos;
   }
 
-  /** Realiza un intento de conexión completo a partir del lockfile. */
+  /** Devuelve el último reporte completo de detección. */
+  getDetectionReport(): LcuDetectionReport | null {
+    return this.ultimoReporte;
+  }
+
+  /** Ejecuta una prueba manual de diagnóstico bajo demanda. */
+  async testDetection(manualPath?: string): Promise<LcuDetectionReport> {
+    const ruta = manualPath || this.opciones.rutaLockfile || this.opciones.obtenerRutaManual?.();
+    const rep = await ejecutarDeteccionLcu({ rutaManual: ruta });
+    this.ultimoReporte = rep;
+
+    if (rep.isPermissionError !== this.errorPermisos) {
+      this.errorPermisos = rep.isPermissionError;
+      this.emit(EVENTOS_LCU_CLIENT.ERROR_PERMISOS, this.errorPermisos);
+    }
+
+    if (rep.success && rep.credentials) {
+      void this.intentarConexion();
+    }
+
+    return rep;
+  }
+
+  /** Realiza un intento de conexión completo mediante los 4 métodos de LcuDetector (o lockfile directo si se configuró). */
   private async intentarConexion(): Promise<void> {
     if (!this.activo || this.conexionEnCurso) {
       return;
     }
 
-    const resultado = await this.buscarLockfileActual();
+    let credenciales: LcuCredentials | null = null;
+
+    if (this.opciones.rutaLockfile) {
+      // Si se configuró una ruta de lockfile fija explícita (p. ej. en pruebas con mock server)
+      try {
+        credenciales = await leerLockfile(this.opciones.rutaLockfile);
+      } catch {
+        credenciales = null;
+      }
+    } else {
+      const rutaManual = this.opciones.obtenerRutaManual?.();
+      const reporte = await ejecutarDeteccionLcu({ rutaManual });
+      this.ultimoReporte = reporte;
+
+      if (reporte.isPermissionError !== this.errorPermisos) {
+        this.errorPermisos = reporte.isPermissionError;
+        this.emit(EVENTOS_LCU_CLIENT.ERROR_PERMISOS, this.errorPermisos);
+      }
+
+      credenciales = reporte.credentials;
+    }
+
     if (!this.activo) {
       return;
     }
 
-    if (!resultado) {
-      // El cliente de League no está abierto: si estábamos conectados, se desmonta la conexión.
+    if (!credenciales) {
+      // Si el cliente ya no está disponible y estábamos conectados, desmontar
       if (this.estado === 'connected') {
         this.desmontarConexion();
       }
@@ -359,20 +403,36 @@ export class LcuClient extends EventEmitter implements ILcuClient {
 
     const cambiaron =
       !this.credenciales ||
-      this.credenciales.port !== resultado.credenciales.port ||
-      this.credenciales.password !== resultado.credenciales.password;
-    if (!cambiaron) {
-      // Las credenciales no cambiaron: el WebSocket gestiona su propia reconexión.
+      this.credenciales.port !== credenciales.port ||
+      this.credenciales.password !== credenciales.password;
+
+    // Si ya estamos conectados con las mismas credenciales y el socket está abierto, no reconectar
+    if (!cambiaron && this.ws.estaConectado() && this.estado === 'connected') {
       return;
     }
 
     this.conexionEnCurso = true;
     try {
-      this.credenciales = resultado.credenciales;
-      this.http.actualizarCredenciales(resultado.credenciales);
+      this.cambiarEstado('connecting');
+      this.credenciales = credenciales;
+      this.http.actualizarCredenciales(credenciales);
       const esperaHandshake = this.esperarHandshake();
-      this.ws.conectar(resultado.credenciales);
-      await esperaHandshake;
+      this.ws.conectar(credenciales);
+      const handshakeOk = await esperaHandshake;
+
+      if (handshakeOk) {
+        this.cambiarEstado('connected');
+        await this.refrescarFaseInicial();
+      } else {
+        if (this.estado === 'connected') {
+          this.desmontarConexion();
+        }
+      }
+    } catch (err) {
+      if (this.estado === 'connected') {
+        this.desmontarConexion();
+      }
+      this.emit(EVENTOS_LCU_CLIENT.ERROR_LCU, err instanceof Error ? err : new Error(String(err)));
     } finally {
       this.conexionEnCurso = false;
     }

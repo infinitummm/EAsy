@@ -312,4 +312,26 @@ export interface AppSettings {
     platform: PlatformRouting;
     regional: RegionalRouting;
   } | null;
+  leagueInstallationPath?: string;
 }
+
+// ==========================================
+// Diagnóstico y Detección de LCU
+// ==========================================
+export interface LcuDetectionStepResult {
+  step: 'process' | 'riotClientInstalls' | 'commonPaths' | 'manualPath';
+  name: string;
+  commandOrPath: string;
+  success: boolean;
+  details: string;
+}
+
+export interface LcuDetectionReport {
+  success: boolean;
+  credentials: LcuCredentials | null;
+  successfulStep?: string;
+  steps: LcuDetectionStepResult[];
+  isPermissionError: boolean;
+  logFilePath: string;
+}
+

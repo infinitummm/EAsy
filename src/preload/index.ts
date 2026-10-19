@@ -1,6 +1,15 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC_CHANNELS } from '../shared/events';
-import { AppSettings, RunePage, Role, PlatformRouting, RegionalRouting } from '../shared/types';
+import {
+  AppSettings,
+  RunePage,
+  Role,
+  PlatformRouting,
+  RegionalRouting,
+  LcuDetectionReport,
+  LcuConnectionState,
+  GameflowPhase
+} from '../shared/types';
 
 export const api = {
   // Configuración
@@ -9,6 +18,12 @@ export const api = {
     ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_SAVE, settings),
 
   // LCU
+  getLcuState: (): Promise<{ state: LcuConnectionState; gameflow: GameflowPhase; isPermissionError: boolean }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.LCU_GET_STATE),
+  testLcuDetection: (manualPath?: string): Promise<LcuDetectionReport> =>
+    ipcRenderer.invoke(IPC_CHANNELS.LCU_TEST_DETECTION, manualPath),
+  selectFolder: (): Promise<string | null> =>
+    ipcRenderer.invoke(IPC_CHANNELS.LCU_SELECT_FOLDER),
   setAutoAccept: (params: { enabled: boolean; delaySeconds: number }): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.LCU_SET_AUTO_ACCEPT, params),
   applyRunes: (page: RunePage): Promise<{ success: boolean; error?: string }> =>

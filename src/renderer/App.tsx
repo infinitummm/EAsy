@@ -16,6 +16,7 @@ export default function App() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
   const [autoAcceptEnabled, setAutoAcceptEnabled] = useState<boolean>(true);
   const [autoAcceptDelay, setAutoAcceptDelay] = useState<number>(2);
+  const [isPermissionError, setIsPermissionError] = useState<boolean>(false);
 
   useEffect(() => {
     if (window.api) {
@@ -26,6 +27,20 @@ export default function App() {
           setAutoAcceptDelay(loaded.autoAccept.delaySeconds);
         }
       }).catch(console.error);
+
+      // Consulta de estado inicial para evitar condiciones de carrera al montar
+      if (window.api.getLcuState) {
+        window.api.getLcuState().then((info) => {
+          if (info) {
+            setLcuState(info.state);
+            setGameflow(info.gameflow);
+            setIsPermissionError(info.isPermissionError);
+            if (info.gameflow === 'ChampSelect') {
+              setActiveTab('champSelect');
+            }
+          }
+        }).catch(console.error);
+      }
 
       const unsubLcu = window.api.on('lcu:state-changed', (state: LcuConnectionState) => {
         setLcuState(state);
@@ -43,10 +58,15 @@ export default function App() {
         setReadyCheck(event);
       });
 
+      const unsubPerm = window.api.on('lcu:permission-error', (errorPermisos: boolean) => {
+        setIsPermissionError(errorPermisos);
+      });
+
       return () => {
         unsubLcu();
         unsubGameflow();
         unsubReadyCheck();
+        unsubPerm();
       };
     }
   }, []);
@@ -189,6 +209,24 @@ export default function App() {
 
       {/* Contenido Principal */}
       <main className="flex-1 overflow-y-auto p-8 bg-[#0B1320]">
+        {isPermissionError && (
+          <div className="mb-6 p-4 rounded bg-amber-950/40 border border-amber-600/50 flex items-start space-x-3 text-amber-200 text-sm shadow-md">
+            <span className="text-xl shrink-0">⚠️</span>
+            <div className="flex-1">
+              <h4 className="font-semibold text-amber-300">Aviso de Privilegios de Windows</h4>
+              <p className="mt-0.5 text-xs text-amber-200/90 leading-relaxed">
+                Se detectó League of Legends en ejecución, pero Windows bloqueó la lectura del proceso por diferencia de privilegios. Ejecuta Itero Local con el mismo nivel de permisos que League of Legends (ambos como Administrador o ambos como usuario estándar), o configura la ruta de instalación en la pestaña <strong>Ajustes & Keys</strong>.
+              </p>
+            </div>
+            <button
+              onClick={() => setActiveTab('settings')}
+              className="px-3 py-1 bg-amber-600/30 hover:bg-amber-600/50 text-amber-200 text-xs font-semibold rounded transition shrink-0"
+            >
+              Configurar Ruta
+            </button>
+          </div>
+        )}
+
         {activeTab === 'dashboard' && (
           <DashboardView
             lcuState={lcuState}

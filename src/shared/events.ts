@@ -14,7 +14,8 @@ import {
   PlatformRouting,
   Role,
   GeminiMatchupRecommendation,
-  ParsedMatchSummary
+  ParsedMatchSummary,
+  LcuDetectionReport
 } from './types';
 import { AccountEntity, KeyHealthStatus } from './contracts';
 
@@ -27,12 +28,16 @@ export const IPC_CHANNELS = {
   LCU_GAMEFLOW_CHANGED: 'lcu:gameflow-changed',
   LCU_READY_CHECK: 'lcu:ready-check',
   LCU_CHAMP_SELECT_SESSION: 'lcu:champ-select-session',
+  LCU_PERMISSION_ERROR: 'lcu:permission-error',
   RIOT_KEY_WARNING: 'riot:key-warning',
   API_QUOTA_UPDATED: 'api:quota-updated',
 
   // Invocaciones de Renderer hacia Main
   SETTINGS_GET: 'settings:get',
   SETTINGS_SAVE: 'settings:save',
+  LCU_GET_STATE: 'lcu:get-state',
+  LCU_TEST_DETECTION: 'lcu:test-detection',
+  LCU_SELECT_FOLDER: 'lcu:select-folder',
   LCU_SET_AUTO_ACCEPT: 'lcu:set-auto-accept',
   LCU_APPLY_RUNES: 'lcu:apply-runes',
   RIOT_VALIDATE_KEY: 'riot:validate-key',
@@ -47,6 +52,13 @@ export const IPC_CHANNELS = {
 export interface IpcInvokeHandlers {
   [IPC_CHANNELS.SETTINGS_GET]: () => Promise<AppSettings>;
   [IPC_CHANNELS.SETTINGS_SAVE]: (settings: Partial<AppSettings>) => Promise<{ success: boolean }>;
+  [IPC_CHANNELS.LCU_GET_STATE]: () => Promise<{
+    state: LcuConnectionState;
+    gameflow: GameflowPhase;
+    isPermissionError: boolean;
+  }>;
+  [IPC_CHANNELS.LCU_TEST_DETECTION]: (manualPath?: string) => Promise<LcuDetectionReport>;
+  [IPC_CHANNELS.LCU_SELECT_FOLDER]: () => Promise<string | null>;
   [IPC_CHANNELS.LCU_SET_AUTO_ACCEPT]: (params: { enabled: boolean; delaySeconds: number }) => Promise<void>;
   [IPC_CHANNELS.LCU_APPLY_RUNES]: (page: RunePage) => Promise<{ success: boolean; error?: string }>;
   [IPC_CHANNELS.RIOT_VALIDATE_KEY]: (apiKey: string) => Promise<KeyHealthStatus>;
@@ -78,6 +90,7 @@ export interface IpcEventPayloads {
   [IPC_CHANNELS.LCU_GAMEFLOW_CHANGED]: GameflowPhase;
   [IPC_CHANNELS.LCU_READY_CHECK]: ReadyCheckEvent;
   [IPC_CHANNELS.LCU_CHAMP_SELECT_SESSION]: ChampSelectSession | null;
+  [IPC_CHANNELS.LCU_PERMISSION_ERROR]: boolean;
   [IPC_CHANNELS.RIOT_KEY_WARNING]: KeyHealthStatus;
   [IPC_CHANNELS.API_QUOTA_UPDATED]: { riotCount: number; geminiCount: number };
 }

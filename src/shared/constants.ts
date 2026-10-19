@@ -88,4 +88,5 @@ export const DEFAULT_APP_SETTINGS = {
     geminiApiKeyEncrypted: '',
   },
   activeAccount: null,
+  leagueInstallationPath: '',
 };

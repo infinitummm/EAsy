@@ -19,7 +19,9 @@ import { DataDragonService } from './riot/DataDragonService';
 import { DEFAULT_APP_SETTINGS } from '../shared/constants';
 
 let mainWindow: BrowserWindow | null = null;
-const lcuClient = new LcuClient();
+const lcuClient = new LcuClient({
+  obtenerRutaManual: () => dbService?.getSettings().leagueInstallationPath,
+});
 const runeManager = new RuneManager(lcuClient);
 const geminiService = new GeminiService();
 const riotClient = new RiotApiClient();

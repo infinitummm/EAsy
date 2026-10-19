@@ -7,10 +7,12 @@ import { ipcMain } from 'electron';
 import { IPC_CHANNELS } from '../../shared/events';
 import { IDatabaseService, IRiotApiClient, AccountEntity } from '../../shared/contracts';
 import { PlatformRouting, RegionalRouting, ParsedMatchSummary } from '../../shared/types';
+import { ProfileSyncService } from '../riot/ProfileSyncService';
 
 export function setupProfileIpc(
   dbService?: IDatabaseService,
-  riotClient?: IRiotApiClient
+  riotClient?: IRiotApiClient,
+  profileSyncService?: ProfileSyncService
 ): void {
   // 1. Obtener perfil y partidas guardadas en SQLite
   ipcMain.handle(
@@ -65,6 +67,16 @@ export function setupProfileIpc(
       }
     ): Promise<{ success: boolean; error?: string }> => {
       try {
+        if (profileSyncService) {
+          await profileSyncService.sincronizarPorRiotId(
+            params.gameName,
+            params.tagLine,
+            params.platform,
+            params.regional
+          );
+          return { success: true };
+        }
+
         if (!riotClient) {
           return { success: false, error: 'Cliente de Riot API no inicializado.' };
         }

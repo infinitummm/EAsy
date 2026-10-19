@@ -5,20 +5,29 @@
 
 import { ipcMain, BrowserWindow } from 'electron';
 import { IPC_CHANNELS } from '../../shared/events';
-import { ILcuClient } from '../../shared/contracts';
 import { GeminiService } from '../ai/GeminiService';
+import { RuneManager } from '../lcu/RuneManager';
 import { RunePage, Role } from '../../shared/types';
 
 export function setupChampSelectIpc(
   mainWindow: BrowserWindow,
   lcuClient: ILcuClient,
-  geminiService: GeminiService
+  geminiService: GeminiService,
+  runeManager?: RuneManager
 ): void {
-  // 1. Inyección de runas al cliente LoL vía LCU API
+  // 1. Inyección de runas al cliente LoL vía LCU API (con soporte de sobrescritura activa)
   ipcMain.handle(
     IPC_CHANNELS.LCU_APPLY_RUNES,
     async (_event, page: RunePage): Promise<{ success: boolean; pageId?: number; error?: string }> => {
       try {
+        if (runeManager) {
+          const res = await runeManager.aplicarPagina(page);
+          return {
+            success: res.success,
+            pageId: res.pageId,
+            error: res.error
+          };
+        }
         return await lcuClient.injectRunePage(page);
       } catch (err: unknown) {
         return {

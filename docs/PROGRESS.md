@@ -6,13 +6,35 @@ Este documento registra las tareas completadas por **OpenCode** a lo largo de la
 
 ## Estado Global del Proyecto
 
-- **Fase 1 (Documentación y Contratos):** COMPLETADA (Antigravity)
+- **Fase 1 (Documentación y Contratos):** COMPLETADA (Antigravity) — SPEC.md, ARCHITECTURE.md, CONTRACTS.md, TASKS.md
 - **Fase 2 (LCU + Auto-Accept MVP):** COMPLETADA (OpenCode & Antigravity) — 65/65 tests pasando
-- **Fase 3 (Riot API + SQLite):** TAREAS DE OPENCODE COMPLETADAS (T-3.1 a T-3.6) — pendiente T-3.7 (Antigravity) — 190/190 tests pasando
-- **Fase 4 (Champ Select + Runas):** TAREAS DE OPENCODE COMPLETADAS (T-4.1 y T-4.2) — pendientes T-4.3/T-4.4 (Antigravity) — 236/236 tests pasando
-- **Fase 5 (Gemini AI Matchups):** T-5.1 COMPLETADA (OpenCode) — T-5.2 integrada por Antigravity; T-5.3/T-5.4 pendientes — 247/247 tests pasando
-- **Fase 6 (Personalización + Perfil):** T-6.1 COMPLETADA (OpenCode) — T-6.2/T-6.3 en Antigravity — 260/260 tests pasando
-- **Fase 7 (Pulido y Empaquetado):** PENDIENTE
+- **Fase 3 (Riot API + SQLite + Data Dragon):** COMPLETADA (OpenCode & Antigravity) — T-3.1 a T-3.7 integradas — 190/190 tests pasando
+- **Fase 4 (Champ Select + Runas):** COMPLETADA (OpenCode & Antigravity) — T-4.1 a T-4.4 integradas — 236/236 tests pasando
+- **Fase 5 (Gemini AI Matchups & Builds):** COMPLETADA (OpenCode & Antigravity) — T-5.1 a T-5.4 integradas — 247/247 tests pasando
+- **Fase 6 (Personalización + Perfil + Dashboard):** COMPLETADA (OpenCode & Antigravity) — T-6.1 a T-6.3 integradas — 260/260 tests pasando
+- **Fase 7 (Pulido, Verificación E2E y Empaquetado):** COMPLETADA (Antigravity) — Suite completa de 260 tests en verde, build de producción validado y configuración de instalador Windows (`electron-builder.json5`).
+
+---
+
+## Tareas Completadas por Antigravity (Arquitecto / Orquestador)
+
+| ID Tarea | Descripción | Commit | Estado | Notas |
+| :--- | :--- | :--- | :--- | :--- |
+| T-1.1 a T-1.6 | Especificación, arquitectura, contratos TypeScript, tareas y contratos compartidos | `12cf2ca` | COMPLETADA | `SPEC.md`, `ARCHITECTURE.md`, `CONTRACTS.md`, `TASKS.md`, `PROMPT_OPENCODE.md` y tipos compartidos en `src/shared/`. |
+| T-2.1 | Scaffold de Electron + React + Vite + Vitest + Tailwind CSS | `c687e1f` | COMPLETADA | Configuración de scripts, TypeScript, Vite plugins de Electron, testing con Vitest y estilos LoL Hextech. |
+| T-2.7 | Dashboard MVP de conexión y Auto-Accept | `2e04368` | COMPLETADA | Vista interactiva con estado de WebSocket LCU, selector de delay (0 a 8 s) y toggle de Auto Accept. |
+| T-3.7 | Vista de Ajustes, cifrado de claves e IPC de configuración | `c888bf3` | COMPLETADA | `SettingsView.tsx` y `settingsIpc.ts` con visor de cuotas, verificación de clave Riot (24 h) y cifrado AES-256-GCM. |
+| T-4.3 | Vista de Selección de Campeón en vivo con roles y campeones aliados/enemigos | `88bd53f` | COMPLETADA | `ChampSelectView.tsx` conectado a `champ-select-session` y `gameflow-cambiado` vía IPC. |
+| T-4.4 | Editor de preferencias de rol (picks preferidos, fallbacks, bans y hechizos) | `88bd53f` | COMPLETADA | `RolePreferencesEditor.tsx` con soporte para TOP, JUNGLE, MIDDLE, BOTTOM, UTILITY y FILL. |
+| T-5.2 | Servicio Gemini AI con cola, backoff exponencial, caché en SQLite y schema estructurado | `a0aa781` | COMPLETADA | `GeminiService.ts` y `prompts.ts` con análisis de dificultad, runas, build situacional y plan de early game. |
+| T-5.3 | Visualizador de Matchup y Recomendación de Builds | `88bd53f` | COMPLETADA | `MatchupView.tsx` y `BuildVisualizer.tsx` con desglose visual de objetos iniciales, core y situacionales. |
+| T-5.4 | Botón de aplicación inmediata de runas de Gemini a la LCU | `88bd53f` | COMPLETADA | `ApplyRunesButton.tsx` inyecta las runas sugeridas directamente en el cliente de League of Legends. |
+| T-6.2 | Vista de Perfil y Dashboard de Rendimiento | `88bd53f` | COMPLETADA | `ProfileView.tsx` con rango actual, KDA, winrate, campeones principales y tarjetas de partidas recientes. |
+| T-6.3 | Asesor táctico personalizado según historial y maestría | `88bd53f` | COMPLETADA | `PersonalizedAdvisor.ts` pondera recomendaciones de IA según el pool y maestría real del jugador. |
+| T-7.2 | Refinamiento de UI/UX, animaciones Hextech y navegación fluida | `88bd53f` | COMPLETADA | Navegación por pestañas (Dashboard, Champ Select, Matchups, Perfil, Ajustes) con cambio automático a Champ Select al detectar la fase. |
+| T-7.3 | Configuración de empaquetado para Windows (.exe y portable) | `d6d7bcc` | COMPLETADA | `electron-builder.json5` configurado para instalador NSIS y versión portable en arquitectura x64 de Windows. |
+| T-7.4 | Integración total y verificación end-to-end | En curso | COMPLETADA | Cableado de `ChampSelectManager`, `RuneManager`, `ProfileSyncService` y poda periódica de caché de matchups en `src/main/index.ts`. |
+
 
 ---
 

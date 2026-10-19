@@ -9,3 +9,5 @@ export * from './LcuHttpClient';
 export * from './LcuWebSocket';
 export * from './AutoAcceptService';
 export * from './LcuClient';
+export * from './ChampSelectManager';
+export * from './RuneManager';

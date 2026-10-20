@@ -62,7 +62,7 @@ export class ItemSetManager {
   public construirItemSet(params: ParametrosAplicarBuild): Record<string, unknown> {
     const champ = getChampionById(params.championId);
     const champName = champ ? champ.name : `Campeón ${params.championId}`;
-    const titulo = params.title || `Itero: Build para ${champName}`;
+    const titulo = params.title || `[IL] ${champName}`;
 
     const itemsInicio = (params.build.startingItems || [1055, 2003]).map((id: number) => ({
       id: String(id),
@@ -212,10 +212,10 @@ export class ItemSetManager {
             globalData.itemSets = [];
           }
 
-          // Filtrar conjuntos previos creados por Itero para este campeón
+          // Filtrar conjuntos previos creados por la app ([IL] o Itero)
           globalData.itemSets = globalData.itemSets.filter(
             (s: any) =>
-              !(s.title && s.title.startsWith('Itero') && s.associatedChampions?.includes(params.championId))
+              !(s.title && (s.title.startsWith('[IL]') || s.title.startsWith('Itero')))
           );
           globalData.itemSets.unshift(itemSetData);
           globalData.timestamp = Date.now();
@@ -261,10 +261,10 @@ export class ItemSetManager {
               registrarLog(`[ItemSetManager Advertencia] Fallo al leer conjuntos previos: ${fetchErr}`);
             }
 
-            // Filtrar conjunto previo de Itero para este campeón
+            // Filtrar conjuntos previos de la app ([IL] o Itero)
             const filteredSets = existingSets.filter(
               (s: any) =>
-                !(s.title && s.title.startsWith('Itero') && s.associatedChampions?.includes(params.championId))
+                !(s.title && (s.title.startsWith('[IL]') || s.title.startsWith('Itero')))
             );
             filteredSets.unshift(itemSetData);
 
@@ -314,5 +314,80 @@ export class ItemSetManager {
         error: msg,
       };
     }
+  }
+
+  /**
+   * Elimina todos los Item Sets generados por la app ([IL] o Itero) tanto de LCU como de disco.
+   * Devuelve la cantidad de conjuntos eliminados.
+   */
+  public async cleanAppItemSets(): Promise<number> {
+    let deletedCount = 0;
+
+    // 1. Limpieza en el cliente de League of Legends (LCU)
+    try {
+      if (this.lcuClient.getConnectionState() === 'connected') {
+        const summoner = await this.lcuClient.request<{ summonerId?: number; accountId?: number }>(
+          'GET',
+          '/lol-summoner/v1/current-summoner'
+        );
+        const targetSummonerId = summoner?.summonerId || summoner?.accountId;
+        if (targetSummonerId) {
+          const currentRes = await this.lcuClient.request<{
+            accountId?: number;
+            itemSets?: any[];
+            timestamp?: number;
+          }>('GET', `/lol-item-sets/v1/item-sets/${targetSummonerId}/sets`);
+
+          if (currentRes && Array.isArray(currentRes.itemSets)) {
+            const initialCount = currentRes.itemSets.length;
+            const cleanedSets = currentRes.itemSets.filter(
+              (s: any) => !(s.title && (s.title.startsWith('[IL]') || s.title.startsWith('Itero')))
+            );
+            const diff = initialCount - cleanedSets.length;
+            if (diff > 0) {
+              await this.lcuClient.request(
+                'PUT',
+                `/lol-item-sets/v1/item-sets/${targetSummonerId}/sets`,
+                {
+                  accountId: currentRes.accountId || targetSummonerId,
+                  itemSets: cleanedSets,
+                  timestamp: Date.now(),
+                }
+              );
+              deletedCount += diff;
+              registrarLog(`[ItemSetManager] Eliminados ${diff} item sets de la app en LCU.`);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      registrarLog(`[ItemSetManager] Error limpiando Item Sets de LCU: ${err}`);
+    }
+
+    // 2. Limpieza en disco (ItemSets.json)
+    try {
+      const installDir = this.resolverRutaInstalacion();
+      if (installDir) {
+        const globalItemSetsPath = path.join(installDir, 'Config', 'ItemSets.json');
+        if (fs.existsSync(globalItemSetsPath)) {
+          const raw = fs.readFileSync(globalItemSetsPath, 'utf-8');
+          const data = JSON.parse(raw);
+          if (Array.isArray(data.itemSets)) {
+            const before = data.itemSets.length;
+            data.itemSets = data.itemSets.filter(
+              (s: any) => !(s.title && (s.title.startsWith('[IL]') || s.title.startsWith('Itero')))
+            );
+            if (data.itemSets.length !== before) {
+              fs.writeFileSync(globalItemSetsPath, JSON.stringify(data, null, 2), 'utf-8');
+              registrarLog(`[ItemSetManager] Limpieza de ItemSets.json completada.`);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      registrarLog(`[ItemSetManager] Error limpiando ItemSets.json en disco: ${err}`);
+    }
+
+    return deletedCount;
   }
 }

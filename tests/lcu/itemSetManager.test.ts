@@ -105,4 +105,46 @@ describe('ItemSetManager - Generación y Exportación de Builds a LoL', () => {
     const globalContent = JSON.parse(fs.readFileSync(globalPath, 'utf-8'));
     expect(globalContent.itemSets.length).toBeGreaterThan(0);
   });
+  it('cleanAppItemSets elimina conjuntos de la app con prefijo [IL] o Itero en LCU y disco', async () => {
+    // Configurar ItemSets.json previo en disco
+    const globalPath = path.join(tempDir, 'Config', 'ItemSets.json');
+    fs.writeFileSync(globalPath, JSON.stringify({
+      itemSets: [
+        { title: '[IL] Caitlyn' },
+        { title: 'Itero Build Ashe' },
+        { title: 'Mi Conjunto Personal' }
+      ]
+    }), 'utf-8');
+
+    // Configurar LCU para simular 2 sets de Itero y 1 personal
+    (mockLcuClient.request as any).mockImplementation(async (method: string, endpoint: string, body: any) => {
+      if (endpoint.includes('current-summoner')) {
+        return { accountId: 12345678 };
+      }
+      if (method === 'GET' && endpoint.includes('/sets')) {
+        return {
+          accountId: 12345678,
+          itemSets: [
+            { title: '[IL] Caitlyn' },
+            { title: 'Itero Build Ashe' },
+            { title: 'Mi Conjunto Personal' }
+          ]
+        };
+      }
+      if (method === 'PUT' && endpoint.includes('/sets')) {
+        return { success: true };
+      }
+      return { success: true };
+    });
+
+    const manager = new ItemSetManager(mockLcuClient, () => tempDir);
+    const eliminados = await manager.cleanAppItemSets();
+
+    expect(eliminados).toBe(2);
+
+    // Verificar en disco
+    const disco = JSON.parse(fs.readFileSync(globalPath, 'utf-8'));
+    expect(disco.itemSets.length).toBe(1);
+    expect(disco.itemSets[0].title).toBe('Mi Conjunto Personal');
+  });
 });

@@ -386,6 +386,7 @@ export interface OpGgMatchupData {
   skillPriority: string[];
   totalMatches: number;
   isGeneralBuildFallback?: boolean;
+  sampleSizeWarning?: string;
   opponentTip?: string;
   laneAdvantage?: string;
   counters?: Array<{ championId: number; championName: string; winRate: number; play: number }>;

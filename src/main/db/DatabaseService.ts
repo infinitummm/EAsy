@@ -610,13 +610,13 @@ export class DatabaseService implements IDatabaseService {
 
   // ---------- Métricas de consumo ----------
 
-  recordApiCall(api: 'RIOT' | 'GEMINI', endpoint: string, statusCode: number): void {
+  recordApiCall(api: 'RIOT' | 'GEMINI' | 'OPGG', endpoint: string, statusCode: number): void {
     this.sentencia(
       'INSERT INTO api_usage (api_name, endpoint, status_code, timestamp) VALUES (?, ?, ?, ?)'
     ).run(api, endpoint, statusCode, Date.now());
   }
 
-  getApiCallCount(api: 'RIOT' | 'GEMINI', windowMs: number): number {
+  getApiCallCount(api: 'RIOT' | 'GEMINI' | 'OPGG', windowMs: number): number {
     const desde = Date.now() - Math.max(0, windowMs);
     const fila = this.sentencia(
       'SELECT COUNT(*) AS total FROM api_usage WHERE api_name = ? AND timestamp >= ?'

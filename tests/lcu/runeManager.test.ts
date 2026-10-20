@@ -323,4 +323,33 @@ describe('RuneManager (T-4.2)', () => {
       expect(pagina.name).toBe('Itero Local');
     });
   });
+  describe('limpieza y reutilización de páginas de la app (REQ-022)', () => {
+    it('reutiliza la página [IL] existente y limpia duplicados', async () => {
+      cliente.paginas = [
+        crearPagina({ id: 10, name: '[IL] Itero Local', isEditable: true } as any),
+        crearPagina({ id: 11, name: '[IL] Duplicada', isEditable: true } as any),
+        crearPagina({ id: 12, name: 'Página Personal', isEditable: true } as any),
+      ];
+      const manager = new RuneManager(comoClienteLcu(cliente));
+
+      const res = await manager.aplicarPagina(crearPagina());
+      expect(res.success).toBe(true);
+      expect(res.pageId).toBe(10);
+      expect(res.sobrescrita).toBe(true);
+      expect(cliente.peticiones.some(p => p.metodo === 'DELETE' && p.ruta === '/lol-perks/v1/pages/11')).toBe(true);
+    });
+
+    it('cleanAppRunePages elimina todas las páginas con prefijo [IL] o Itero', async () => {
+      cliente.paginas = [
+        crearPagina({ id: 10, name: '[IL] Itero Local', isEditable: true } as any),
+        crearPagina({ id: 11, name: 'Itero Build', isEditable: true } as any),
+        crearPagina({ id: 12, name: 'Página Personal', isEditable: true } as any),
+      ];
+      const manager = new RuneManager(comoClienteLcu(cliente));
+
+      const eliminadas = await manager.cleanAppRunePages();
+      expect(eliminadas).toBe(2);
+      expect(cliente.peticiones.filter(p => p.metodo === 'DELETE')).toHaveLength(2);
+    });
+  });
 });

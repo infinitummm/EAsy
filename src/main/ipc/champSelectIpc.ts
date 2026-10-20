@@ -9,6 +9,7 @@ import { ILcuClient } from '../../shared/contracts';
 import { GeminiService } from '../ai/GeminiService';
 import { RuneManager } from '../lcu/RuneManager';
 import { ItemSetManager } from '../lcu/ItemSetManager';
+import { OpGgClient } from '../opgg/OpGgClient';
 import { PatchDiffService } from '../riot/PatchDiffService';
 import { RunePage, Role, ChampSelectSession, GameflowPhase, BuildRecommendation } from '../../shared/types';
 
@@ -19,7 +20,8 @@ export function setupChampSelectIpc(
   runeManager?: RuneManager,
   itemSetManager?: ItemSetManager,
   dataDragonService?: any,
-  patchDiffService?: PatchDiffService
+  patchDiffService?: PatchDiffService,
+  opggClient?: OpGgClient
 ): void {
   const difundir = (canal: string, ...args: unknown[]) => {
     const windows = BrowserWindow.getAllWindows();
@@ -243,6 +245,117 @@ export function setupChampSelectIpc(
   ipcMain.removeHandler(IPC_CHANNELS.AI_GET_GROUNDING_QUOTA);
   ipcMain.handle(IPC_CHANNELS.AI_GET_GROUNDING_QUOTA, async () => {
     return geminiService.getGroundingQuotaStatus();
+  });
+
+
+  // 11. Consulta de estadísticas y meta desde OP.GG MCP (REQ-022)
+  ipcMain.removeHandler(IPC_CHANNELS.OPGG_GET_MATCHUP);
+  ipcMain.handle(
+    IPC_CHANNELS.OPGG_GET_MATCHUP,
+    async (
+      _event,
+      params: {
+        championId: number;
+        opponentId: number;
+        role: Role;
+        patch?: string;
+        elo?: string;
+        forceRefresh?: boolean;
+      }
+    ) => {
+      if (!opggClient) {
+        throw new Error('OpGgClient no inicializado en el proceso principal.');
+      }
+      return await opggClient.getLaneMatchupGuide(params);
+    }
+  );
+
+  // 12. Limpieza de activos generados por la app ([IL]) en LCU y disco (REQ-022)
+  ipcMain.removeHandler(IPC_CHANNELS.LCU_CLEAN_APP_ASSETS);
+  ipcMain.handle(IPC_CHANNELS.LCU_CLEAN_APP_ASSETS, async () => {
+    let deletedItemSets = 0;
+    let deletedRunePages = 0;
+
+    if (itemSetManager) {
+      try {
+        deletedItemSets = await itemSetManager.cleanAppItemSets();
+      } catch (err) {
+        console.warn('[ChampSelectIpc] Error limpiando item sets:', err);
+      }
+    }
+
+    if (runeManager) {
+      try {
+        deletedRunePages = await runeManager.cleanAppRunePages();
+      } catch (err) {
+        console.warn('[ChampSelectIpc] Error limpiando páginas de runas:', err);
+      }
+    }
+
+    return {
+      deletedItemSets,
+      deletedRunePages,
+      success: true,
+    };
+  });
+
+  // 13. Comparación y sincronización de versión LCU vs Data Dragon (REQ-022)
+  ipcMain.removeHandler(IPC_CHANNELS.LCU_GET_CLIENT_VERSION);
+  ipcMain.handle(IPC_CHANNELS.LCU_GET_CLIENT_VERSION, async () => {
+    let ddragonVersion = '16.20.1';
+    if (dataDragonService) {
+      try {
+        ddragonVersion = await dataDragonService.obtenerVersionActual();
+      } catch {}
+    }
+
+    let clientVersion: string | undefined;
+    try {
+      if (lcuClient && lcuClient.getConnectionState() === 'connected') {
+        const builds = await lcuClient.request<any>('GET', '/system/v1/builds');
+        clientVersion = builds?.version || builds?.branch;
+        if (!clientVersion) {
+          const patchRes = await lcuClient.request<any>('GET', '/lol-patch/v1/game-version');
+          clientVersion = typeof patchRes === 'string' ? patchRes : patchRes?.version;
+        }
+      }
+    } catch {}
+
+    const ddragonParts = ddragonVersion.split('.').map((n) => parseInt(n, 10));
+    const ddMajor = ddragonParts[0] || 16;
+    const ddMinor = ddragonParts[1] || 20;
+
+    // Normalizar a formato visual del cliente: 16.20 -> Parche 26.20 (año 2026)
+    const displayMajor = ddMajor <= 16 ? ddMajor + 10 : ddMajor;
+    let displayPatch = `Parche ${displayMajor}.${ddMinor}`;
+    let matches = true;
+    let ddragonOutdated = false;
+
+    if (clientVersion) {
+      const clientParts = clientVersion.replace(/^[^\d]*/, '').split('.').map((n) => parseInt(n, 10));
+      const cMajor = clientParts[0];
+      const cMinor = clientParts[1];
+      if (Number.isFinite(cMajor) && Number.isFinite(cMinor)) {
+        displayPatch = `Parche ${cMajor}.${cMinor}`;
+        if (cMinor === ddMinor && (cMajor === ddMajor + 10 || cMajor === ddMajor)) {
+          matches = true;
+        } else {
+          matches = false;
+          if (cMinor > ddMinor || cMajor > displayMajor) {
+            ddragonOutdated = true;
+            displayPatch = `Parche ${cMajor}.${cMinor} (Datos de ${displayMajor}.${ddMinor})`;
+          }
+        }
+      }
+    }
+
+    return {
+      clientVersion,
+      ddragonVersion,
+      matches,
+      displayPatch,
+      ddragonOutdated,
+    };
   });
 
   // Re-emisión de sesión de Champ Select cuando LCU emita eventos

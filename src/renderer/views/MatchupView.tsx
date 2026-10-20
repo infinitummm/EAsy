@@ -113,7 +113,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
 
     try {
       const runePage: RunePage = {
-        name: `Itero: ${getChampionName(rec.championId)} vs ${getChampionName(rec.opponentChampionId)}`,
+        name: '[IL] Itero Local',
         primaryStyleId: rec.runesRecommendation.primaryStyleId,
         subStyleId: rec.runesRecommendation.subStyleId,
         selectedPerkIds: rec.runesRecommendation.selectedPerkIds,
@@ -124,7 +124,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
         window.api.applyRunes(runePage).catch((e) => ({ success: false, error: e.message })),
         window.api.applyBuild({
           championId: rec.championId,
-          title: `Itero: ${getChampionName(rec.championId)} vs ${getChampionName(rec.opponentChampionId)}`,
+          title: `[IL] ${getChampionName(rec.championId)}`,
           build: rec.buildRecommendation
         }).catch((e) => ({ success: false, error: e.message }))
       ]);
@@ -227,8 +227,17 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
             </h2>
             <div className="flex flex-wrap items-center gap-2 mt-1.5">
               <span className="text-xs text-[#94A3B8]">
-                Parche: <span className="text-[#60A5FA] font-bold">{formatFullPatchLabel(activePatch)}</span>
+                Parche: <span className="text-[#60A5FA] font-bold">26.20</span>
               </span>
+              {recommendation?.opggData && (
+                <>
+                  <span className="text-xs text-[#475569]">•</span>
+                  <span className="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded bg-[#0A111F] border border-[#00D4FF]/40 text-[11px] text-[#00D4FF]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#00D4FF]"></span>
+                    <span>Datos de OP.GG ({recommendation.opggData.totalMatches.toLocaleString()} partidas • {recommendation.opggData.elo || 'Esmeralda+'})</span>
+                  </span>
+                </>
+              )}
               <span className="text-xs text-[#475569]">•</span>
               <span
                 className="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded bg-[#0A111F] border border-[#1E355B] text-[11px] text-[#CBD5E1]"

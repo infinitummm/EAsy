@@ -122,9 +122,58 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
   const isMyBanTurn = myActionInProgress?.type === 'ban';
   const currentGlobalAction = allActions.find((a) => a.isInProgress && !a.completed);
 
-  // Obtener recomendaciones de pick en vivo para el draft
-  const fetchDraftRecommendations = async (forceRefresh = false) => {
+  // Estado para los counters en vivo obtenidos de OP.GG MCP (Sin consumo de tokens IA)
+  const [opggLiveCounters, setOpggLiveCounters] = useState<
+    Record<number, Array<{ championId: number; championName: string; winRate: number; play: number }>>
+  >({});
+  const fetchedOpponentsRef = useRef<Set<number>>(new Set());
+
+  // Verificar si los 10 campeones están bloqueados
+  const all10Locked = Boolean(
+    session &&
+    session.theirTeam.length === 5 &&
+    session.myTeam.length === 5 &&
+    session.theirTeam.every((p) => extractPlayerChampionId(p, session) > 0) &&
+    session.myTeam.every((p) => (p.cellId === session.localPlayerCellId ? myChampionId > 0 : extractPlayerChampionId(p, session) > 0))
+  );
+
+  // Consulta en vivo a OP.GG MCP durante el draft (CERO llamadas a Gemini)
+  useEffect(() => {
+    if (!session || !window.api?.getOpGgMatchup) return;
+
+    session.theirTeam.forEach(async (p) => {
+      const champId = extractPlayerChampionId(p, session);
+      if (champId > 0 && !fetchedOpponentsRef.current.has(champId)) {
+        fetchedOpponentsRef.current.add(champId);
+        try {
+          const pRole = detectPlayerRole(p, session, champId);
+          const data = await window.api.getOpGgMatchup({
+            championId: champId,
+            role: pRole,
+            patch: '26.20',
+            elo: settings.opggTier || 'emerald_plus',
+          });
+          if (data && Array.isArray(data.counters) && data.counters.length > 0) {
+            setOpggLiveCounters((prev) => ({
+              ...prev,
+              [champId]: data.counters,
+            }));
+          }
+        } catch (err) {
+          console.warn('[ChampSelectView] Error consultando counters OP.GG:', err);
+        }
+      }
+    });
+  }, [session?.theirTeam, settings.opggTier]);
+
+  // Consulta a Gemini IA: SOLO cuando los 10 picks están fijados o manual con botón
+  const fetchDraftRecommendations = async (forceManual = false) => {
     if (!session || !window.api?.getDraftRecommendations) return;
+
+    // REGLA DEL DRAFT: CERO llamadas a Gemini a menos que estén los 10 picks completos o sea forzado manual
+    if (!all10Locked && !forceManual) {
+      return;
+    }
 
     const allies = session.myTeam
       .map((p) => (p.cellId === session.localPlayerCellId && myChampionId > 0 ? myChampionId : extractPlayerChampionId(p, session)))
@@ -138,7 +187,7 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
     ].filter((id) => id > 0);
 
     const queryKey = `${localRole}_${allies.sort().join(',')}_${enemies.sort().join(',')}_${bans.sort().join(',')}_${pickableIds.length}`;
-    if (!forceRefresh && lastDraftQueryRef.current === queryKey && draftRecs) {
+    if (!forceManual && lastDraftQueryRef.current === queryKey && draftRecs) {
       return;
     }
     lastDraftQueryRef.current = queryKey;
@@ -148,12 +197,12 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
     try {
       const recs = await window.api.getDraftRecommendations({
         role: localRole,
-        patch: '16.20.1',
+        patch: '26.20',
         allies,
         enemies,
         bans,
         pickableChampionIds: pickableIds.length > 0 ? pickableIds : undefined,
-        forceRefresh,
+        forceRefresh: forceManual,
       });
       setDraftRecs(recs);
     } catch (err: any) {
@@ -163,20 +212,16 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
     }
   };
 
-  // Debounce para recalcular recomendaciones al cambiar el draft
+  // Disparar Gemini automáticamente SOLO cuando los 10 picks se completan
+  const prevAll10LockedRef = useRef(false);
   useEffect(() => {
-    if (!session) return;
-    const timer = setTimeout(() => {
+    if (all10Locked && !prevAll10LockedRef.current) {
+      prevAll10LockedRef.current = true;
       fetchDraftRecommendations(false);
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [
-    session?.myTeam,
-    session?.theirTeam,
-    session?.bans,
-    localRole,
-    pickableIds.length
-  ]);
+    } else if (!all10Locked) {
+      prevAll10LockedRef.current = false;
+    }
+  }, [all10Locked]);
 
   // Acción Hover (reflejar pick en League of Legends)
   const handleHover = async (championId: number) => {
@@ -401,18 +446,20 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                     <div>
                       <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center space-x-2">
                         <span>RECOMENDACIONES DE PICK // DRAFT TÁCTICO</span>
-                        {draftRecs?.source === 'ai' ? (
+                        {all10Locked ? (
                           <span className="text-[10px] bg-emerald-950/60 text-emerald-400 border border-emerald-500/40 px-2 py-0.5 rounded font-bold">
-                            IA GEMINI ACTIVA
+                            10 PICKS FIJADOS (IA COMPLETA)
                           </span>
                         ) : (
-                          <span className="text-[10px] bg-amber-950/60 text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded font-bold">
-                            MODO CONTINGENCIA
+                          <span className="text-[10px] bg-blue-950/60 text-[#00D4FF] border border-[#00D4FF]/40 px-2 py-0.5 rounded font-bold">
+                            META OP.GG EN VIVO (0 LLAMADAS IA)
                           </span>
                         )}
                       </h3>
                       <p className="text-xs text-[#94A3B8] mt-0.5">
-                        Filtrado estrictamente contra campeones elegibles en LCU y adaptado a tu rol ({localRole})
+                        {all10Locked
+                          ? `Análisis táctico 5v5 completo de Gemini adaptado a tu rol (${localRole})`
+                          : `Counters y meta en vivo de OP.GG para tu rol (${localRole}). Cero tokens de Gemini consumidos durante el draft.`}
                       </p>
                     </div>
                   </div>
@@ -426,7 +473,7 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                     >
                       <div className="transform skew-x-6 flex items-center space-x-1.5">
                         <RefreshCw className={`w-3.5 h-3.5 ${draftLoading ? 'animate-spin' : ''}`} />
-                        <span>{draftLoading ? 'Analizando...' : 'Actualizar Draft'}</span>
+                        <span>{draftLoading ? 'Analizando...' : (all10Locked ? 'Reanalizar con IA' : 'Analizar ahora con IA')}</span>
                       </div>
                     </button>
                   </div>
@@ -580,11 +627,70 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                     <RefreshCw className="w-6 h-6 animate-spin text-[#0070EB]" />
                     <span>Analizando sinergias aliadas y amenazas enemigas con Gemini...</span>
                   </div>
-                ) : (
-                  <div className="p-6 text-center text-xs text-[#94A3B8] bg-[#0A111F] rounded-lg border border-[#1E355B]">
-                    <span>Esperando asignación de roles y picks del draft para generar sugerencias tácticas.</span>
-                  </div>
-                )}
+                ) : Object.keys(opggLiveCounters).length > 0 ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-xs border-b border-[#1E355B]/60 pb-2">
+                        <span className="text-[#00D4FF] font-bold font-mono">
+                          ★ COUNTERS EN VIVO DE OP.GG (Parche 26.20 - ${settings.opggTier || 'Esmeralda +'}):
+                        </span>
+                        <span className="text-[11px] text-neutral-400">Tokens IA preservados: 0 llamadas</span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {Object.entries(opggLiveCounters).map(([oppIdStr, counters]) => {
+                          const oppId = Number(oppIdStr);
+                          return (
+                            <div key={oppId} className="bg-[#0A111F] p-3 rounded-lg border border-[#1E355B] space-y-2">
+                              <div className="flex items-center space-x-2 border-b border-[#1E355B]/60 pb-1.5">
+                                <img
+                                  src={getChampionIconUrl(oppId)}
+                                  alt={getChampionName(oppId)}
+                                  className="w-6 h-6 rounded border border-rose-500/50"
+                                />
+                                <div className="text-xs font-bold text-white">
+                                  vs {getChampionName(oppId)}
+                                </div>
+                              </div>
+                              <div className="space-y-1.5">
+                                {counters.slice(0, 3).map((cnt) => {
+                                  const isPickable = pickableIds.length === 0 || pickableIds.includes(cnt.championId);
+                                  return (
+                                    <div key={cnt.championId} className="flex items-center justify-between text-[11px] bg-[#111A24] p-1.5 rounded border border-neutral-800">
+                                      <div className="flex items-center space-x-1.5 truncate">
+                                        <img
+                                          src={getChampionIconUrl(cnt.championId)}
+                                          alt={cnt.championName}
+                                          className="w-5 h-5 rounded"
+                                        />
+                                        <span className="text-white font-medium truncate">{cnt.championName}</span>
+                                      </div>
+                                      <div className="flex items-center space-x-2 shrink-0">
+                                        <span className="text-emerald-400 font-bold font-mono">
+                                          {(cnt.winRate * 100).toFixed(1)}% WR
+                                        </span>
+                                        {isPickable && isMyPickTurn && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleHover(cnt.championId)}
+                                            className="px-1.5 py-0.5 rounded bg-[#00D4FF] hover:bg-[#00F0FF] text-black font-black text-[10px]"
+                                          >
+                                            Pick
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-6 text-center text-xs text-[#94A3B8] bg-[#0A111F] rounded-lg border border-[#1E355B]">
+                      <span>Esperando que el equipo rival elija campeones para calcular counters en vivo desde OP.GG.</span>
+                    </div>
+                  )}
 
                 {/* Resumen Táctico de Equipos (Gemini) */}
                 {draftRecs?.allyCompAnalysis && (

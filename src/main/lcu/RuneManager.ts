@@ -56,7 +56,7 @@ export class RuneManager {
 
   constructor(lcu: ILcuClient, opciones: OpcionesRuneManager = {}) {
     this.lcu = lcu;
-    this.nombrePaginaPorDefecto = opciones.nombrePaginaPorDefecto ?? 'Itero Local';
+    this.nombrePaginaPorDefecto = opciones.nombrePaginaPorDefecto ?? '[IL] Itero Local';
     this.sobrescribirActiva = opciones.sobrescribirActiva ?? true;
   }
 
@@ -130,12 +130,19 @@ export class RuneManager {
         }
       }
 
-      // 3. Si ya existe una página previa creada por Itero que sea editable, sobrescribirla
-      const paginaIteroPrevia = paginas.find(
-        (p) => (p as any).isEditable !== false && p.id !== undefined && p.name && p.name.startsWith('Itero')
+      // 3. Si ya existe una página de la app ([IL] o Itero), reutilizarla y limpiar duplicados
+      const paginasApp = paginas.filter(
+        (p) => (p as any).isEditable !== false && p.id !== undefined && p.name && (p.name.startsWith('[IL]') || p.name.startsWith('Itero'))
       );
-      if (paginaIteroPrevia?.id !== undefined) {
-        return await this.inyectar({ ...candidata, id: paginaIteroPrevia.id }, false);
+      if (paginasApp.length > 0) {
+        const principal = paginasApp[0];
+        for (let i = 1; i < paginasApp.length; i++) {
+          const dupId = paginasApp[i].id;
+          if (dupId !== undefined) {
+            this.eliminarPagina(dupId).catch(() => {});
+          }
+        }
+        return await this.inyectar({ ...candidata, id: principal.id, name: this.nombrePaginaPorDefecto }, false);
       }
 
       // 4. Intentar crear una nueva página si no se ha llegado al límite de 8 páginas
@@ -248,5 +255,28 @@ export class RuneManager {
       sobrescrita: !creada,
       error: resultado.error,
     };
+  }
+  /**
+   * Elimina todas las páginas de runas generadas por la app ([IL] o Itero).
+   * Devuelve la cantidad de páginas eliminadas.
+   */
+  public async cleanAppRunePages(): Promise<number> {
+    let deletedCount = 0;
+    try {
+      const paginas = await this.obtenerPaginas();
+      const paginasApp = paginas.filter(
+        (p) => (p as any).isEditable !== false && p.id !== undefined && p.name && (p.name.startsWith('[IL]') || p.name.startsWith('Itero'))
+      );
+      for (const p of paginasApp) {
+        if (p.id !== undefined) {
+          const ok = await this.eliminarPagina(p.id);
+          if (ok) deletedCount++;
+        }
+      }
+      registrarLog(`[RuneManager] Limpieza de páginas completada. ${deletedCount} páginas eliminadas.`);
+    } catch (err) {
+      registrarLog(`[RuneManager] Error en cleanAppRunePages: ${err}`);
+    }
+    return deletedCount;
   }
 }

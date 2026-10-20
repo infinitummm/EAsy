@@ -12,7 +12,8 @@ import {
   FolderOpen,
   Terminal,
   HardDrive,
-  AlertTriangle
+  AlertTriangle,
+  Trash2
 } from 'lucide-react';
 import type { AppSettings, LcuDetectionReport } from '../../shared/types';
 import type { KeyHealthStatus } from '../../shared/contracts';
@@ -42,8 +43,26 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
   const [refreshingData, setRefreshingData] = useState<boolean>(false);
   const [dataRefreshMsg, setDataRefreshMsg] = useState<string | null>(null);
   const [quotaInfo, setQuotaInfo] = useState<any>(null);
+  const [opggTier, setOpggTier] = useState<any>(settings.opggTier || 'emerald_plus');
+  const [cleaningAssets, setCleaningAssets] = useState<boolean>(false);
+  const [cleanResultMsg, setCleanResultMsg] = useState<string | null>(null);
+  const [versionInfo, setVersionInfo] = useState<{
+    clientVersion?: string;
+    ddragonVersion: string;
+    matches: boolean;
+    displayPatch: string;
+    ddragonOutdated?: boolean;
+  } | null>(null);
 
   React.useEffect(() => {
+    if (window.api?.getClientVersion) {
+      window.api.getClientVersion().then((v) => {
+        if (v) {
+          setVersionInfo(v);
+          setPatchVersion(v.displayPatch.replace('Parche ', ''));
+        }
+      }).catch(() => {});
+    }
     if (window.api?.getPatchVersion) {
       window.api.getPatchVersion().then((p) => {
         if (p) setPatchVersion(p);
@@ -55,6 +74,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
       }).catch(() => {});
     }
   }, []);
+
+
+  const handleCleanAssets = async () => {
+    if (!window.api?.cleanAppAssets) return;
+    setCleaningAssets(true);
+    setCleanResultMsg(null);
+    try {
+      const res = await window.api.cleanAppAssets();
+      setCleanResultMsg(`✓ Limpieza completada: ${res.deletedItemSets} conjunto(s) de objetos y ${res.deletedRunePages} página(s) de runas [IL] eliminadas del cliente.`);
+    } catch (err: any) {
+      setCleanResultMsg(`Error en la limpieza: ${err.message || String(err)}`);
+    } finally {
+      setCleaningAssets(false);
+    }
+  };
 
   const handleRefreshGameData = async () => {
     if (!window.api?.refreshDataDragon) return;
@@ -111,6 +145,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
 
   const handleSaveAll = async () => {
     await onSaveSettings({
+      opggTier,
       leagueInstallationPath: leaguePath.trim(),
       apiKeys: {
         riotApiKeyEncrypted: riotKey,
@@ -274,6 +309,90 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
         settings={settings.autoChampSelect}
         onSave={(autoChampSelect) => onSaveSettings({ autoChampSelect })}
       />
+
+      
+      {/* Sección 2.8: Configuración de Datos OP.GG y Limpieza de Activos (REQ-022) */}
+      <div className="bg-[#111823] p-6 rounded-lg border border-[#1E282D] space-y-4 shadow">
+        <div className="flex justify-between items-start">
+          <div>
+            <h3 className="text-lg font-semibold text-[#F0E6D2] flex items-center space-x-2">
+              <Activity className="w-5 h-5 text-[#00D4FF]" />
+              <span>Estadísticas de Meta Competitivo (OP.GG MCP)</span>
+            </h3>
+            <p className="text-xs text-[#A09B8C] mt-1">
+              Filtro de nivel de juego para tasas de victoria, builds, runas y enfrentamientos (Streamable HTTP oficial de OP.GG).
+            </p>
+          </div>
+          {versionInfo && (
+            <span className="text-xs font-mono font-bold px-2.5 py-1 rounded bg-[#0A1428] border border-[#00D4FF]/40 text-[#00D4FF]">
+              {versionInfo.displayPatch}
+            </span>
+          )}
+        </div>
+
+        {versionInfo?.ddragonOutdated && (
+          <div className="p-3 rounded text-xs bg-amber-950/40 border border-amber-600/40 text-amber-200 flex items-start space-x-2">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <strong className="text-amber-300">Aviso de Parche Nuevo:</strong>
+              <p className="mt-0.5">
+                Datos del parche anterior hasta que Riot publique el nuevo catálogo en Data Dragon.
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs font-semibold text-[#F0E6D2] block mb-1">
+              Rango / Elo de Referencia para Builds:
+            </label>
+            <select
+              value={opggTier}
+              onChange={(e) => {
+                const val = e.target.value as NonNullable<AppSettings['opggTier']>;
+                setOpggTier(val);
+                onSaveSettings({ opggTier: val });
+              }}
+              className="w-full bg-[#0A1428] border border-[#1E282D] rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#00D4FF]"
+            >
+              <option value="emerald_plus">Esmeralda + (Recomendado - Mi Elo)</option>
+              <option value="diamond_plus">Diamante +</option>
+              <option value="master_plus">Máster +</option>
+              <option value="grandmaster">Gran Máster</option>
+              <option value="challenger">Challenger</option>
+              <option value="all">Todos los Rangos (Agregado)</option>
+            </select>
+            <p className="text-[10px] text-neutral-400 mt-1">
+              Clave de caché: <code className="font-mono text-[#00D4FF]">opgg:&#123;champ&#125;:&#123;pos&#125;:&#123;rival&#125;:{opggTier}:26.20</code>
+            </p>
+          </div>
+
+          <div className="flex flex-col justify-between p-3 bg-[#0A1428] rounded border border-[#1E282D]">
+            <div>
+              <div className="text-xs font-semibold text-white">Limpieza de Importaciones en LoL</div>
+              <p className="text-[11px] text-neutral-400 mt-0.5">
+                Elimina páginas de runas y conjuntos de objetos creados por la app ([IL] Itero Local).
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleCleanAssets}
+              disabled={cleaningAssets}
+              className="mt-2.5 bg-[#D92546]/80 hover:bg-[#D92546] text-white text-xs font-bold px-3 py-1.5 rounded transition flex items-center justify-center space-x-2 disabled:opacity-50"
+            >
+              {cleaningAssets ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+              <span>Borrar importaciones de la app</span>
+            </button>
+          </div>
+        </div>
+
+        {cleanResultMsg && (
+          <div className="p-2.5 rounded text-xs bg-emerald-950/40 border border-emerald-600/40 text-emerald-300">
+            {cleanResultMsg}
+          </div>
+        )}
+      </div>
 
       {/* Sección 3: Conexión con League of Legends (LCU API) */}
       <div className="bg-[#111823] p-6 rounded-lg border border-[#1E282D] space-y-4 shadow">

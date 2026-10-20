@@ -125,8 +125,8 @@ export interface IDatabaseService {
   pruneExpiredCache(): number;
   getSettings(): AppSettings;
   saveSettings(settings: Partial<AppSettings>): void;
-  recordApiCall(api: 'RIOT' | 'GEMINI', endpoint: string, statusCode: number): void;
-  getApiCallCount(api: 'RIOT' | 'GEMINI', windowMs: number): number;
+  recordApiCall(api: 'RIOT' | 'GEMINI' | 'OPGG', endpoint: string, statusCode: number): void;
+  getApiCallCount(api: 'RIOT' | 'GEMINI' | 'OPGG', windowMs: number): number;
 }
 
 // ==========================================

@@ -118,7 +118,7 @@ export interface IpcInvokeHandlers {
   }) => Promise<any>;
   [IPC_CHANNELS.OPGG_GET_MATCHUP]: (params: {
     championId: number;
-    opponentId: number;
+    opponentId?: number;
     role: Role;
     patch?: string;
     elo?: string;

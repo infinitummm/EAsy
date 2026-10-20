@@ -2,6 +2,7 @@ import { app, BrowserWindow, shell } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LcuClient, ChampSelectManager, RuneManager, ItemSetManager, EVENTOS_LCU_CLIENT } from './lcu';
+import { OpGgClient } from './opgg/OpGgClient';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { registrarLcuIpc } from './ipc/lcuIpc';
@@ -40,6 +41,7 @@ let patchDiffService: PatchDiffService | null = null;
 let champSelectManager: ChampSelectManager | null = null;
 let profileSyncService: ProfileSyncService | null = null;
 let matchupCacheRepo: MatchupCacheRepo | null = null;
+let opggClient: OpGgClient | null = null;
 let podaCacheInterval: NodeJS.Timeout | null = null;
 
 function createWindow() {
@@ -151,6 +153,11 @@ app.whenReady().then(async () => {
     patchDiffService = new PatchDiffService(dataDragonService);
     geminiService.setPatchDiffService(patchDiffService);
 
+    opggClient = new OpGgClient({
+      dbService: dbService || undefined,
+      translator: dataDragonTranslator,
+    });
+
     // Carga no bloqueante del catálogo de campeones y diccionarios
     void dataDragonService.sincronizarCatalogoCampeones().catch(() => {});
     dataDragonTranslator.initialize().catch((err) => {
@@ -200,7 +207,7 @@ app.whenReady().then(async () => {
 
   // 5. Registrar canales IPC con todas sus dependencias
   registrarLcuIpc(lcuClient, () => mainWindow?.webContents ?? null);
-  setupChampSelectIpc(null, lcuClient, geminiService, runeManager, itemSetManager, dataDragonService || undefined, patchDiffService || undefined);
+  setupChampSelectIpc(null, lcuClient, geminiService, runeManager, itemSetManager, dataDragonService || undefined, patchDiffService || undefined, opggClient || undefined);
   registrarSettingsIpc(
     () => mainWindow?.webContents ?? null,
     dbService || undefined,

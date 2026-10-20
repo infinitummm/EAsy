@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Role, AppSettings } from '../../shared/types';
 import {
   obtenerTodosLosCampeones,
@@ -28,6 +28,212 @@ import {
   AlertCircle
 } from 'lucide-react';
 
+// ==========================================
+// 1. Buscador Autocompletado de Campeones (Top-Level & Memoizado)
+// ==========================================
+interface ChampionAutocompleteProps {
+  listType: 'preferredChampions' | 'fallbackChampions' | 'banChampions';
+  placeholder: string;
+  existingIds: number[];
+  allChampions: ChampionInfo[];
+  onAddChampion: (listType: 'preferredChampions' | 'fallbackChampions' | 'banChampions', champId: number) => void;
+  disabled?: boolean;
+}
+
+export const ChampionAutocomplete = React.memo<ChampionAutocompleteProps>(({
+  listType,
+  placeholder,
+  existingIds,
+  allChampions,
+  onAddChampion,
+  disabled = false
+}) => {
+  const [search, setSearch] = useState('');
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return [];
+    const query = search.toLowerCase().trim();
+    return allChampions
+      .filter(
+        (c) =>
+          !existingIds.includes(c.id) &&
+          (c.name.toLowerCase().includes(query) ||
+            c.key.toLowerCase().includes(query) ||
+            String(c.id).includes(query))
+      )
+      .slice(0, 8);
+  }, [search, existingIds, allChampions]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div className="relative" ref={containerRef} data-testid={`champion-autocomplete-${listType}`}>
+      <div className="relative">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          placeholder={placeholder}
+          disabled={disabled}
+          className="w-full bg-[#0A1428] border border-[#1E282D] rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-[#00D4FF] transition"
+        />
+        <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2.5 top-2.5" />
+        {search && (
+          <button
+            type="button"
+            onClick={() => setSearch('')}
+            className="absolute right-2.5 top-2 text-neutral-400 hover:text-white"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+
+      {open && filtered.length > 0 && (
+        <div
+          data-testid="champion-autocomplete-dropdown"
+          className="absolute z-30 left-0 right-0 mt-1 bg-[#0A1428] border border-[#00D4FF]/40 rounded-lg shadow-2xl max-h-48 overflow-y-auto divide-y divide-neutral-800"
+        >
+          {filtered.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => {
+                onAddChampion(listType, c.id);
+                setSearch('');
+                setOpen(false);
+              }}
+              className="w-full flex items-center space-x-2.5 px-3 py-1.5 text-left hover:bg-[#111A24] transition"
+            >
+              <img
+                src={getChampionIconUrl(c.id)}
+                alt={c.name}
+                className="w-6 h-6 rounded-full border border-neutral-700 object-cover"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-semibold text-white truncate">{c.name}</div>
+                <div className="text-[10px] text-neutral-400 font-mono">ID: {c.id}</div>
+              </div>
+              <span className="text-[10px] text-[#00D4FF] font-medium">+ Agregar</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+});
+
+// ==========================================
+// 2. Selector de Hechizos de Invocador (Top-Level & Memoizado)
+// ==========================================
+interface SpellSelectorProps {
+  slot: 0 | 1;
+  label: string;
+  currentId: number;
+  onSelectSpell: (slot: 0 | 1, spellId: number) => void;
+  disabled?: boolean;
+}
+
+export const SpellSelector = React.memo<SpellSelectorProps>(({
+  slot,
+  label,
+  currentId,
+  onSelectSpell,
+  disabled = false
+}) => {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const currentSpell = COMMON_SUMMONER_SPELLS.find((s) => s.id === currentId) || {
+    id: currentId,
+    key: 'unknown',
+    name: getSummonerSpellName(currentId),
+    icon: getSummonerSpellIconUrl(currentId)
+  };
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  return (
+    <div className="relative flex-1" ref={ref} data-testid={`spell-selector-${slot}`}>
+      <div className="text-[10px] text-neutral-400 font-mono uppercase mb-1">
+        {label} (Tecla {slot === 0 ? 'D' : 'F'})
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setDropdownOpen(!dropdownOpen)}
+        disabled={disabled}
+        className="w-full flex items-center justify-between bg-[#0A1428] border border-[#1E282D] hover:border-[#00D4FF]/40 rounded-lg p-2 text-xs transition"
+      >
+        <div className="flex items-center space-x-2 truncate">
+          <img
+            src={currentSpell.icon}
+            alt={currentSpell.name}
+            className="w-6 h-6 rounded border border-neutral-700 object-cover shrink-0"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src =
+                'https://ddragon.leagueoflegends.com/cdn/14.20.1/img/spell/SummonerFlash.png';
+            }}
+          />
+          <span className="text-white font-medium truncate">{currentSpell.name}</span>
+        </div>
+        <ChevronDown className="w-3.5 h-3.5 text-neutral-400 shrink-0 ml-1" />
+      </button>
+
+      {dropdownOpen && (
+        <div className="absolute z-30 left-0 right-0 mt-1 bg-[#0A1428] border border-[#00D4FF]/50 rounded-lg shadow-2xl max-h-56 overflow-y-auto divide-y divide-neutral-800">
+          {COMMON_SUMMONER_SPELLS.map((spell) => (
+            <button
+              key={spell.id}
+              type="button"
+              onClick={() => {
+                onSelectSpell(slot, spell.id);
+                setDropdownOpen(false);
+              }}
+              className={`w-full flex items-center space-x-2.5 px-3 py-2 text-left hover:bg-[#111A24] transition ${
+                spell.id === currentId ? 'bg-[#00D4FF]/10 text-[#00D4FF]' : 'text-white'
+              }`}
+            >
+              <img
+                src={spell.icon}
+                alt={spell.name}
+                className="w-5 h-5 rounded border border-neutral-700 object-cover"
+              />
+              <span className="text-xs font-medium flex-1">{spell.name}</span>
+              {spell.id === currentId && <Check className="w-3.5 h-3.5 text-[#00D4FF]" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+});
+
+// ==========================================
+// 3. Editor Principal de Preferencias por Rol
+// ==========================================
 interface RolePreferencesEditorProps {
   settings: AppSettings['autoChampSelect'];
   onSave: (updated: AppSettings['autoChampSelect']) => void;
@@ -42,7 +248,7 @@ const ROLES: Array<{ id: Role; label: string; icon: React.ReactNode }> = [
   { id: 'UTILITY', label: 'Soporte (Support)', icon: <Heart className="w-3.5 h-3.5 text-purple-400" /> }
 ];
 
-export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = ({
+export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React.memo(({
   settings,
   onSave,
   disabled = false
@@ -51,12 +257,16 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = ({
   const [prefs, setPrefs] = useState<AppSettings['autoChampSelect']>(settings);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
-  // Catálogo completo de campeones
+  // Catálogo completo de campeones (memoizado globalmente)
   const allChampions = useMemo(() => obtenerTodosLosCampeones(), []);
 
-  // Sincronizar si cambian las props
+  // Sincronizar solo cuando cambie settings por guardado externo
+  const lastSettingsRef = useRef(settings);
   useEffect(() => {
-    setPrefs(settings);
+    if (settings !== lastSettingsRef.current) {
+      lastSettingsRef.current = settings;
+      setPrefs(settings);
+    }
   }, [settings]);
 
   const currentRolePref = prefs.rolePreferences[selectedRole] || {
@@ -66,35 +276,41 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = ({
     spells: [4, 14] as [number, number]
   };
 
-  const handleUpdateCurrentRole = (updatedFields: Partial<typeof currentRolePref>) => {
-    const updated = {
-      ...prefs,
-      rolePreferences: {
-        ...prefs.rolePreferences,
-        [selectedRole]: {
-          ...currentRolePref,
-          ...updatedFields
+  const handleUpdateCurrentRole = useCallback((updatedFields: Partial<typeof currentRolePref>) => {
+    setPrefs((prev) => {
+      const rolePref = prev.rolePreferences[selectedRole] || {
+        preferredChampions: [],
+        fallbackChampions: [],
+        banChampions: [],
+        spells: [4, 14] as [number, number]
+      };
+      return {
+        ...prev,
+        rolePreferences: {
+          ...prev.rolePreferences,
+          [selectedRole]: {
+            ...rolePref,
+            ...updatedFields
+          }
         }
-      }
-    };
-    setPrefs(updated);
-  };
-
-  const handleToggleAutoAction = (key: 'autoHover' | 'autoPick' | 'autoBan' | 'autoSpells') => {
-    const updated = {
-      ...prefs,
-      [key]: !prefs[key]
-    };
-    setPrefs(updated);
-  };
-
-  const handlePickDelayChange = (seconds: number) => {
-    const clamped = Math.max(0, Math.min(5, seconds));
-    setPrefs({
-      ...prefs,
-      pickDelaySeconds: clamped
+      };
     });
-  };
+  }, [selectedRole]);
+
+  const handleToggleAutoAction = useCallback((key: 'autoHover' | 'autoPick' | 'autoBan' | 'autoSpells') => {
+    setPrefs((prev) => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  }, []);
+
+  const handlePickDelayChange = useCallback((seconds: number) => {
+    const clamped = Math.max(0, Math.min(5, seconds));
+    setPrefs((prev) => ({
+      ...prev,
+      pickDelaySeconds: clamped
+    }));
+  }, []);
 
   const handleSave = () => {
     onSave(prefs);
@@ -102,141 +318,114 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = ({
     setTimeout(() => setSavedSuccess(false), 2500);
   };
 
-  // ==========================================
-  // Manejador de lista reordenable / eliminar / agregar
-  // ==========================================
-  const handleAddChampion = (
+  const handleAddChampion = useCallback((
     listType: 'preferredChampions' | 'fallbackChampions' | 'banChampions',
     champId: number
   ) => {
-    const currentList = currentRolePref[listType] || [];
-    if (!currentList.includes(champId)) {
-      handleUpdateCurrentRole({
-        [listType]: [...currentList, champId]
-      });
-    }
-  };
-
-  const handleRemoveChampion = (
-    listType: 'preferredChampions' | 'fallbackChampions' | 'banChampions',
-    champId: number
-  ) => {
-    const currentList = currentRolePref[listType] || [];
-    handleUpdateCurrentRole({
-      [listType]: currentList.filter((id) => id !== champId)
+    setPrefs((prev) => {
+      const rolePref = prev.rolePreferences[selectedRole] || {
+        preferredChampions: [],
+        fallbackChampions: [],
+        banChampions: [],
+        spells: [4, 14] as [number, number]
+      };
+      const currentList = rolePref[listType] || [];
+      if (currentList.includes(champId)) return prev;
+      return {
+        ...prev,
+        rolePreferences: {
+          ...prev.rolePreferences,
+          [selectedRole]: {
+            ...rolePref,
+            [listType]: [...currentList, champId]
+          }
+        }
+      };
     });
-  };
+  }, [selectedRole]);
 
-  const handleMoveChampion = (
+  const handleRemoveChampion = useCallback((
+    listType: 'preferredChampions' | 'fallbackChampions' | 'banChampions',
+    champId: number
+  ) => {
+    setPrefs((prev) => {
+      const rolePref = prev.rolePreferences[selectedRole] || {
+        preferredChampions: [],
+        fallbackChampions: [],
+        banChampions: [],
+        spells: [4, 14] as [number, number]
+      };
+      const currentList = rolePref[listType] || [];
+      return {
+        ...prev,
+        rolePreferences: {
+          ...prev.rolePreferences,
+          [selectedRole]: {
+            ...rolePref,
+            [listType]: currentList.filter((id) => id !== champId)
+          }
+        }
+      };
+    });
+  }, [selectedRole]);
+
+  const handleMoveChampion = useCallback((
     listType: 'preferredChampions' | 'fallbackChampions' | 'banChampions',
     index: number,
     direction: 'up' | 'down'
   ) => {
-    const currentList = [...(currentRolePref[listType] || [])];
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= currentList.length) return;
+    setPrefs((prev) => {
+      const rolePref = prev.rolePreferences[selectedRole] || {
+        preferredChampions: [],
+        fallbackChampions: [],
+        banChampions: [],
+        spells: [4, 14] as [number, number]
+      };
+      const currentList = [...(rolePref[listType] || [])];
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= currentList.length) return prev;
 
-    const temp = currentList[index];
-    currentList[index] = currentList[targetIndex];
-    currentList[targetIndex] = temp;
+      const temp = currentList[index];
+      currentList[index] = currentList[targetIndex];
+      currentList[targetIndex] = temp;
 
-    handleUpdateCurrentRole({
-      [listType]: currentList
-    });
-  };
-
-  // ==========================================
-  // Componente Buscador Autocompletado de Campeones
-  // ==========================================
-  const ChampionAutocomplete: React.FC<{
-    listType: 'preferredChampions' | 'fallbackChampions' | 'banChampions';
-    placeholder: string;
-    existingIds: number[];
-  }> = ({ listType, placeholder, existingIds }) => {
-    const [search, setSearch] = useState('');
-    const [open, setOpen] = useState(false);
-    const containerRef = useRef<HTMLDivElement>(null);
-
-    const filtered = useMemo(() => {
-      if (!search.trim()) return [];
-      const query = search.toLowerCase().trim();
-      return allChampions
-        .filter(
-          (c) =>
-            !existingIds.includes(c.id) &&
-            (c.name.toLowerCase().includes(query) ||
-              c.key.toLowerCase().includes(query) ||
-              String(c.id).includes(query))
-        )
-        .slice(0, 8);
-    }, [search, existingIds]);
-
-    useEffect(() => {
-      const handleClickOutside = (e: MouseEvent) => {
-        if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-          setOpen(false);
+      return {
+        ...prev,
+        rolePreferences: {
+          ...prev.rolePreferences,
+          [selectedRole]: {
+            ...rolePref,
+            [listType]: currentList
+          }
         }
       };
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    });
+  }, [selectedRole]);
 
-    return (
-      <div className="relative" ref={containerRef}>
-        <div className="relative">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setOpen(true);
-            }}
-            onFocus={() => setOpen(true)}
-            placeholder={placeholder}
-            disabled={disabled}
-            className="w-full bg-[#0A1428] border border-[#1E282D] rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-[#00D4FF] transition"
-          />
-          <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2.5 top-2.5" />
-          {search && (
-            <button
-              onClick={() => setSearch('')}
-              className="absolute right-2.5 top-2 text-neutral-400 hover:text-white"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-
-        {open && filtered.length > 0 && (
-          <div className="absolute z-30 left-0 right-0 mt-1 bg-[#0A1428] border border-[#00D4FF]/40 rounded-lg shadow-2xl max-h-48 overflow-y-auto divide-y divide-neutral-800">
-            {filtered.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => {
-                  handleAddChampion(listType, c.id);
-                  setSearch('');
-                  setOpen(false);
-                }}
-                className="w-full flex items-center space-x-2.5 px-3 py-1.5 text-left hover:bg-[#111A24] transition"
-              >
-                <img
-                  src={getChampionIconUrl(c.id)}
-                  alt={c.name}
-                  className="w-6 h-6 rounded-full border border-neutral-700 object-cover"
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold text-white truncate">{c.name}</div>
-                  <div className="text-[10px] text-neutral-400 font-mono">ID: {c.id}</div>
-                </div>
-                <span className="text-[10px] text-[#00D4FF] font-medium">+ Agregar</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
+  const handleSelectSpell = useCallback((slot: 0 | 1, spellId: number) => {
+    setPrefs((prev) => {
+      const rolePref = prev.rolePreferences[selectedRole] || {
+        preferredChampions: [],
+        fallbackChampions: [],
+        banChampions: [],
+        spells: [4, 14] as [number, number]
+      };
+      const newSpells: [number, number] =
+        slot === 0
+          ? [spellId, rolePref.spells[1]]
+          : [rolePref.spells[0], spellId];
+      return {
+        ...prev,
+        rolePreferences: {
+          ...prev.rolePreferences,
+          [selectedRole]: {
+            ...rolePref,
+            spells: newSpells
+          }
+        }
+      };
+    });
+  }, [selectedRole]);
 
   // ==========================================
   // Renderizado de Chips Reordenables con Prioridad
@@ -293,7 +482,6 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = ({
               </div>
 
               <div className="flex items-center space-x-1 shrink-0">
-                {/* Botón Subir Prioridad */}
                 <button
                   type="button"
                   onClick={() => handleMoveChampion(listType, index, 'up')}
@@ -304,7 +492,6 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = ({
                   <ChevronUp className="w-3.5 h-3.5" />
                 </button>
 
-                {/* Botón Bajar Prioridad */}
                 <button
                   type="button"
                   onClick={() => handleMoveChampion(listType, index, 'down')}
@@ -315,7 +502,6 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = ({
                   <ChevronDown className="w-3.5 h-3.5" />
                 </button>
 
-                {/* Botón Quitar */}
                 <button
                   type="button"
                   onClick={() => handleRemoveChampion(listType, id)}
@@ -333,98 +519,8 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = ({
     );
   };
 
-  // ==========================================
-  // Selector de Hechizos de Invocador con Icono y Nombre
-  // ==========================================
-  const SpellSelector: React.FC<{
-    slot: 0 | 1;
-    label: string;
-    currentId: number;
-  }> = ({ slot, label, currentId }) => {
-    const [dropdownOpen, setDropdownOpen] = useState(false);
-    const ref = useRef<HTMLDivElement>(null);
-
-    const currentSpell = COMMON_SUMMONER_SPELLS.find((s) => s.id === currentId) || {
-      id: currentId,
-      key: 'unknown',
-      name: getSummonerSpellName(currentId),
-      icon: getSummonerSpellIconUrl(currentId)
-    };
-
-    useEffect(() => {
-      const handleClick = (e: MouseEvent) => {
-        if (ref.current && !ref.current.contains(e.target as Node)) {
-          setDropdownOpen(false);
-        }
-      };
-      document.addEventListener('mousedown', handleClick);
-      return () => document.removeEventListener('mousedown', handleClick);
-    }, []);
-
-    const handleSelect = (spell: SummonerSpellInfo) => {
-      const newSpells: [number, number] =
-        slot === 0
-          ? [spell.id, currentRolePref.spells[1]]
-          : [currentRolePref.spells[0], spell.id];
-      handleUpdateCurrentRole({ spells: newSpells });
-      setDropdownOpen(false);
-    };
-
-    return (
-      <div className="relative flex-1" ref={ref}>
-        <div className="text-[10px] text-neutral-400 font-mono uppercase mb-1">
-          {label} (Tecla {slot === 0 ? 'D' : 'F'})
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setDropdownOpen(!dropdownOpen)}
-          disabled={disabled}
-          className="w-full flex items-center justify-between bg-[#0A1428] border border-[#1E282D] hover:border-[#00D4FF]/40 rounded-lg p-2 text-xs transition"
-        >
-          <div className="flex items-center space-x-2 truncate">
-            <img
-              src={currentSpell.icon}
-              alt={currentSpell.name}
-              className="w-6 h-6 rounded border border-neutral-700 object-cover shrink-0"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src =
-                  'https://ddragon.leagueoflegends.com/cdn/14.20.1/img/spell/SummonerFlash.png';
-              }}
-            />
-            <span className="text-white font-medium truncate">{currentSpell.name}</span>
-          </div>
-          <ChevronDown className="w-3.5 h-3.5 text-neutral-400 shrink-0 ml-1" />
-        </button>
-
-        {dropdownOpen && (
-          <div className="absolute z-30 left-0 right-0 mt-1 bg-[#0A1428] border border-[#00D4FF]/50 rounded-lg shadow-2xl max-h-56 overflow-y-auto divide-y divide-neutral-800">
-            {COMMON_SUMMONER_SPELLS.map((spell) => (
-              <button
-                key={spell.id}
-                type="button"
-                onClick={() => handleSelect(spell)}
-                className={`w-full flex items-center space-x-2.5 px-3 py-2 text-left hover:bg-[#111A24] transition ${
-                  spell.id === currentId ? 'bg-[#00D4FF]/10 text-[#00D4FF]' : 'text-white'
-                }`}
-              >
-                <img
-                  src={spell.icon}
-                  alt={spell.name}
-                  className="w-5 h-5 rounded border border-neutral-700 object-cover"
-                />
-                <span className="text-xs font-medium flex-1">{spell.name}</span>
-                {spell.id === currentId && <Check className="w-3.5 h-3.5 text-[#00D4FF]" />}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   return (
-    <div className="bg-[#0B121E] border border-[#1E355B] rounded-xl p-5 shadow-2xl space-y-6">
+    <div className="bg-[#0B121E] border border-[#1E355B] rounded-xl p-5 shadow-2xl space-y-6" data-testid="role-preferences-editor">
       {/* Cabecera P3R */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#1E355B]/80 pb-4">
         <div>
@@ -567,6 +663,9 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = ({
             listType="preferredChampions"
             placeholder="Buscar por nombre (ej: Caitlyn, Ashe, Jinx)..."
             existingIds={currentRolePref.preferredChampions}
+            allChampions={allChampions}
+            onAddChampion={handleAddChampion}
+            disabled={disabled}
           />
           {renderReorderableChips('preferredChampions', currentRolePref.preferredChampions)}
           <p className="text-[10px] text-neutral-400">
@@ -589,6 +688,9 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = ({
             listType="fallbackChampions"
             placeholder="Buscar campeones secundarios..."
             existingIds={currentRolePref.fallbackChampions}
+            allChampions={allChampions}
+            onAddChampion={handleAddChampion}
+            disabled={disabled}
           />
           {renderReorderableChips('fallbackChampions', currentRolePref.fallbackChampions)}
           <p className="text-[10px] text-neutral-400">
@@ -611,6 +713,9 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = ({
             listType="banChampions"
             placeholder="Buscar campeón a banear (ej: Yasuo, Zed, Blitzcrank)..."
             existingIds={currentRolePref.banChampions}
+            allChampions={allChampions}
+            onAddChampion={handleAddChampion}
+            disabled={disabled}
           />
           {renderReorderableChips('banChampions', currentRolePref.banChampions)}
           <p className="text-[10px] text-neutral-400">
@@ -635,11 +740,15 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = ({
               slot={0}
               label="Hechizo Primario"
               currentId={currentRolePref.spells[0]}
+              onSelectSpell={handleSelectSpell}
+              disabled={disabled}
             />
             <SpellSelector
               slot={1}
               label="Hechizo Secundario"
               currentId={currentRolePref.spells[1]}
+              onSelectSpell={handleSelectSpell}
+              disabled={disabled}
             />
           </div>
 
@@ -653,4 +762,4 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = ({
       </div>
     </div>
   );
-};
+});

@@ -74,6 +74,7 @@ export const DEFAULT_APP_SETTINGS = {
     autoPick: false,
     autoBan: false,
     autoSpells: true,
+    pickDelaySeconds: 1,
     rolePreferences: {
       TOP: { preferredChampions: [], fallbackChampions: [], banChampions: [], spells: [4, 12] as [number, number] }, // Flash + TP
       JUNGLE: { preferredChampions: [], fallbackChampions: [], banChampions: [], spells: [4, 11] as [number, number] }, // Flash + Smite

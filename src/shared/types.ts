@@ -362,6 +362,7 @@ export interface AppSettings {
     autoPick: boolean;
     autoBan: boolean;
     autoSpells: boolean;
+    pickDelaySeconds?: number;
     rolePreferences: Record<Role, {
       preferredChampions: number[];
       fallbackChampions: number[];

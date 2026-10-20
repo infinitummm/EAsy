@@ -282,3 +282,48 @@ Si OpenCode encuentra alguna ambigüedad técnica, inconsistencia o necesidad de
      - Paso 2: `estructurarRecomendacion(investigacion, diffParche, statsPersonales)` con salida JSON estructurada y validación Data Dragon.
 - **Estado:** APROBADO
 - **Respuesta de Antigravity:** Aprobado. Antigravity adapta `src/shared/types.ts`, `src/main/ai/prompts.ts`, `src/main/ai/GeminiService.ts` y los componentes visuales de la UI.
+
+---
+
+### [REQ-017] Bloqueo Real (Lock-In), Validación de Elegibles y Retraso en Champ Select (Frente 1)
+- **Fecha:** 2026-10-19
+- **Tarea asociada:** T-ChampSelect-LockIn
+- **Módulo afectado:** `src/main/lcu/LcuClient.ts`, `src/main/lcu/ChampSelectManager.ts`, `src/shared/types.ts`, `src/shared/constants.ts`
+- **Problema encontrado:**
+  1. `LcuClient.hoverChampion` solo enviaba `{ championId }` sin `completed: true`.
+  2. `ChampSelectManager` intentaba enviar `completed: true` durante la fase de planeación/intento (donde Riot lo rechaza) o no confirmaba el bloqueo.
+  3. No se validaba contra `getPickableChampionIds()`, pudiendo intentar elegir campeones no disponibles en la cuenta.
+  4. Faltaba confirmación con `GET /lol-champ-select/v1/session`, registro en `registrarLog` del resultado/código HTTP, y soporte de retardo configurable (0-5s).
+- **Propuesta de solución / Firma requerida:**
+  1. En `LcuClient`:
+     ```typescript
+     lockInChampion(actionId: number, championId: number, delayMs?: number): Promise<{ success: boolean; actionId: number; championId: number; error?: string }>;
+     lockInBan(actionId: number, championId: number): Promise<{ success: boolean; actionId: number; championId: number; error?: string }>;
+     ```
+     Cada método ejecuta el PATCH con `{ championId, completed: true }`, confirma con un GET de la sesión que `completed === true` y registra en `registrarLog` fase, acción, campeón, código HTTP y confirmación.
+  2. En `ChampSelectManager`:
+     - Distinguir fase de intento (`completed: false`) de turno de pick (`completed: true`).
+     - Filtrar candidatos contra `getPickableChampionIds()`.
+     - Respetar `settings.autoChampSelect.pickDelaySeconds` (0-5 s).
+     - Emitir advertencia si ningún candidato está disponible.
+  3. En `AppSettings.autoChampSelect`:
+     - Añadir `pickDelaySeconds?: number` (defecto 1).
+- **Estado:** APROBADO
+- **Respuesta de Antigravity:** Aprobado. OpenCode implementará los métodos de bloqueo, confirmación y pruebas en el worktree hijo; Antigravity integrará la configuración y el selector visual.
+
+---
+
+### [REQ-018] Detección de Idioma del Cliente LoL, Diccionarios y Hechizos de Invocador (Frente 4)
+- **Fecha:** 2026-10-19
+- **Tarea asociada:** T-Locale-DataDragon
+- **Módulo afectado:** `src/main/lcu/LcuClient.ts`, `src/main/riot/DataDragonService.ts`, `src/main/riot/DataDragonTranslator.ts`
+- **Problema encontrado:** Los nombres de campeones, runas y hechizos se cargaban en un idioma fijo (`es_ES`) sin sincronizar con el idioma configurado en el cliente de LoL del usuario (ej. `es_MX`, `es_ES`, `en_US`), y no había catálogo de hechizos de invocador con iconos.
+- **Propuesta de solución / Firma requerida:**
+  1. En `LcuClient`:
+     - `getLocale(): Promise<string>` que consulte los endpoints de configuración del cliente Riot/LCU (`/riotclient/region-locale` o `/lol-client-config/v3/client-config/lol.client_settings.locale`) y normalice a formato Data Dragon (`es_MX`, `es_ES`, `en_US`, etc.).
+  2. En `DataDragonService`:
+     - `obtenerHechizosInvocador(version?: string, idioma?: string): Promise<Array<{ id: number; key: string; name: string; icon: string }>>`.
+  3. En `DataDragonTranslator`:
+     - Mapeo bidireccional tolerante a nombres en el idioma del cliente y en inglés.
+- **Estado:** APROBADO
+- **Respuesta de Antigravity:** Aprobado. OpenCode implementa en el worktree hijo la detección de locale, carga de hechizos en Data Dragon y tests; Antigravity los consumirá en la UI.

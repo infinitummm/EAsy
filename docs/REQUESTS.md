@@ -186,3 +186,99 @@ Si OpenCode encuentra alguna ambigüedad técnica, inconsistencia o necesidad de
   3. Comportamiento seguro: si un ID no existe, devolver `"Campeón (ID X)"` con icono genérico sin romper la UI y disparar refresco en segundo plano.
 - **Estado:** APROBADO
 - **Respuesta de Antigravity:** Aprobado.
+
+---
+
+### [REQ-014] Servicio de Detección de Cambios entre Parches (Data Dragon Patch Diff)
+- **Fecha:** 2026-10-19
+- **Tarea asociada:** T-PatchDiff (Capa 1)
+- **Módulo afectado:** `src/main/riot/PatchDiffService.ts`, `src/main/riot/DataDragonService.ts`
+- **Problema encontrado:** La IA alucina o recomienda ítems o runas que fueron eliminados o fuertemente modificados en parches recientes. Se requiere un detector determinista y sin consumo de cuota que compare los metadatos de Data Dragon entre el parche actual y el anterior.
+- **Propuesta de solución / Firma requerida:**
+  1. Implementar `PatchDiffService` con:
+     ```typescript
+     export interface ItemDiffInfo {
+       id: number;
+       name: string;
+       changeType: 'removed' | 'modified' | 'added';
+       changes?: string[];
+     }
+
+     export interface RuneDiffInfo {
+       id: number;
+       name: string;
+       changeType: 'removed' | 'modified' | 'added';
+     }
+
+     export interface PatchDiffSummary {
+       currentPatch: string;
+       previousPatch: string;
+       removedItems: ItemDiffInfo[];
+       changedItems: ItemDiffInfo[];
+       removedRunes: RuneDiffInfo[];
+       changedRunes: RuneDiffInfo[];
+       newChampions: string[];
+     }
+     ```
+  2. Método `compararParches(parcheActual: string, parcheAnterior?: string): Promise<PatchDiffSummary>`.
+  3. Método de validación `validarSinElementosEliminados(nombresItems: string[], nombresRunas: string[], diff: PatchDiffSummary): { valido: boolean; itemsInvalidos: string[]; runasInvalidas: string[] }`.
+- **Estado:** APROBADO
+- **Respuesta de Antigravity:** Aprobado. OpenCode implementa `PatchDiffService` y sus pruebas unitarias en el worktree hijo; Antigravity lo integrará en el validador del traductor de Gemini y en la UI para mostrar los cambios destacados del parche.
+
+---
+
+### [REQ-015] Extractor de Estadísticas Personales de Partidas Match-V5 (Capa 3)
+- **Fecha:** 2026-10-19
+- **Tarea asociada:** T-PersonalStats
+- **Módulo afectado:** `src/main/db/DatabaseService.ts`
+- **Problema encontrado:** La base de datos almacena partidas locales en `matches` y `match_participants`, pero no existía una consulta optimizada para extraer el historial y rendimiento específico de un campeón y matchup del jugador para enriquecer el contexto de la IA.
+- **Propuesta de solución / Firma requerida:**
+  1. En `DatabaseService` (o servicio de base de datos):
+     ```typescript
+     export interface PersonalChampionStats {
+       championId: number;
+       championName: string;
+       totalGames: number;
+       wins: number;
+       winrate: number;
+       mostBuiltItems: Array<{ id: number; name: string; count: number; winrate: number }>;
+       mostUsedKeystones: Array<{ id: number; name: string; count: number; winrate: number }>;
+       matchupGames?: {
+         opponentId: number;
+         games: number;
+         wins: number;
+         winrate: number;
+       };
+     }
+     ```
+  2. Implementar `getPersonalChampionStats(puuid: string, championId: number, opponentId?: number): PersonalChampionStats | null`.
+- **Estado:** APROBADO
+- **Respuesta de Antigravity:** Aprobado. OpenCode implementa el método en `DatabaseService` con pruebas unitarias; Antigravity inyecta estas estadísticas en el contexto del prompt de Gemini.
+
+---
+
+### [REQ-016] Estructura de Investigación de Dos Pasos y Fuentes de Grounding (Capa 2 y 4)
+- **Fecha:** 2026-10-19
+- **Tarea asociada:** T-TwoStepGeminiGrounding
+- **Módulo afectado:** `src/shared/types.ts`, `src/main/ai/GeminiService.ts`
+- **Problema encontrado:** La API de Gemini no permite combinar `tools: [{ google_search: {} }]` con esquemas JSON estructurados en una misma petición. Además, en cuentas sin billing configurado, la cuota de Google Search Grounding puede retornar 429 (`limit: 0`), requiriendo fallback honesto hacia Capas 1 y 3 sin mentir sobre la fuente.
+- **Propuesta de solución / Firma requerida:**
+  1. Extender `GeminiMatchupRecommendation` en `src/shared/types.ts` con:
+     ```typescript
+     export type ConfidenceLevel = 'verified' | 'general' | 'sparse';
+
+     export interface GroundingSource {
+       title?: string;
+       uri: string;
+     }
+     ```
+     Añadiendo a la recomendación:
+     - `confidenceLevel: ConfidenceLevel`
+     - `sources: GroundingSource[]`
+     - `groundingUsed: boolean`
+     - `researchNotes?: string`
+  2. Proceso en dos pasos:
+     - Paso 1: `investigarMetaActual(params)` con Google Search grounding (si falla o cuota 429, activa modo local honesto).
+     - Paso 2: `estructurarRecomendacion(investigacion, diffParche, statsPersonales)` con salida JSON estructurada y validación Data Dragon.
+- **Estado:** APROBADO
+- **Respuesta de Antigravity:** Aprobado. Antigravity adapta `src/shared/types.ts`, `src/main/ai/prompts.ts`, `src/main/ai/GeminiService.ts` y los componentes visuales de la UI.

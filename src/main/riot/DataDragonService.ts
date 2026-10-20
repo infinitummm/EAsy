@@ -224,6 +224,7 @@ export class DataDragonService {
   private readonly urlResumenCampeonesComunidad: string;
   private readonly cacheMemoria = new Map<string, unknown>();
   private versionActual: string | null = null;
+  private versionesEnMemoria: string[] | null = null;
 
   constructor(opciones: OpcionesDataDragonService = {}) {
     this.idioma = opciones.idioma ?? 'es_ES';
@@ -256,15 +257,28 @@ export class DataDragonService {
       return desdeDisco;
     }
 
-    const crudo = await this.obtenerJson(this.urlVersiones);
-    if (!Array.isArray(crudo) || typeof crudo[0] !== 'string') {
-      throw new ErrorDataDragon('El CDN devolvió una lista de versiones inválida.');
-    }
-
-    const version = crudo[0];
+    const versiones = await this.obtenerVersiones();
+    const version = versiones[0];
     this.versionActual = version;
     await this.escribirVersionEnDisco(version);
     return version;
+  }
+
+  /**
+   * Lista completa de versiones publicadas en `versions.json` (la primera es
+   * la vigente). Se cachea en memoria y permite resolver el parche anterior
+   * para el diff entre parches (REQ-014).
+   */
+  async obtenerVersiones(): Promise<string[]> {
+    if (this.versionesEnMemoria) return this.versionesEnMemoria;
+
+    const crudo = await this.obtenerJson(this.urlVersiones);
+    if (!Array.isArray(crudo) || crudo.length === 0 || crudo.some((entrada) => typeof entrada !== 'string')) {
+      throw new ErrorDataDragon('El CDN devolvió una lista de versiones inválida.');
+    }
+
+    this.versionesEnMemoria = crudo as string[];
+    return this.versionesEnMemoria;
   }
 
   // ==========================================
@@ -377,6 +391,7 @@ export class DataDragonService {
   invalidarCacheMemoria(): void {
     this.cacheMemoria.clear();
     this.versionActual = null;
+    this.versionesEnMemoria = null;
   }
 
   // ==========================================

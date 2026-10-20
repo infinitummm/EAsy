@@ -15,6 +15,7 @@ import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { SQLOutputValue, StatementSync } from 'node:sqlite';
 import { DEFAULT_APP_SETTINGS } from '@shared/constants';
+import { getChampionName } from '@shared/champions';
 import type { AccountEntity, IDatabaseService } from '@shared/contracts';
 import type {
   AppSettings,
@@ -22,11 +23,14 @@ import type {
   ParsedMatchSummary,
   Role,
 } from '@shared/types';
-import { calcularCsPorMinuto, calcularKda } from '../riot/estadisticas';
+import { calcularCsPorMinuto, calcularKda, redondear2 } from '../riot/estadisticas';
 import esquemaPorDefecto from './schema.sql?raw';
 
 /** Vigencia por defecto de las recomendaciones de IA en caché: 7 días. */
 export const TTL_CACHE_MATCHUP_SEGUNDOS_POR_DEFECTO = 7 * 24 * 60 * 60;
+
+/** Número de ítems y de keystones más construidos/usados que expone `getPersonalChampionStats`. */
+export const LIMITE_TOP_ESTADISTICAS = 5;
 
 /** Error genérico de la capa de datos SQLite. */
 export class ErrorBaseDeDatos extends Error {
@@ -49,6 +53,40 @@ export interface OpcionesDatabaseService {
   rutaBd?: string;
   /** SQL del esquema; por defecto el de `src/main/db/schema.sql` empaquetado. */
   esquemaSql?: string;
+  /**
+   * Resuelve el nombre legible de un ítem para las estadísticas personales
+   * (REQ-015). Por defecto devuelve `Ítem <id>`; en la app se puede cablear a
+   * `DataDragonService` (el resolutor es síncrono y debe usar caché en memoria).
+   */
+  resolverNombreItem?: (id: number) => string;
+  /**
+   * Resuelve el nombre legible de una runa/keystone para las estadísticas
+   * personales (REQ-015). Por defecto devuelve `Runa <id>`.
+   */
+  resolverNombreRuna?: (id: number) => string;
+}
+
+/**
+ * Estadísticas personales de un campeón para un invocador concreto (REQ-015).
+ *
+ * Se calculan a partir de las partidas almacenadas en `match_participants`.
+ * `matchupGames` solo se incluye si se indica `opponentId` y existen partidas
+ * registradas contra ese rival (columna `opponent_id`).
+ */
+export interface PersonalChampionStats {
+  championId: number;
+  championName: string;
+  totalGames: number;
+  wins: number;
+  winrate: number;
+  mostBuiltItems: Array<{ id: number; name: string; count: number; winrate: number }>;
+  mostUsedKeystones: Array<{ id: number; name: string; count: number; winrate: number }>;
+  matchupGames?: {
+    opponentId: number;
+    games: number;
+    wins: number;
+    winrate: number;
+  };
 }
 
 type FilaBd = Record<string, SQLOutputValue>;
@@ -184,12 +222,16 @@ function filaAPartida(fila: FilaBd): ParsedMatchSummary {
 export class DatabaseService implements IDatabaseService {
   private readonly rutaBd: string;
   private readonly esquemaSql: string;
+  private readonly resolverNombreItem: (id: number) => string;
+  private readonly resolverNombreRuna: (id: number) => string;
   private bd: DatabaseSync | null = null;
   private readonly sentencias = new Map<string, StatementSync>();
 
   constructor(opciones: OpcionesDatabaseService = {}) {
     this.rutaBd = opciones.rutaBd ?? ':memory:';
     this.esquemaSql = opciones.esquemaSql ?? esquemaPorDefecto;
+    this.resolverNombreItem = opciones.resolverNombreItem ?? ((id) => `Ítem ${id}`);
+    this.resolverNombreRuna = opciones.resolverNombreRuna ?? ((id) => `Runa ${id}`);
   }
 
   /** Abre la BD (creando directorios si hace falta) y aplica el esquema de forma idempotente. */
@@ -204,6 +246,7 @@ export class DatabaseService implements IDatabaseService {
     try {
       bd = new DatabaseSync(this.rutaBd);
       bd.exec(this.esquemaSql);
+      this.ampliarEsquemaLegado(bd);
       this.bd = bd;
     } catch (error) {
       try {
@@ -213,6 +256,20 @@ export class DatabaseService implements IDatabaseService {
       }
       const detalle = error instanceof Error ? error.message : String(error);
       throw new ErrorBaseDeDatos(`No se pudo inicializar la base de datos en "${this.rutaBd}": ${detalle}`);
+    }
+  }
+
+  /**
+   * Migración ligera de bases de datos creadas antes de REQ-015: añade la
+   * columna `match_participants.opponent_id` si el esquema aplicado no la trae.
+   * Si la columna ya existe (esquema actual), el `ALTER TABLE` falla y se
+   * ignora de forma segura.
+   */
+  private ampliarEsquemaLegado(bd: DatabaseSync): void {
+    try {
+      bd.exec('ALTER TABLE match_participants ADD COLUMN opponent_id INTEGER');
+    } catch {
+      // Columna ya presente o tabla inexistente (esquema personalizado).
     }
   }
 
@@ -272,8 +329,13 @@ export class DatabaseService implements IDatabaseService {
 
   // ---------- Partidas ----------
 
-  /** Guarda (o actualiza) una partida y el participante objetivo de forma transaccional. */
-  saveMatch(summary: ParsedMatchSummary): void {
+  /**
+   * Guarda (o actualiza) una partida y el participante objetivo de forma transaccional.
+   *
+   * `opponentId` (REQ-015) permite registrar el campeón rival de línea para
+   * poder calcular después `getPersonalChampionStats(..., opponentId)`.
+   */
+  saveMatch(summary: ParsedMatchSummary, opponentId?: number | null): void {
     const bd = this.bdAc();
     const ahora = Date.now();
 
@@ -305,8 +367,8 @@ export class DatabaseService implements IDatabaseService {
       this.sentencia(
         `INSERT INTO match_participants
            (match_id, puuid, champion_id, champion_name, role, win, kills, deaths, assists, cs,
-            gold_earned, damage_dealt, items_json, perks_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            gold_earned, damage_dealt, items_json, perks_json, opponent_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
         summary.matchId,
         summary.puuid,
@@ -325,7 +387,8 @@ export class DatabaseService implements IDatabaseService {
           primaryStyleId: summary.primaryStyleId ?? 0,
           subStyleId: summary.subStyleId ?? 0,
           selectedPerks: summary.selectedPerks ?? [],
-        })
+        }),
+        Number.isInteger(opponentId) ? (opponentId as number) : null
       );
 
       bd.exec('COMMIT');
@@ -357,6 +420,112 @@ export class DatabaseService implements IDatabaseService {
     )
       .all(puuid, limite)
       .map(filaAPartida);
+  }
+
+  // ---------- Estadísticas personales (REQ-015) ----------
+
+  /**
+   * Extrae el historial y rendimiento del jugador con `puuid` sobre `championId`
+   * a partir de las partidas almacenadas localmente.
+   *
+   * - `mostBuiltItems` / `mostUsedKeystones`: top de {@link LIMITE_TOP_ESTADISTICAS}
+   *   elementos, ordenados por frecuencia (y por id en caso de empate). Los
+   *   huecos vacíos del inventario (`0`) y los perks de stat se ignoran; el
+   *   keystone es la primera perk del árbol primario.
+   * - `matchupGames`: solo se calcula si se pasa `opponentId` y hay partidas
+   *   registradas contra ese rival (columna `opponent_id`); si no, se omite.
+   * - Devuelve `null` si no existe ninguna partida de ese campeón para el jugador.
+   *
+   * Los nombres de ítems/runas provienen de los resolutores inyectados en el
+   * constructor (por defecto `Ítem <id>` / `Runa <id>`).
+   */
+  getPersonalChampionStats(
+    puuid: string,
+    championId: number,
+    opponentId?: number
+  ): PersonalChampionStats | null {
+    const filas = this.sentencia(
+      `SELECT p.champion_name, p.win, p.items_json, p.perks_json, p.opponent_id
+       FROM match_participants p
+       WHERE p.puuid = ? AND p.champion_id = ?`
+    ).all(puuid, championId);
+
+    if (filas.length === 0) return null;
+
+    let wins = 0;
+    let championName = '';
+    let matchupGames: { games: number; wins: number } | null = null;
+    const porItem = new Map<number, { count: number; wins: number }>();
+    const porKeystone = new Map<number, { count: number; wins: number }>();
+
+    for (const fila of filas) {
+      const gano = aNumero(fila.win) === 1;
+      if (gano) wins += 1;
+      if (!championName) championName = aTexto(fila.champion_name);
+
+      for (const idItem of leerArregloNumeros(aTexto(fila.items_json))) {
+        if (idItem <= 0) continue; // 0 = hueco vacío del inventario
+        const acumulado = porItem.get(idItem) ?? { count: 0, wins: 0 };
+        acumulado.count += 1;
+        if (gano) acumulado.wins += 1;
+        porItem.set(idItem, acumulado);
+      }
+
+      const keystone = leerPerks(aTexto(fila.perks_json)).selectedPerks[0];
+      if (typeof keystone === 'number' && keystone > 0) {
+        const acumulado = porKeystone.get(keystone) ?? { count: 0, wins: 0 };
+        acumulado.count += 1;
+        if (gano) acumulado.wins += 1;
+        porKeystone.set(keystone, acumulado);
+      }
+
+      const rival = fila.opponent_id;
+      if (
+        opponentId !== undefined &&
+        rival !== null &&
+        rival !== undefined &&
+        aNumero(rival) === opponentId
+      ) {
+        matchupGames ??= { games: 0, wins: 0 };
+        matchupGames.games += 1;
+        if (gano) matchupGames.wins += 1;
+      }
+    }
+
+    const aLista = (
+      mapa: Map<number, { count: number; wins: number }>,
+      resolver: (id: number) => string
+    ): PersonalChampionStats['mostBuiltItems'] =>
+      [...mapa.entries()]
+        .map(([id, acumulado]) => ({
+          id,
+          name: resolver(id),
+          count: acumulado.count,
+          winrate: redondear2((acumulado.wins / acumulado.count) * 100),
+        }))
+        .sort((a, b) => b.count - a.count || a.id - b.id)
+        .slice(0, LIMITE_TOP_ESTADISTICAS);
+
+    const estadisticas: PersonalChampionStats = {
+      championId,
+      championName: championName || getChampionName(championId),
+      totalGames: filas.length,
+      wins,
+      winrate: redondear2((wins / filas.length) * 100),
+      mostBuiltItems: aLista(porItem, this.resolverNombreItem),
+      mostUsedKeystones: aLista(porKeystone, this.resolverNombreRuna),
+    };
+
+    if (opponentId !== undefined && matchupGames) {
+      estadisticas.matchupGames = {
+        opponentId,
+        games: matchupGames.games,
+        wins: matchupGames.wins,
+        winrate: redondear2((matchupGames.wins / matchupGames.games) * 100),
+      };
+    }
+
+    return estadisticas;
   }
 
   // ---------- Caché de matchups ----------

@@ -53,6 +53,8 @@ export const IPC_CHANNELS = {
   AI_GET_DRAFT_RECOMMENDATIONS: 'ai:get-draft-recommendations',
   DDRAGON_GET_PATCH: 'ddragon:get-patch',
   DDRAGON_REFRESH_DATA: 'ddragon:refresh-data',
+  PATCH_DIFF_GET: 'patch-diff:get',
+  AI_GET_GROUNDING_QUOTA: 'ai:get-grounding-quota',
 } as const;
 
 // ==========================================

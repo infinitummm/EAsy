@@ -282,14 +282,67 @@ export interface GeminiMatchupRecommendation {
   modelUsed?: string;
   generatedAt?: string;
   fallbackReason?: string;
+  confidenceLevel?: ConfidenceLevel;
+  sources?: GroundingSource[];
+  groundingUsed?: boolean;
+  researchNotes?: string;
   debugInfo?: {
     rawPrompt?: string;
     rawResponse?: string;
+    researchPrompt?: string;
+    rawResearchResponse?: string;
+    groundingSourcesFound?: number;
     validationStatus?: string;
     resolvedRunes?: Array<{ requested: string; resolvedId: number }>;
     resolvedItems?: Array<{ requested: string; resolvedId: number }>;
     runesHttpStatus?: number;
     itemSetsHttpStatus?: number;
+  };
+}
+
+export type ConfidenceLevel = 'verified' | 'general' | 'sparse';
+
+export interface GroundingSource {
+  title?: string;
+  uri: string;
+}
+
+export interface ItemDiffInfo {
+  id: number;
+  name: string;
+  changeType: 'removed' | 'modified' | 'added';
+  changes?: string[];
+}
+
+export interface RuneDiffInfo {
+  id: number;
+  name: string;
+  changeType: 'removed' | 'modified' | 'added';
+}
+
+export interface PatchDiffSummary {
+  currentPatch: string;
+  previousPatch: string;
+  removedItems: ItemDiffInfo[];
+  changedItems: ItemDiffInfo[];
+  removedRunes: RuneDiffInfo[];
+  changedRunes: RuneDiffInfo[];
+  newChampions: string[];
+}
+
+export interface PersonalChampionStats {
+  championId: number;
+  championName: string;
+  totalGames: number;
+  wins: number;
+  winrate: number;
+  mostBuiltItems: Array<{ id: number; name: string; count: number; winrate: number }>;
+  mostUsedKeystones: Array<{ id: number; name: string; count: number; winrate: number }>;
+  matchupGames?: {
+    opponentId: number;
+    games: number;
+    wins: number;
+    winrate: number;
   };
 }
 

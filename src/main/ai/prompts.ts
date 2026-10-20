@@ -3,7 +3,160 @@
  * Propiedad exclusiva de ANTIGRAVITY.
  */
 
-import { Role } from '../../shared/types';
+import { Role, PatchDiffSummary, PersonalChampionStats, GroundingSource } from '../../shared/types';
+
+/**
+ * Genera el prompt para el Paso 1: Investigación del meta y notas del parche actual con Grounding.
+ */
+export function buildInvestigationPrompt(params: {
+  championName: string;
+  opponentName: string;
+  role: Role;
+  patch: string;
+  patchDiff?: PatchDiffSummary;
+  personalStats?: PersonalChampionStats;
+}): { systemInstruction: string; userPrompt: string } {
+  const systemInstruction = `Eres un analista de datos e investigador táctico de League of Legends enfocado rigurosamente en el parche actual (${params.patch}).
+Tu misión es investigar y resumir la información más fresca, competitiva y veraz sobre el emparejamiento directo en el meta actual.
+REGLAS ESTRICTAS DE INVESTIGACIÓN:
+1. Prioriza notas de parche oficiales de Riot Games, análisis competitivos y guías de la última semana correspondientes al parche ${params.patch}.
+2. Cada afirmación sobre objetos o runas DEBE indicar explícitamente a qué parche corresponde (ej: "En el parche ${params.patch}, el objeto X...").
+3. Si un objeto o runa fue eliminado o severamente debilitado en el parche actual, menciónalo explícitamente y prohíbe su recomendación.
+4. Cita fuentes concretas con nombres de sitios o notas de parche.`;
+
+  let contextChanges = '';
+  if (params.patchDiff) {
+    if (params.patchDiff.removedItems && params.patchDiff.removedItems.length > 0) {
+      contextChanges += `\n- OBJETOS ELIMINADOS EN ESTE PARCHE (PROHIBIDO RECOMENDAR): ${params.patchDiff.removedItems.map(i => i.name).join(', ')}`;
+    }
+    if (params.patchDiff.changedItems && params.patchDiff.changedItems.length > 0) {
+      contextChanges += `\n- OBJETOS CON CAMBIOS DE STATS/PASIVAS EN EL PARCHE ${params.patch}: ${params.patchDiff.changedItems.map(i => i.name).join(', ')}`;
+    }
+    if (params.patchDiff.removedRunes && params.patchDiff.removedRunes.length > 0) {
+      contextChanges += `\n- RUNAS ELIMINADAS O DESACTIVADAS: ${params.patchDiff.removedRunes.map(r => r.name).join(', ')}`;
+    }
+  }
+
+  let personalContext = '';
+  if (params.personalStats && params.personalStats.totalGames > 0) {
+    personalContext = `\n- Historial del jugador con ${params.championName}: ${params.personalStats.totalGames} partidas registradas (${params.personalStats.winrate}% winrate).`;
+    if (params.personalStats.mostBuiltItems && params.personalStats.mostBuiltItems.length > 0) {
+      personalContext += ` Objetos más exitosos: ${params.personalStats.mostBuiltItems.slice(0, 3).map(i => `${i.name} (${i.winrate}% WR)`).join(', ')}.`;
+    }
+    if (params.personalStats.matchupGames && params.personalStats.matchupGames.games > 0) {
+      personalContext += ` Historial directo contra ${params.opponentName}: ${params.personalStats.matchupGames.games} partidas (${params.personalStats.matchupGames.winrate}% WR).`;
+    }
+  }
+
+  const userPrompt = `Investiga la mejor configuración competitiva para el parche actual (${params.patch}):
+- Campeón propio: ${params.championName}
+- Rival directo en línea: ${params.opponentName}
+- Posición / Rol: ${params.role}
+- Parche vigente: ${params.patch}
+${contextChanges}
+${personalContext}
+
+Proporciona:
+1. Meta actual de ${params.championName} en ${params.role}: objetos core indispensables, botas y objetos situacionales clave contra ${params.opponentName}.
+2. Configuración de runas más sólida en el parche ${params.patch} (Runa clave, rama primaria, rama secundaria y fragmentos).
+3. Cómo afectan los cambios recientes del parche a este enfrentamiento específico.
+4. Resumen de hallazgos y fuentes/sitios consultados.`;
+
+  return { systemInstruction, userPrompt };
+}
+
+/**
+ * Genera el prompt para el Paso 2: Conversión estructurada a JSON de los hallazgos de investigación.
+ */
+export function buildTwoStepStructuredPrompt(params: {
+  championId: number;
+  championName: string;
+  opponentId: number;
+  opponentName: string;
+  role: Role;
+  patch: string;
+  researchText: string;
+  sources?: GroundingSource[];
+  patchDiff?: PatchDiffSummary;
+  personalStats?: PersonalChampionStats;
+  allies?: number[];
+  enemies?: number[];
+}): { systemInstruction: string; userPrompt: string } {
+  const systemInstruction = `Eres un coach profesional Challenger y analista de élite de League of Legends.
+Tu misión es estructurar los hallazgos de investigación del meta del parche actual (${params.patch}) en una recomendación táctica definitiva en formato JSON estricto.
+REGLAS MANDATORIAS:
+1. Para runas y objetos, proporciona sus NOMBRES OFICIALES en español (por ejemplo: "Compás letal", "Claridad mental", "Espada de Doran", "El Coleccionista"). NO inventes IDs numéricos.
+2. PROHIBIDO terminantemente incluir objetos o runas eliminados en este parche.
+3. El análisis táctico debe ser profundo y responder directamente a la investigación realizada.
+4. Responde ÚNICAMENTE un único objeto JSON válido sin texto adicional antes o después, sin bloques de markdown.`;
+
+  let bannedItemsNotice = '';
+  if (params.patchDiff?.removedItems && params.patchDiff.removedItems.length > 0) {
+    bannedItemsNotice = `\nOBJETOS ELIMINADOS EN EL PARCHE ${params.patch} (NUNCA RECOMENDAR): ${params.patchDiff.removedItems.map(i => i.name).join(', ')}`;
+  }
+
+  let bannedRunesNotice = '';
+  if (params.patchDiff?.removedRunes && params.patchDiff.removedRunes.length > 0) {
+    bannedRunesNotice = `\nRUNAS ELIMINADAS EN EL PARCHE ${params.patch} (NUNCA RECOMENDAR): ${params.patchDiff.removedRunes.map(r => r.name).join(', ')}`;
+  }
+
+  const userPrompt = `Convierte la investigación y el meta del parche actual (${params.patch}) en la recomendación final:
+- Mi Campeón: ${params.championName} (ID: ${params.championId})
+- Campeón Rival directo: ${params.opponentName} (ID: ${params.opponentId})
+- Posición / Rol: ${params.role}
+- Parche en curso: ${params.patch}
+${bannedItemsNotice}
+${bannedRunesNotice}
+
+INVESTIGACIÓN RECIENTE DEL PARCHE ${params.patch}:
+"""
+${params.researchText}
+"""
+
+Genera el JSON final cumpliendo estrictamente con este esquema:
+{
+  "championId": ${params.championId},
+  "opponentChampionId": ${params.opponentId},
+  "assignedRole": "${params.role}",
+  "patchVersion": "${params.patch}",
+  "difficultyRating": <entero de 1 a 10>,
+  "matchupSummary": "<resumen táctico en español explicando la dinámica de la línea basado en el parche ${params.patch}>",
+  "runesRecommendation": {
+    "primaryStyleName": "<Precisión | Dominación | Brujería | Inspiración | Valor>",
+    "subStyleName": "<rama secundaria>",
+    "keystoneName": "<nombre oficial runa clave>",
+    "primaryRunes": ["<runa fila 1>", "<runa fila 2>", "<runa fila 3>"],
+    "secondaryRunes": ["<runa secundaria 1>", "<runa secundaria 2>"],
+    "statShards": ["<fragmento 1 ofensivo>", "<fragmento 2 flexible>", "<fragmento 3 defensivo>"],
+    "rationale": "<justificación táctica>"
+  },
+  "buildRecommendation": {
+    "startingItems": ["<ítem inicio 1>", "<ítem inicio 2>"],
+    "boots": "<nombre de botas>",
+    "coreItems": ["<objeto core 1>", "<objeto core 2>", "<objeto core 3>"],
+    "situationalItems": [
+      { "itemName": "<nombre objeto situacional>", "condition": "<situación o rival>" }
+    ],
+    "rationale": "<explicación del orden de compras en el parche ${params.patch}>"
+  },
+  "skillOrder": {
+    "priority": ["Q", "W", "E", "R"],
+    "firstThreeLevels": ["Q", "W", "E"],
+    "rationale": "<orden en los primeros 3 niveles>"
+  },
+  "earlyGameStrategy": {
+    "waveManagement": "<gestión de oleadas niv 1-4>",
+    "tradingPlan": "<plan de intercambios y enfriamientos>",
+    "levelSpikes": ["<pico de poder 1>", "<pico de poder 2>"]
+  },
+  "threatAnalysis": {
+    "enemyThreats": ["<amenazas principales>"],
+    "winCondition": "<condición de victoria clara>"
+  }
+}`;
+
+  return { systemInstruction, userPrompt };
+}
 
 /**
  * Genera el system prompt y user prompt para el análisis de matchup de LoL.

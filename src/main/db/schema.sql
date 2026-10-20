@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS match_participants (
     damage_dealt INTEGER NOT NULL,
     items_json TEXT NOT NULL, -- Array JSON de item IDs
     perks_json TEXT NOT NULL, -- Array JSON de perks
+    opponent_id INTEGER, -- Campeón rival de línea si se conoce (REQ-015)
     FOREIGN KEY(match_id) REFERENCES matches(match_id) ON DELETE CASCADE
 );
 

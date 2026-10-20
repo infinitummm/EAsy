@@ -4,6 +4,7 @@ import { BuildVisualizer } from '../components/BuildVisualizer';
 import { ChampionSelectInput } from '../components/ChampionSelectInput';
 import { getChampionName, getChampionIconUrl } from '../../shared/champions';
 import { getAccurateFallbackRecommendation } from '../../shared/buildDatabase';
+import { formatFullPatchLabel, formatDisplayPatch } from '../../shared/patchUtils';
 
 interface MatchupViewProps {
   initialChampionId?: number;
@@ -226,7 +227,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
             </h2>
             <div className="flex flex-wrap items-center gap-2 mt-1.5">
               <span className="text-xs text-[#94A3B8]">
-                Parche: <span className="text-[#60A5FA] font-bold">{activePatch}</span>
+                Parche: <span className="text-[#60A5FA] font-bold">{formatFullPatchLabel(activePatch)}</span>
               </span>
               <span className="text-xs text-[#475569]">•</span>
               <span
@@ -674,7 +675,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#1E355B]">
               <h3 className="text-sm font-bold text-white flex items-center space-x-2 tracking-wide">
                 <span className="w-2 h-2 rounded-full bg-[#0070EB]"></span>
-                <span className="uppercase">Configuración de Runas Oficial (Parche {activePatch})</span>
+                <span className="uppercase">Configuración de Runas Oficial (Parche {formatFullPatchLabel(activePatch)})</span>
               </h3>
               <span className="text-xs text-[#60A5FA] font-mono font-semibold">
                 Ramas: {recommendation.runesRecommendation.primaryStyleId} + {recommendation.runesRecommendation.subStyleId}

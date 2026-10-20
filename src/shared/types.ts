@@ -262,6 +262,7 @@ export interface GeminiMatchupRecommendation {
     startingItems: number[];
     coreItems: number[];
     situationalItems: Array<{ itemId: number; condition: string }>;
+    boots?: number;
     rationale: string;
   };
   skillOrder: {

@@ -17,6 +17,7 @@ import {
 import type { AppSettings, LcuDetectionReport } from '../../shared/types';
 import type { KeyHealthStatus } from '../../shared/contracts';
 import { RolePreferencesEditor } from '../components/RolePreferencesEditor';
+import { formatFullPatchLabel } from '../../shared/patchUtils';
 
 interface SettingsViewProps {
   settings: AppSettings;
@@ -459,7 +460,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
           <div className="flex items-center space-x-3">
             <span className="text-[#A09B8C]">Parche detectado:</span>
             <span className="font-mono text-emerald-400 font-bold bg-[#111A24] px-2.5 py-1 rounded border border-[#1E282D]">
-              v{patchVersion}
+              v{formatFullPatchLabel(patchVersion)}
             </span>
             <span className="text-gray-400 text-[11px]">• Sincronización en tiempo real</span>
           </div>
@@ -523,7 +524,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
       {/* Footer de versión y estado */}
       <div className="pt-4 border-t border-[#1E355B]/60 flex items-center justify-between text-[11px] text-[#64748B] font-mono">
         <div>
-          <span>Itero Local Assistant</span> • <span>Parche Activo: <strong className="text-white">v{patchVersion}</strong></span>
+          <span>Itero Local Assistant</span> • <span>Parche Activo: <strong className="text-white">v{formatFullPatchLabel(patchVersion)}</strong></span>
         </div>
         <div>
           <span>DDragon & LCU Dynamic Sync</span> • <span>Arquitectura 100% Local</span>

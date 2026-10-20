@@ -701,6 +701,7 @@ export class GeminiService {
     return {
       ...fallback,
       source: 'fallback',
+      matchupSummary: reason ? `${reason} ${fallback.matchupSummary}` : fallback.matchupSummary,
       fallbackReason: reason,
       confidenceLevel: 'sparse',
       groundingUsed: false,

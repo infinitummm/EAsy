@@ -6,6 +6,33 @@
 import { Role, PatchDiffSummary, PersonalChampionStats, GroundingSource } from '../../shared/types';
 
 /**
+ * Catálogo canónico del meta y sistemas vigentes en el Parche 26.20 (Temporada 2026 / Data Dragon 16.20.1).
+ * Alimenta a Gemini con el estado actual del juego para evitar alucinaciones de parches o temporadas antiguas.
+ */
+export const CURRENT_META_CONTEXT_26_20 = `
+--- CONTEXTO OFICIAL DEL PARCHE VIGENTE 26.20 (TEMPORADA 2026 / DATA DRAGON 16.20.1) ---
+1. SISTEMA DE OBJETOS ACTUAL:
+   - Los objetos Míticos FUERON ELIMINADOS del juego. NUNCA menciones "objeto mítico" ni recomiendes mecánicas de míticos.
+   - Tiradores / Crítico / AD Carry: Filo Infinito (+80 DA, +25% Crítico), El Coleccionista (+DA, +Letalidad, +Crítico, Ejecución a 5% de vida), Recuerdos de Lord Dominik (+DA, +Crítico, +Penetración de Armadura), Flechas de Yun Tal (+DA, +Crítico, Hemorragia por daño crítico), Cañón de Fuego Rápido, Segador de Esencia, Sanguinaria (Escudo sobrecuración), Puñal de Statikk, Huracán de Runaan, Hoja de Furia de Guinsoo, Hoja del Rey Arruinado, Arcoescudo Inmortal, Cimitarra Mercurial.
+   - Magos / AP Carry: Antorcha de Fuego Negro (quema de maná), Malignidad (odio definitivo), Compañero de Luden (disparos cargados), Criptofloración (penetración porcentual y nova curativa), Llama Sombría (crítico mágico a poca vida), Sobrecarga Tormentosa (daño de ráfaga y velocidad), Báculo del Vacío, Sombrero Mortífero de Rabadon, Reloj de Arena de Zhonya, Velo del Hada de la Muerte, Cetro de Cristal de Rylai, Creagrietas, Diente de Nashor, Tormento de Liandry, Abrazo del Serafín, Impulso Cósmico.
+   - Luchadores / Bruisers: Cielo Desgarrado (primer ataque con golpe crítico garantizado y curación), Eclipse (escudo protector al conectar 2 ataques o habilidades), Cuchilla Negra (reducción de armadura acumulable y velocidad), Lanza de Shojin (amplificación porcentual de daño de habilidades básicas), Guantelete de Sterak (tenacidad y escudo salvavidas), Hidra Titánica, Hidra Voraz, Cortasendas, Rompehechizos, Fuerza de la Trinidad, Fauces de Malmortius, Danza de la Muerte.
+   - Tanques: Fulgor Vano (daño mágico pasivo e inmolación explosiva en súbditos), Kaénico Rookern (escudo masivo contra daño mágico tras no recibir daño), Corazón de Hielo, Presagio de Randuin, Malla de Espinas, Desesperanza Eterna, Máscara Abisal, Égida de Fuego Solar, Jak'Sho el Proteiforme, Coraza del Muerto, Fuerza de la Naturaleza.
+   - Asesinos / Letalidad: Espada Voltaica (estallido energizado con ralentización del 99%), Hidra Profana (activo cortante con daño letal a objetivos con poca vida), Oportunidad (letalidad masiva al entrar en combate y velocidad al matar), Rencor de Serylda (penetración de armadura escalada con letalidad), Filo de la Noche, Guja Sombría, Arco Axiomático, Soberbia.
+   - Soportes: Oposición Celestial, Trineo del Solsticio, Rompesueños, Detractor de Sangre, Canto de Guerra de Shurelya, Medallón de los Solari de Hierro, Promesa del Caballero, Redención, Bendición de Mikael, Ecos de Helia, Mandato Imperial, Creador de Caminos.
+   - Botas: Grebas de Berserker, Botas Blindadas (Plated Steelcaps), Botas de Mercurio, Botas de Hechicero, Botas de Rapidez, Botas Simbióticas / Suelas Simbióticas, Botas Jonias de la Lucidez.
+
+2. SISTEMA DE RUNAS Y FRAGMENTOS ACTUAL:
+   - Ramas principales: Precisión, Dominación, Brujería, Inspiración, Valor.
+   - Runas Clave comunes: Compás Letal (Lethal Tempo), Ataque Intensificado (Press the Attack), Pies Veloces (Fleet Footwork), Conquistador, Primer Golpe (First Strike), Electrocutar, Cosecha Oscura, Lluvia de Cuchillas, Cometa Arcano, Fase Veloz, Garras del Inmortal, Reverberación, Aumento Glacial.
+   - Fragmentos de Estadísticas (Stat Shards) ACTUALES:
+     Fila 1 (Ofensiva): Fuerza adaptable (+9) | Velocidad de ataque (+10%) | Aceleración de habilidad (+8).
+     Fila 2 (Flexible): Fuerza adaptable (+9) | Velocidad de movimiento (+2%) | Vida progresiva (+10 a 180).
+     Fila 3 (Defensiva): Vida plana (+65) | Tenacidad y resistencia a ralentizaciones (+10%) | Vida progresiva (+10 a 180).
+     (PROHIBIDO: NUNCA sugieras armadura ni resistencia mágica plana en los fragmentos; fueron retiradas del juego).
+---------------------------------------------------------------------------------
+`;
+
+/**
  * Genera el prompt para el Paso 1: Investigación del meta y notas del parche actual con Grounding.
  */
 export function buildInvestigationPrompt(params: {
@@ -83,9 +110,10 @@ export function buildTwoStepStructuredPrompt(params: {
   enemies?: number[];
 }): { systemInstruction: string; userPrompt: string } {
   const systemInstruction = `Eres un coach profesional Challenger y analista de élite de League of Legends.
-Tu misión es estructurar los hallazgos de investigación del meta del parche actual (${params.patch}) en una recomendación táctica definitiva en formato JSON estricto.
+Tu misión es estructurar los hallazgos de investigación del meta del parche actual (${params.patch} / 26.20) en una recomendación táctica definitiva en formato JSON estricto.
+${CURRENT_META_CONTEXT_26_20}
 REGLAS MANDATORIAS:
-1. Para runas y objetos, proporciona sus NOMBRES OFICIALES en español (por ejemplo: "Compás letal", "Claridad mental", "Espada de Doran", "El Coleccionista"). NO inventes IDs numéricos.
+1. Para runas y objetos, proporciona sus NOMBRES OFICIALES en español (por ejemplo: "Compás letal", "Claridad mental", "Espada de Doran", "El Coleccionista", "Flechas de Yun Tal"). NO inventes IDs numéricos.
 2. PROHIBIDO terminantemente incluir objetos o runas eliminados en este parche.
 3. El análisis táctico debe ser profundo y responder directamente a la investigación realizada.
 4. Responde ÚNICAMENTE un único objeto JSON válido sin texto adicional antes o después, sin bloques de markdown.`;
@@ -175,9 +203,10 @@ export function buildMatchupPrompt(params: {
   const opponent = params.opponentName || `Rival ID ${params.opponentId}`;
 
   const systemInstruction = `Eres un coach profesional Challenger y analista de élite de League of Legends.
-Tu misión es generar recomendaciones tácticas hiperprecisas, óptimas para el parche actual (${params.patch}), en formato JSON estricto.
+Tu misión es generar recomendaciones tácticas hiperprecisas, óptimas para el parche actual (${params.patch} / 26.20), en formato JSON estricto.
+${CURRENT_META_CONTEXT_26_20}
 IMPORTANTE:
-- Para runas y objetos, proporciona sus NOMBRES OFICIALES en español (por ejemplo: "Compás letal", "Claridad mental", "Espada de Doran", "El Coleccionista"). NO inventes IDs numéricos.
+- Para runas y objetos, proporciona sus NOMBRES OFICIALES en español (por ejemplo: "Compás letal", "Claridad mental", "Espada de Doran", "El Coleccionista", "Flechas de Yun Tal"). NO inventes IDs numéricos.
 - El análisis táctico debe ser profundo y específico para el emparejamiento directo entre los dos campeones en la fase de líneas.
 - Responde ÚNICAMENTE un único objeto JSON válido sin texto adicional antes o después, sin bloques de markdown (\`\`\`json) si se solicita formato directo.`;
 

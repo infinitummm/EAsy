@@ -333,7 +333,7 @@ export class DataDragonService {
     const datos = extraerValoresDeData<DatosHechizo>(crudo);
     const hechizos = datos
       .map((hechizo) => {
-        const id = Number(hechizo.id);
+        const id = Number(hechizo.key || hechizo.id);
         if (!Number.isInteger(id) || id <= 0) {
           return null;
         }

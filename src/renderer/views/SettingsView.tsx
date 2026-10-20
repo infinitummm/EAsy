@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import type { AppSettings, LcuDetectionReport } from '../../shared/types';
 import type { KeyHealthStatus } from '../../shared/contracts';
+import { RolePreferencesEditor } from '../components/RolePreferencesEditor';
 
 interface SettingsViewProps {
   settings: AppSettings;
@@ -39,11 +40,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
   const [patchVersion, setPatchVersion] = useState<string>('16.20.1');
   const [refreshingData, setRefreshingData] = useState<boolean>(false);
   const [dataRefreshMsg, setDataRefreshMsg] = useState<string | null>(null);
+  const [quotaInfo, setQuotaInfo] = useState<any>(null);
 
   React.useEffect(() => {
     if (window.api?.getPatchVersion) {
       window.api.getPatchVersion().then((p) => {
         if (p) setPatchVersion(p);
+      }).catch(() => {});
+    }
+    if (window.api?.getGroundingQuota) {
+      window.api.getGroundingQuota().then((q) => {
+        if (q) setQuotaInfo(q);
       }).catch(() => {});
     }
   }, []);
@@ -261,6 +268,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
         </div>
       </div>
 
+      {/* Sección 2.5: Automatización de Champ Select y Preferencias por Rol */}
+      <RolePreferencesEditor
+        settings={settings.autoChampSelect}
+        onSave={(autoChampSelect) => onSaveSettings({ autoChampSelect })}
+      />
+
       {/* Sección 3: Conexión con League of Legends (LCU API) */}
       <div className="bg-[#111823] p-6 rounded-lg border border-[#1E282D] space-y-4 shadow">
         <div className="flex justify-between items-start">
@@ -463,7 +476,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
       <div className="bg-[#111823] p-6 rounded-lg border border-[#1E282D] space-y-4 shadow">
         <h3 className="text-lg font-semibold text-[#F0E6D2] flex items-center space-x-2">
           <Activity className="w-5 h-5 text-[#C89B3C]" />
-          <span>Monitor de Límites de Tasa y Cuotas</span>
+          <span>Monitor de Límites de Tasa y Cuotas de IA (Frente 2)</span>
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
@@ -479,12 +492,32 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
           <div className="bg-[#0A1428] p-4 rounded border border-[#1E282D]">
             <div className="font-semibold text-[#F0E6D2] mb-1">Google Gemini API (Free Tier)</div>
             <div className="text-[#A09B8C] space-y-1">
-              <div>Límite por minuto: <strong>15 RPM</strong></div>
-              <div>Límite diario: <strong>1,500 RPD</strong></div>
-              <div className="text-emerald-400 font-mono mt-2">✓ Cola y Caché SQLite Activos</div>
+              <div>Límite estándar: <strong>15 RPM / 1,500 RPD</strong></div>
+              <div>
+                Peticiones hoy:{' '}
+                <strong className="text-white">
+                  {quotaInfo?.standardRequestsToday ?? 0} / 1,500
+                </strong>
+              </div>
+              <div>
+                Google Search Grounding:{' '}
+                <span className="text-amber-400 font-medium">
+                  {quotaInfo?.groundingAvailable ? 'Disponible' : '0 cuota libre (HTTP 429)'}
+                </span>
+              </div>
+              <div className="text-emerald-400 font-mono mt-2">
+                ✓ Proveedor Activo: Gemini 3.5 Flash (Conmutación automática ante 429)
+              </div>
             </div>
           </div>
         </div>
+
+        {quotaInfo?.quotaNote && (
+          <div className="p-3 bg-[#070D19] rounded border border-[#1E282D] text-[11px] text-[#8EA2C6] leading-relaxed">
+            <strong className="text-white">Diagnóstico de Cuota Google AI Studio: </strong>
+            {quotaInfo.quotaNote}
+          </div>
+        )}
       </div>
 
       {/* Footer de versión y estado */}

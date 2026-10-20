@@ -239,6 +239,13 @@ describe('DataDragonService (T-3.6)', () => {
       );
     });
 
+    it('obtiene hechizos de invocador formateados con id numérico y nombre', async () => {
+      const servicio = crearServicio();
+      const hechizos = await servicio.obtenerHechizosInvocador();
+      expect(hechizos[0].id).toBe(4);
+      expect(hechizos[0].name).toBe('Destello');
+    });
+
     it('respeta la versión explícita sin consultar versions.json', async () => {
       const servicio = crearServicio();
 

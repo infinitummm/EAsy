@@ -188,3 +188,32 @@ Para evitar colisiones entre los agentes que trabajan en paralelo en diferentes 
 1. **Inviolabilidad de `src/shared/`:** OpenCode **NO TIENE PERMITIDO** modificar ningún archivo dentro de `src/shared/`. Si necesita un nuevo método, campo o tipo, debe registrar la solicitud detallada en `docs/REQUESTS.md`. Antigravity evaluará, actualizará `src/shared/` y `docs/CONTRACTS.md`, y le notificará por el terminal de Orca para que haga merge.
 2. **Sin código cruzado en carpetas:** OpenCode trabaja estrictamente en sus carpetas asignadas. Antigravity no tocará las carpetas de backend de OpenCode durante las fases activas del implementador.
 3. **Commits atómicos por tarea:** Cada tarea finalizada por OpenCode debe acompañarse de sus tests unitarios correspondientes pasando al 100% y un commit con mensaje claro.
+
+---
+
+## 7. Capa de Proveedores de IA Intercambiable (Frente 2, REQ-019)
+
+Para garantizar independencia de un único proveedor y permitir la integración futura de modelos locales o proveedores ultrarrápidos (Groq, Mistral, Ollama) sin modificar la lógica de negocio ni romper contratos, Itero Local implementa una arquitectura desacoplada basada en la interfaz canónica `AiProvider`.
+
+### 7.1 Interfaces Canónicas (`src/main/ai/providers/AiProvider.ts`)
+```typescript
+export interface AiProvider {
+  readonly id: string;
+  readonly name: string;
+  generateText(prompt: string, options?: AiGenerateOptions): Promise<string>;
+  generateStructured<T>(prompt: string, schema?: unknown, options?: AiGenerateOptions): Promise<T>;
+  generateWithSearch?(prompt: string, options?: AiGenerateOptions): Promise<GroundingResult>;
+  getQuotaInfo?(): ProviderQuotaInfo;
+}
+```
+
+### 7.2 Orquestador y Conmutación Automática ante 429 (`AiProviderManager.ts`)
+El orquestador `AiProviderManager` mantiene una lista priorizada de proveedores. Al recibir un error `HTTP 429` (`RESOURCE_EXHAUSTED` / Rate Limit Exceeded) de un proveedor primario, conmuta automáticamente de forma transparente al siguiente proveedor registrado y emite eventos `fallo-cuota-429` y `cambio-proveedor`.
+
+### 7.3 Guía de Extensión para Proveedores Compatibles con OpenAI (Groq / Mistral / Ollama)
+Para añadir un nuevo proveedor compatible con OpenAI:
+1. Crear `src/main/ai/providers/OpenAiCompatibleProvider.ts` implementando `AiProvider`.
+2. Usar el endpoint estándar `POST /chat/completions` con `Authorization: Bearer <API_KEY>` y `response_format: { type: "json_object" }` para `generateStructured`.
+3. Registrar la instancia en `AiProviderManager.registerProvider(new OpenAiCompatibleProvider({ id: 'groq', baseUrl: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' }))`.
+4. El resto de la aplicación continuará funcionando idénticamente.
+

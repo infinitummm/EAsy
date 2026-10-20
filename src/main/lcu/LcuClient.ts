@@ -497,6 +497,185 @@ export class LcuClient extends EventEmitter implements ILcuClient {
     });
   }
 
+  /**
+   * Bloquea (lock-in) un campeón en la acción de pick indicada.
+   * Ejecuta PATCH con completed: true, confirma con GET de la sesión y registra logs descriptivos.
+   */
+  async lockInChampion(
+    actionId: number,
+    championId: number,
+    delayMs?: number
+  ): Promise<{ success: boolean; actionId: number; championId: number; error?: string }> {
+    if (!Number.isInteger(actionId) || actionId <= 0 || !Number.isInteger(championId) || championId <= 0) {
+      return { success: false, actionId, championId, error: 'Identificadores de acción/campeón inválidos.' };
+    }
+
+    if (typeof delayMs === 'number' && delayMs > 0) {
+      await new Promise((resolver) => setTimeout(resolver, delayMs));
+    }
+
+    try {
+      registrarLog(
+        `[ChampSelect][lockInChampion] Fase=${this.fase} acción=${actionId} campeón=${championId} -> PATCH ${ENDPOINTS_LCU.CHAMP_SELECT_ACTIONS}/${actionId} {championId, completed:true}`
+      );
+      await this.http.request<unknown>('PATCH', `${ENDPOINTS_LCU.CHAMP_SELECT_ACTIONS}/${actionId}`, {
+        championId,
+        completed: true,
+      });
+      registrarLog(`[ChampSelect][lockInChampion] PATCH enviado (acción ${actionId}, campeón ${championId})`);
+    } catch (error) {
+      const mensaje = error instanceof Error ? error.message : String(error);
+      registrarLog(`[ChampSelect][lockInChampion] ERROR al enviar PATCH acción ${actionId}: ${mensaje}`);
+      return { success: false, actionId, championId, error: mensaje };
+    }
+
+    try {
+      const sesion = await this.getChampSelectSession();
+      const accionConfirmada = sesion
+        ? (sesion.actions ?? [])
+            .flat()
+            .find((candidata) => candidata.id === actionId) ?? null
+        : null;
+
+      if (accionConfirmada && accionConfirmada.completed && accionConfirmada.championId === championId) {
+        registrarLog(
+          `[ChampSelect][lockInChampion] Confirmado: acción ${actionId} completada con campeón ${championId} (fase ${this.fase})`
+        );
+        return { success: true, actionId, championId };
+      }
+
+      const detalle = accionConfirmada
+        ? `completed=${accionConfirmada.completed}, championId=${accionConfirmada.championId}`
+        : 'acción no encontrada tras PATCH';
+      registrarLog(`[ChampSelect][lockInChampion] Confirmación fallida para acción ${actionId}: ${detalle}`);
+      return {
+        success: false,
+        actionId,
+        championId,
+        error: `No se confirmó el lock-in de la acción ${actionId}: ${detalle}`,
+      };
+    } catch (error) {
+      const mensaje = error instanceof Error ? error.message : String(error);
+      registrarLog(`[ChampSelect][lockInChampion] ERROR al confirmar con GET sesión: ${mensaje}`);
+      return { success: false, actionId, championId, error: mensaje };
+    }
+  }
+
+  /**
+   * Bloquea (lock-in) un ban en la acción de ban indicada.
+   * Ejecuta PATCH con completed: true, confirma con GET de la sesión y registra logs descriptivos.
+   */
+  async lockInBan(
+    actionId: number,
+    championId: number
+  ): Promise<{ success: boolean; actionId: number; championId: number; error?: string }> {
+    if (!Number.isInteger(actionId) || actionId <= 0 || !Number.isInteger(championId) || championId <= 0) {
+      return { success: false, actionId, championId, error: 'Identificadores de acción/campeón inválidos.' };
+    }
+
+    try {
+      registrarLog(
+        `[ChampSelect][lockInBan] Fase=${this.fase} acción=${actionId} campeón=${championId} -> PATCH ${ENDPOINTS_LCU.CHAMP_SELECT_ACTIONS}/${actionId} {championId, completed:true}`
+      );
+      await this.http.request<unknown>('PATCH', `${ENDPOINTS_LCU.CHAMP_SELECT_ACTIONS}/${actionId}`, {
+        championId,
+        completed: true,
+      });
+      registrarLog(`[ChampSelect][lockInBan] PATCH enviado (acción ${actionId}, campeón ${championId})`);
+    } catch (error) {
+      const mensaje = error instanceof Error ? error.message : String(error);
+      registrarLog(`[ChampSelect][lockInBan] ERROR al enviar PATCH acción ${actionId}: ${mensaje}`);
+      return { success: false, actionId, championId, error: mensaje };
+    }
+
+    try {
+      const sesion = await this.getChampSelectSession();
+      const accionConfirmada = sesion
+        ? (sesion.actions ?? [])
+            .flat()
+            .find((candidata) => candidata.id === actionId) ?? null
+        : null;
+
+      if (accionConfirmada && accionConfirmada.completed && accionConfirmada.championId === championId) {
+        registrarLog(
+          `[ChampSelect][lockInBan] Confirmado: acción ${actionId} completada con campeón ${championId} (fase ${this.fase})`
+        );
+        return { success: true, actionId, championId };
+      }
+
+      const detalle = accionConfirmada
+        ? `completed=${accionConfirmada.completed}, championId=${accionConfirmada.championId}`
+        : 'acción no encontrada tras PATCH';
+      registrarLog(`[ChampSelect][lockInBan] Confirmación fallida para acción ${actionId}: ${detalle}`);
+      return {
+        success: false,
+        actionId,
+        championId,
+        error: `No se confirmó el ban de la acción ${actionId}: ${detalle}`,
+      };
+    } catch (error) {
+      const mensaje = error instanceof Error ? error.message : String(error);
+      registrarLog(`[ChampSelect][lockInBan] ERROR al confirmar con GET sesión: ${mensaje}`);
+      return { success: false, actionId, championId, error: mensaje };
+    }
+  }
+
+  /**
+   * Obtiene el locale/configuración regional del cliente LCU normalizado a formato Data Dragon.
+   * Intenta varios endpoints de configuración del cliente Riot/LCU.
+   */
+  async getLocale(): Promise<string> {
+    const candidatos = [
+      '/riotclient/region-locale',
+      '/lol-client-config/v3/client-config/lol.client_settings.locale',
+      '/lol-client-config/v1/namespaces/lol.client_settings.locale',
+    ];
+
+    for (const endpoint of candidatos) {
+      try {
+        const datos = await this.http.request<unknown>('GET', endpoint);
+        const locale = this.normalizarLocale(datos);
+        if (locale) {
+          registrarLog(`[LcuClient] Locale detectado desde ${endpoint}: ${locale}`);
+          return locale;
+        }
+      } catch {
+        // Intentar siguiente candidato
+      }
+    }
+
+    registrarLog('[LcuClient] No se pudo detectar locale desde LCU; usando es_ES por defecto');
+    return 'es_ES';
+  }
+
+  private normalizarLocale(datos: unknown): string | null {
+    if (typeof datos === 'string') {
+      const normalizado = datos.replace('-', '_').trim();
+      if (normalizado) {
+        return normalizado;
+      }
+      return null;
+    }
+
+    if (!datos || typeof datos !== 'object') {
+      return null;
+    }
+
+    const obj = datos as Record<string, unknown>;
+    const candidatosClave = ['locale', 'language', 'lang', 'regionLocale'];
+    for (const clave of candidatosClave) {
+      const valor = obj[clave];
+      if (typeof valor === 'string') {
+        const normalizado = valor.replace('-', '_').trim();
+        if (normalizado) {
+          return normalizado;
+        }
+      }
+    }
+
+    return null;
+  }
+
   /** Establece los hechizos de invocador del jugador local en Champ Select. */
   async setSummonerSpells(spell1Id: number, spell2Id: number): Promise<void> {
     await this.http.request<unknown>('PATCH', ENDPOINTS_LCU.CHAMP_SELECT_MY_SELECTION, {

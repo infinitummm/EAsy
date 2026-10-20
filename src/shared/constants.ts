@@ -64,6 +64,7 @@ export const ROLE_LABELS: Record<Role, string> = {
 // Configuración por Defecto de la App
 // ==========================================
 export const DEFAULT_APP_SETTINGS = {
+  opggTier: 'emerald_plus' as const,
   autoAccept: {
     enabled: true,
     delaySeconds: 2,

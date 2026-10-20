@@ -279,7 +279,7 @@ export interface GeminiMatchupRecommendation {
     enemyThreats: string[];
     winCondition: string;
   };
-  source?: 'gemini' | 'fallback';
+  source?: 'gemini' | 'fallback' | 'opgg';
   modelUsed?: string;
   generatedAt?: string;
   fallbackReason?: string;
@@ -287,6 +287,10 @@ export interface GeminiMatchupRecommendation {
   sources?: GroundingSource[];
   groundingUsed?: boolean;
   researchNotes?: string;
+  opggData?: OpGgMatchupData;
+  dataSource?: 'opgg' | 'gemini_opgg' | 'fallback';
+  isPartialBuild?: boolean;
+  sampleSizeWarning?: string;
   debugInfo?: {
     rawPrompt?: string;
     rawResponse?: string;
@@ -347,12 +351,53 @@ export interface PersonalChampionStats {
   };
 }
 
+export interface OpGgRunePage {
+  primaryPageId: number;
+  primaryPageName: string;
+  primaryRuneIds: number[];
+  primaryRuneNames: string[];
+  secondaryPageId: number;
+  secondaryPageName: string;
+  secondaryRuneIds: number[];
+  secondaryRuneNames: string[];
+  statModIds: number[];
+  statModNames: string[];
+  play: number;
+  win: number;
+  pickRate: number;
+}
+
+export interface OpGgMatchupData {
+  myChampionId: number;
+  opponentChampionId: number;
+  position: Role;
+  patch: string;
+  elo: string;
+  updatedAt?: string;
+  runes: OpGgRunePage[];
+  starterItems: Array<{ ids: number[]; names: string[]; play: number; win: number; pickRate: number }>;
+  boots: Array<{ ids: number[]; names: string[]; play: number; win: number; pickRate: number }>;
+  coreItems: Array<{ ids: number[]; names: string[]; play: number; win: number; pickRate: number }>;
+  fourthItems?: Array<{ ids: number[]; names: string[]; play: number; win: number; pickRate: number }>;
+  fifthItems?: Array<{ ids: number[]; names: string[]; play: number; win: number; pickRate: number }>;
+  sixthItems?: Array<{ ids: number[]; names: string[]; play: number; win: number; pickRate: number }>;
+  summonerSpells: Array<{ ids: [number, number]; names: string[]; play: number; win: number; pickRate: number }>;
+  skillOrder: string[];
+  skillPriority: string[];
+  totalMatches: number;
+  isGeneralBuildFallback?: boolean;
+  opponentTip?: string;
+  laneAdvantage?: string;
+  counters?: Array<{ championId: number; championName: string; winRate: number; play: number }>;
+}
+
 export type BuildRecommendation = GeminiMatchupRecommendation['buildRecommendation'];
 
 // ==========================================
 // Configuración de la Aplicación
 // ==========================================
 export interface AppSettings {
+  opggTier?: 'all' | 'emerald_plus' | 'diamond_plus' | 'master_plus' | 'grandmaster' | 'challenger';
   autoAccept: {
     enabled: boolean;
     delaySeconds: number;

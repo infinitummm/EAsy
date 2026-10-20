@@ -58,6 +58,12 @@ export const api = {
     ipcRenderer.invoke(IPC_CHANNELS.PATCH_DIFF_GET, patch),
   getGroundingQuota: () =>
     ipcRenderer.invoke(IPC_CHANNELS.AI_GET_GROUNDING_QUOTA),
+  getOpGgMatchup: (params: { championId: number; opponentId: number; role: Role; patch?: string; elo?: string; forceRefresh?: boolean }) =>
+    ipcRenderer.invoke(IPC_CHANNELS.OPGG_GET_MATCHUP, params),
+  cleanAppAssets: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.LCU_CLEAN_APP_ASSETS),
+  getClientVersion: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.LCU_GET_CLIENT_VERSION),
 
   // Suscripción a Eventos de Main
   on: (channel: string, callback: (...args: any[]) => void) => {

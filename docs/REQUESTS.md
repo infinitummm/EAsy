@@ -327,3 +327,34 @@ Si OpenCode encuentra alguna ambigüedad técnica, inconsistencia o necesidad de
      - Mapeo bidireccional tolerante a nombres en el idioma del cliente y en inglés.
 - **Estado:** APROBADO
 - **Respuesta de Antigravity:** Aprobado. OpenCode implementa en el worktree hijo la detección de locale, carga de hechizos en Data Dragon y tests; Antigravity los consumirá en la UI.
+
+---
+
+### [REQ-022] Integración OP.GG MCP, Versión LCU vs Data Dragon, Limpieza Activos LCU y Validación de Builds
+- **Fecha:** 2026-10-20
+- **Tarea asociada:** T-OpGgMcp-AssetsClean
+- **Módulos afectados:** `src/main/opgg/OpGgClient.ts`, `src/main/lcu/ItemSetManager.ts`, `src/main/lcu/RuneManager.ts`, `src/main/lcu/LcuClient.ts`, `src/shared/types.ts`
+- **Problema encontrado:**
+  1. Gemini por sí solo no conoce el meta actual de parches recientes. Se requiere OP.GG MCP (`https://mcp-api.op.gg/mcp`) como fuente principal de estadísticas reales (runas, ítems, hechizos, orden de habilidades, counters y winrate).
+  2. Los parches de LoL en el cliente se nombran por año (`26.20`), mientras Data Dragon numera `16.20.x`. Se requiere comparar LCU `/system/v1/builds` con Data Dragon y normalizar la visualización y prompts a `Parche 26.20`.
+  3. Acumulación excesiva de item sets y páginas de runas en el cliente LoL. Se debe reutilizar una única página `[IL] Itero Local` y prefijo `[IL]` para conjuntos de objetos, limpiando duplicados antiguos al arrancar o importar.
+  4. Builds incompletas: exigir 3-4 core items, botas, iniciales, hasta 6 finales y 2 situacionales; validar contra Data Dragon y completar huecos con datos de OP.GG.
+- **Propuesta de solución / Firma requerida:**
+  1. `OpGgClient`: cliente Streamable HTTP JSON-RPC 2.0 hacia `https://mcp-api.op.gg/mcp`.
+     - `getChampionAnalysis(champion, position, tier, lang)`
+     - `getLaneMatchupGuide(position, myChampion, opponentChampion, lang)`
+     - Caché en SQLite con clave `opgg:{champion}:{position}:{rival}:{elo}:{patch}` (TTL 24h).
+     - Rate limiter / backoff y soporte de fallback honesto si OP.GG retorna 429 o error.
+     - Detección de muestra pequeña (umbral `< 50` partidas) recurriendo a build general de la posición.
+  2. `LcuClient.getClientVersion()`:
+     - Consulta `/system/v1/builds` y `/lol-patch/v1/game-version`.
+     - Compara con `DataDragonService.obtenerVersionActual()`.
+  3. `ItemSetManager` y `RuneManager`:
+     - Prefijo obligatorio `[IL] ` para todos los conjuntos de objetos creados por la app.
+     - Antes de crear uno nuevo, eliminar cualquier conjunto existente que comience con `[IL]`.
+     - Reutilizar UNA sola página de runas `[IL] Itero Local`, sobrescribiéndola o creando si no existe, eliminando páginas duplicadas con ese prefijo.
+     - Método `cleanAppAssets()` para limpiar páginas y sets de la app a petición del usuario.
+     - Verificación posterior con `GET` de LCU tras importar.
+- **Estado:** APROBADO
+- **Respuesta de Antigravity:** Aprobado. OpenCode desarrollará en su worktree `OpGgClient`, los métodos de versión de LCU, la limpieza de activos `[IL]` y las pruebas unitarias asociadas. Antigravity actualizará `src/shared/`, corregirá el bug de desmontaje del selector en Ajustes, adaptará los prompts de Gemini y la UI.
+

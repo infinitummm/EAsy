@@ -55,6 +55,9 @@ export const IPC_CHANNELS = {
   DDRAGON_REFRESH_DATA: 'ddragon:refresh-data',
   PATCH_DIFF_GET: 'patch-diff:get',
   AI_GET_GROUNDING_QUOTA: 'ai:get-grounding-quota',
+  OPGG_GET_MATCHUP: 'opgg:get-matchup',
+  LCU_CLEAN_APP_ASSETS: 'lcu:clean-app-assets',
+  LCU_GET_CLIENT_VERSION: 'lcu:get-client-version',
 } as const;
 
 // ==========================================
@@ -113,6 +116,16 @@ export interface IpcInvokeHandlers {
     pickableChampionIds?: number[];
     forceRefresh?: boolean;
   }) => Promise<any>;
+  [IPC_CHANNELS.OPGG_GET_MATCHUP]: (params: {
+    championId: number;
+    opponentId: number;
+    role: Role;
+    patch?: string;
+    elo?: string;
+    forceRefresh?: boolean;
+  }) => Promise<any>;
+  [IPC_CHANNELS.LCU_CLEAN_APP_ASSETS]: () => Promise<{ deletedItemSets: number; deletedRunePages: number; success: boolean }>;
+  [IPC_CHANNELS.LCU_GET_CLIENT_VERSION]: () => Promise<{ clientVersion?: string; ddragonVersion: string; matches: boolean; displayPatch: string }>;
 }
 
 // ==========================================

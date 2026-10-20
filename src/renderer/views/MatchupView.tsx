@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { GeminiMatchupRecommendation, Role, RunePage } from '../../shared/types';
+import { GeminiMatchupRecommendation, Role, RunePage, PatchDiffSummary, GroundingSource, ConfidenceLevel } from '../../shared/types';
 import { BuildVisualizer } from '../components/BuildVisualizer';
 import { ChampionSelectInput } from '../components/ChampionSelectInput';
 import { getChampionName, getChampionIconUrl } from '../../shared/champions';
@@ -34,19 +34,41 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
   const [importStatus, setImportStatus] = useState<'idle' | 'importing' | 'success' | 'error'>('idle');
   const [importMsg, setImportMsg] = useState<string>('');
   const [showDebug, setShowDebug] = useState<boolean>(false);
+  const [patchDiff, setPatchDiff] = useState<PatchDiffSummary | null>(null);
+  const [showPatchDiff, setShowPatchDiff] = useState<boolean>(false);
+  const [groundingQuota, setGroundingQuota] = useState<{
+    groundingAvailable: boolean;
+    quotaNote: string;
+    groundingUsedToday: number;
+    standardRequestsToday: number;
+    standardDailyLimit: number;
+  } | null>(null);
 
   const lastAnalyzedKeyRef = useRef<string>('');
 
-  // Obtener el parche real detectado por Data Dragon al montar
+  // Obtener el parche real detectado por Data Dragon y cuota al montar
   useEffect(() => {
     if (window.api && window.api.getPatchVersion) {
       window.api.getPatchVersion().then((detected) => {
         if (detected) {
           setActivePatch(detected);
+          if (window.api.getPatchDiff) {
+            window.api.getPatchDiff(detected).then(setPatchDiff).catch(() => {});
+          }
         }
       }).catch(() => {});
     }
+    if (window.api && window.api.getGroundingQuota) {
+      window.api.getGroundingQuota().then(setGroundingQuota).catch(() => {});
+    }
   }, []);
+
+  // Recargar patch diff si el parche activo cambia
+  useEffect(() => {
+    if (window.api && window.api.getPatchDiff && activePatch) {
+      window.api.getPatchDiff(activePatch).then(setPatchDiff).catch(() => {});
+    }
+  }, [activePatch]);
 
   // Sincronizar campeón propio
   useEffect(() => {
@@ -202,9 +224,31 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
             <h2 className="text-xl font-bold text-white tracking-wide">
               ENFRENTAMIENTO DIRECTO EN LÍNEA
             </h2>
-            <p className="text-xs text-[#94A3B8] mt-1">
-              Build de objetos in-game, runas completas y tácticas para el parche <span className="text-[#60A5FA] font-bold">{activePatch}</span>.
-            </p>
+            <div className="flex flex-wrap items-center gap-2 mt-1.5">
+              <span className="text-xs text-[#94A3B8]">
+                Parche: <span className="text-[#60A5FA] font-bold">{activePatch}</span>
+              </span>
+              <span className="text-xs text-[#475569]">•</span>
+              <span
+                className="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded bg-[#0A111F] border border-[#1E355B] text-[11px] text-[#CBD5E1]"
+                title={groundingQuota?.quotaNote || 'Google AI Studio: Búsqueda web requiere facturación, generación de texto estándar es ilimitada (1500 req/día)'}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-[#3B82F6]"></span>
+                <span>Grounding: <strong className="text-white">{groundingQuota?.groundingUsedToday ?? 0}</strong> hoy</span>
+                <span className="text-[#64748B]">|</span>
+                <span>Texto IA: <strong className="text-[#10B981]">{groundingQuota?.standardRequestsToday ?? 0}</strong>/1500</span>
+              </span>
+              {patchDiff && (
+                <button
+                  type="button"
+                  onClick={() => setShowPatchDiff(!showPatchDiff)}
+                  className="text-[11px] text-[#F5A623] hover:text-white underline font-semibold flex items-center space-x-1 ml-1"
+                >
+                  <span>Cambios parche {activePatch} ({patchDiff.removedItems.length} eliminados)</span>
+                  <span>{showPatchDiff ? '▲' : '▼'}</span>
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center space-x-3">
@@ -221,18 +265,18 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
               </span>
             </label>
 
-            {/* Botón de Regenerar Análisis (fuerza llamada fresca a Gemini ignorando caché) */}
+            {/* Botón de Regenerar Análisis con Datos Frescos (fuerza llamada fresca ignorando caché) */}
             <button
               onClick={() => fetchAdvice(championId, opponentId, role, true)}
               disabled={loading || championId <= 0 || opponentId <= 0}
-              title="Ignora la caché y genera una consulta nueva a Gemini"
+              title="Fuerza una re-investigación ignorando la caché para obtener datos frescos del meta"
               className="px-3.5 py-2.5 bg-[#11223F] hover:bg-[#1A335B] text-white disabled:opacity-40 font-bold text-xs uppercase tracking-wider rounded border border-[#1E355B] hover:border-[#0070EB] transition-all flex items-center space-x-1.5 transform -skew-x-6 active:scale-95"
             >
               <div className="transform skew-x-6 flex items-center space-x-1.5">
                 <svg className={`w-3.5 h-3.5 text-[#60A5FA] ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
-                <span>REGENERAR</span>
+                <span>REGENERAR CON DATOS FRESCOS</span>
               </div>
             </button>
 
@@ -326,6 +370,92 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
             </select>
           </div>
         </div>
+
+        {/* Desplegable de Cambios Clave del Parche (Capa 1) */}
+        {showPatchDiff && patchDiff && (
+          <div className="mt-4 pt-4 border-t border-[#1E355B] bg-[#0A111F]/70 p-4 rounded-lg space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <span className="w-2 h-2 rounded-full bg-[#F5A623]"></span>
+                <span className="text-xs font-bold text-white uppercase tracking-wider">
+                  Diferencial Data Dragon: Parche {patchDiff.previousPatch} → {patchDiff.currentPatch}
+                </span>
+              </div>
+              <span className="px-2 py-0.5 bg-[#10B981]/15 text-[#10B981] text-[10px] font-bold rounded border border-[#10B981]/40">
+                FILTRO DETERMINISTA ACTIVO
+              </span>
+            </div>
+            
+            <p className="text-[11px] text-[#94A3B8]">
+              Capa 1 sin cuota: Los objetos o runas eliminados se bloquean deterministamente para que la IA nunca los recomiende.
+            </p>
+
+            {patchDiff.removedItems.length > 0 && (
+              <div>
+                <span className="text-[11px] font-bold text-[#F87171] uppercase block mb-1">
+                  Objetos Eliminados en este parche ({patchDiff.removedItems.length}):
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {patchDiff.removedItems.map(item => (
+                    <span key={item.id} className="px-2 py-0.5 bg-[#D92546]/15 border border-[#D92546]/50 text-[#F87171] rounded text-[11px] font-medium">
+                      ✕ {item.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {patchDiff.changedItems.length > 0 && (
+              <div>
+                <span className="text-[11px] font-bold text-[#F5A623] uppercase block mb-1">
+                  Objetos Modificados ({patchDiff.changedItems.length}):
+                </span>
+                <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
+                  {patchDiff.changedItems.slice(0, 15).map(item => (
+                    <span key={item.id} className="px-2 py-0.5 bg-[#11223F] border border-[#1E355B] text-[#CBD5E1] rounded text-[11px]" title={item.changes?.join('; ') || ''}>
+                      {item.changeType === 'added' ? '★ ' : '✎ '}{item.name}
+                    </span>
+                  ))}
+                  {patchDiff.changedItems.length > 15 && (
+                    <span className="text-[11px] text-[#94A3B8] self-center">
+                      +{patchDiff.changedItems.length - 15} más...
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {patchDiff.removedRunes.length > 0 && (
+              <div>
+                <span className="text-[11px] font-bold text-[#F87171] uppercase block mb-1">
+                  Runas Eliminadas ({patchDiff.removedRunes.length}):
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {patchDiff.removedRunes.map(rune => (
+                    <span key={rune.id} className="px-2 py-0.5 bg-[#D92546]/15 border border-[#D92546]/50 text-[#F87171] rounded text-[11px]">
+                      ✕ {rune.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {patchDiff.newChampions.length > 0 && (
+              <div>
+                <span className="text-[11px] font-bold text-[#10B981] uppercase block mb-1">
+                  Nuevos Campeones:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {patchDiff.newChampions.map(name => (
+                    <span key={name} className="px-2 py-0.5 bg-[#10B981]/15 border border-[#10B981]/50 text-[#10B981] rounded text-[11px] font-bold">
+                      ★ {name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {error && (
@@ -357,22 +487,77 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
             </button>
           </div>
         ) : (
-          <div className="bg-[#10B981]/15 border border-[#10B981]/40 px-4 py-2.5 rounded-xl text-xs flex items-center justify-between text-white">
-            <div className="flex items-center space-x-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#10B981] animate-pulse"></span>
-              <span className="font-bold text-[#10B981] uppercase tracking-wide">
-                IA: {recommendation.modelUsed || 'Gemini 3.5 Flash'}
-              </span>
-              <span className="text-[#94A3B8]">
-                • Generado en vivo ({recommendation.generatedAt ? new Date(recommendation.generatedAt).toLocaleTimeString() : 'reciente'})
-              </span>
+          <div className="bg-[#0A111F] border border-[#1E355B] p-4 rounded-xl space-y-2.5 text-xs text-white">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[#1E355B]/60">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Badge de Nivel de Confianza (Capa 4) */}
+                {recommendation.confidenceLevel === 'verified' ? (
+                  <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-[#10B981]/20 border border-[#10B981] text-[#10B981] font-bold text-[11px] tracking-wide">
+                    <span className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse"></span>
+                    <span>VERIFICADO (Grounding Web en vivo)</span>
+                  </span>
+                ) : recommendation.confidenceLevel === 'general' ? (
+                  <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-[#F5A623]/20 border border-[#F5A623] text-[#F5A623] font-bold text-[11px] tracking-wide">
+                    <span className="w-2 h-2 rounded-full bg-[#F5A623]"></span>
+                    <span>GENERAL (Data Dragon + Partidas Locales)</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-[#64748B]/20 border border-[#64748B] text-[#94A3B8] font-bold text-[11px] tracking-wide">
+                    <span className="w-2 h-2 rounded-full bg-[#64748B]"></span>
+                    <span>ESCASO (Datos mínimos)</span>
+                  </span>
+                )}
+
+                <span className="text-[#94A3B8] font-medium">
+                  • Parche: <strong className="text-white">{recommendation.patchVersion || activePatch}</strong>
+                </span>
+
+                <span className="text-[#94A3B8]">
+                  • Modelo: <strong className="text-[#60A5FA]">{recommendation.modelUsed || 'gemini-3.5-flash'}</strong>
+                </span>
+
+                <span className="text-[#94A3B8]">
+                  • {recommendation.generatedAt ? new Date(recommendation.generatedAt).toLocaleTimeString() : 'Reciente'}
+                </span>
+              </div>
+
+              <button
+                onClick={() => setShowDebug(!showDebug)}
+                className="text-[11px] text-[#60A5FA] hover:text-white underline font-semibold self-start sm:self-auto"
+              >
+                {showDebug ? 'Ocultar Depuración IA ▲' : 'Ver Depuración IA ▼'}
+              </button>
             </div>
-            <button
-              onClick={() => setShowDebug(!showDebug)}
-              className="text-[11px] text-[#60A5FA] hover:text-white underline font-semibold"
-            >
-              {showDebug ? 'Ocultar Depuración IA ▲' : 'Ver Depuración IA ▼'}
-            </button>
+
+            {/* Aviso transparente si no se utilizó Grounding en vivo por cuota */}
+            {!recommendation.groundingUsed && (
+              <div className="bg-[#11223F] p-2.5 rounded border border-[#1E355B] text-[11px] text-[#CBD5E1] flex items-center space-x-2">
+                <span className="text-sm">ℹ️</span>
+                <span>
+                  <strong>Transparencia de cuota:</strong> Búsqueda web en vivo no ejecutada por límite de cuota en nivel gratuito (HTTP 429). Se garantizan datos reales del parche mediante Data Dragon determinista y tus partidas locales.
+                </span>
+              </div>
+            )}
+
+            {/* Fuentes consultadas con enlaces clickeables */}
+            {recommendation.sources && recommendation.sources.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <span className="text-[11px] text-[#94A3B8] font-semibold">Fuentes consultadas:</span>
+                {recommendation.sources.map((src, i) => (
+                  <a
+                    key={i}
+                    href={src.uri}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2 py-0.5 rounded bg-[#060D17] border border-[#1E355B] text-[11px] text-[#60A5FA] hover:text-white hover:border-[#60A5FA] transition flex items-center space-x-1"
+                    title={src.uri}
+                  >
+                    <span>🌐</span>
+                    <span className="max-w-[200px] truncate">{src.title || src.uri}</span>
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
         )
       )}
@@ -610,8 +795,33 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
                     <span className="text-[#60A5FA] font-bold block mb-1">ESTADO DE VALIDACIÓN:</span>
                     <p className="text-[#10B981]">{recommendation.debugInfo?.validationStatus || 'Validado con Data Dragon'}</p>
                     <p className="text-[#94A3B8] mt-1">Importación LoL: {importMsg || 'Listo'}</p>
+                    <p className="text-[#CBD5E1] mt-1">Fuentes web detectadas: <strong className="text-[#60A5FA]">{recommendation.debugInfo?.groundingSourcesFound ?? recommendation.sources?.length ?? 0}</strong></p>
                   </div>
                 </div>
+
+                {/* Paso 1: Investigación Cruda de Meta (Grounding o Fallback Local) */}
+                {(recommendation.debugInfo?.rawResearchResponse || recommendation.researchNotes) && (
+                  <div className="bg-[#060D17] p-3 rounded border border-[#1E355B]">
+                    <span className="text-[#60A5FA] font-bold block mb-1">
+                      PASO 1: INVESTIGACIÓN DEL META ({recommendation.groundingUsed ? 'Google Search Grounding en vivo' : 'Metadatos Locales de Parche'}):
+                    </span>
+                    <pre className="max-h-40 overflow-y-auto p-2 bg-[#0A111F] rounded text-[11px] text-[#A5B4FC] whitespace-pre-wrap">
+                      {recommendation.debugInfo?.rawResearchResponse || recommendation.researchNotes}
+                    </pre>
+                  </div>
+                )}
+
+                {/* Ítems bloqueados deterministamente por Patch Diff (Capa 1) */}
+                {patchDiff && patchDiff.removedItems.length > 0 && (
+                  <div className="bg-[#060D17] p-3 rounded border border-[#1E355B]">
+                    <span className="text-[#F87171] font-bold block mb-1">
+                      CAPA 1: ÍTEMS ELIMINADOS EN EL PARCHE {patchDiff.currentPatch} (BLOQUEADOS DETERMINISTAMENTE):
+                    </span>
+                    <p className="text-[#94A3B8] text-[11px]">
+                      {patchDiff.removedItems.map(i => i.name).join(', ')}
+                    </p>
+                  </div>
+                )}
 
                 {recommendation.debugInfo?.resolvedRunes && (
                   <div className="bg-[#060D17] p-3 rounded border border-[#1E355B]">

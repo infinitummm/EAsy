@@ -54,6 +54,10 @@ export const api = {
   getPatchVersion: (): Promise<string> => ipcRenderer.invoke(IPC_CHANNELS.DDRAGON_GET_PATCH),
   refreshDataDragon: (): Promise<{ patch: string; championsCount: number }> =>
     ipcRenderer.invoke(IPC_CHANNELS.DDRAGON_REFRESH_DATA),
+  getPatchDiff: (patch?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.PATCH_DIFF_GET, patch),
+  getGroundingQuota: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.AI_GET_GROUNDING_QUOTA),
 
   // Suscripción a Eventos de Main
   on: (channel: string, callback: (...args: any[]) => void) => {

@@ -5,7 +5,14 @@
  * Propiedad exclusiva de ANTIGRAVITY.
  */
 
-import { GeminiMatchupRecommendation, Role } from '../../shared/types';
+import {
+  GeminiMatchupRecommendation,
+  Role,
+  PatchDiffSummary,
+  PersonalChampionStats,
+  GroundingSource,
+  ConfidenceLevel,
+} from '../../shared/types';
 import { IDatabaseService } from '../../shared/contracts';
 import {
   buildMatchupPrompt,
@@ -13,9 +20,12 @@ import {
   validateGeminiMatchupResponse,
   buildDraftRecommendationPrompt,
   validateGeminiDraftResponse,
+  buildInvestigationPrompt,
+  buildTwoStepStructuredPrompt,
 } from './prompts';
 import { getAccurateFallbackRecommendation } from '../../shared/buildDatabase';
 import { DataDragonTranslator, RawGeminiRecommendation } from '../riot/DataDragonTranslator';
+import { PatchDiffService } from '../riot/PatchDiffService';
 import { registrarLog } from '../lcu/LcuDetector';
 import { ALL_CHAMPIONS, getChampionName, getChampionById } from '../../shared/champions';
 
@@ -25,6 +35,7 @@ export interface GeminiServiceOptions {
   fallbackModel?: string;
   dbService?: IDatabaseService;
   translator?: DataDragonTranslator;
+  patchDiffService?: PatchDiffService;
   baseUrl?: string;
   maxRetries?: number;
   initialBackoffMs?: number;
@@ -37,10 +48,14 @@ export class GeminiService {
   private fallbackModel: string;
   private dbService?: IDatabaseService;
   private translator?: DataDragonTranslator;
+  private patchDiffService?: PatchDiffService;
   private baseUrl: string;
   private maxRetries: number;
   private initialBackoffMs: number;
   private requestTimeoutMs: number;
+
+  // Contador de uso de Grounding para monitoreo de cuota
+  private groundingUsedToday = 0;
 
   // Caché en memoria L1
   private memoryCache = new Map<string, { data: GeminiMatchupRecommendation; expiresAt: number }>();
@@ -55,6 +70,7 @@ export class GeminiService {
     this.fallbackModel = options.fallbackModel || 'gemini-3.1-flash-lite';
     this.dbService = options.dbService;
     this.translator = options.translator;
+    this.patchDiffService = options.patchDiffService;
     this.baseUrl = options.baseUrl || 'https://generativelanguage.googleapis.com/v1beta';
     this.maxRetries = options.maxRetries ?? 2;
     this.initialBackoffMs = options.initialBackoffMs ?? 1500;
@@ -73,12 +89,40 @@ export class GeminiService {
     this.translator = translator;
   }
 
+  public setPatchDiffService(service: PatchDiffService): void {
+    this.patchDiffService = service;
+  }
+
   public getModel(): string {
     return this.model;
   }
 
   public setModel(model: string): void {
     this.model = model;
+  }
+
+  /**
+   * Proporciona el estado actual de consumo y disponibilidad de la cuota de Google Search Grounding.
+   */
+  public getGroundingQuotaStatus(): {
+    groundingAvailable: boolean;
+    quotaNote: string;
+    groundingUsedToday: number;
+    standardRequestsToday: number;
+    standardDailyLimit: number;
+  } {
+    const standardRequestsToday = this.dbService
+      ? this.dbService.getApiCallCount('GEMINI', 24 * 60 * 60 * 1000)
+      : this.groundingUsedToday;
+
+    return {
+      groundingAvailable: false, // En cuentas free-tier sin facturación vinculada la cuota asignada por Google AI Studio es 0
+      quotaNote:
+        'En el nivel gratuito de Google AI Studio sin tarjeta de facturación, la cuota de Búsqueda de Google (Grounding) es de 0 peticiones/día (HTTP 429). Al vincular facturación, Google otorga 5,000 búsquedas gratuitas/mes. La generación de texto estándar funciona sin costo con 15 RPM / 1,500 RPD.',
+      groundingUsedToday: this.groundingUsedToday,
+      standardRequestsToday,
+      standardDailyLimit: 1500,
+    };
   }
 
   /**
@@ -259,7 +303,101 @@ export class GeminiService {
   }
 
   /**
+   * Ejecuta la llamada REST para el Paso 1: Investigación con Google Search Grounding.
+   */
+  private async executeGroundingResearch(
+    modelName: string,
+    systemInstruction: string,
+    userPrompt: string
+  ): Promise<{
+    status: number;
+    text?: string;
+    sources: GroundingSource[];
+    groundingUsed: boolean;
+    error?: string;
+  }> {
+    await this.respectRateLimit();
+
+    const url = `${this.baseUrl}/models/${modelName}:generateContent?key=${this.apiKey}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.requestTimeoutMs);
+
+    const payload = {
+      systemInstruction: {
+        parts: [{ text: systemInstruction }],
+      },
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: userPrompt }],
+        },
+      ],
+      tools: [
+        {
+          google_search: {},
+        },
+      ],
+      generationConfig: {
+        temperature: 0.2,
+        maxOutputTokens: 1500,
+      },
+    };
+
+    try {
+      registrarLog(`[GeminiService] Paso 1: Investigando meta actual con Google Search Grounding en ${modelName}...`);
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      const status = response.status;
+
+      if (response.ok) {
+        const json = (await response.json()) as {
+          candidates?: Array<{
+            content?: { parts?: Array<{ text?: string }> };
+            groundingMetadata?: {
+              groundingChunks?: Array<{ web?: { uri?: string; title?: string } }>;
+            };
+          }>;
+        };
+        const candidate = json?.candidates?.[0];
+        const rawText = candidate?.content?.parts?.map((p) => p.text).filter(Boolean).join('\n') || '';
+        const groundingMetadata = candidate?.groundingMetadata;
+        const sources: GroundingSource[] = [];
+
+        if (groundingMetadata?.groundingChunks) {
+          for (const chunk of groundingMetadata.groundingChunks) {
+            if (chunk.web?.uri) {
+              sources.push({
+                title: chunk.web.title || chunk.web.uri,
+                uri: chunk.web.uri,
+              });
+            }
+          }
+        }
+
+        registrarLog(`[GeminiService] Paso 1 exitoso. ${sources.length} fuentes web de búsqueda detectadas.`);
+        return { status, text: rawText, sources, groundingUsed: true };
+      }
+
+      const errorText = await response.text();
+      registrarLog(`[GeminiService Paso 1 Grounding] ${modelName} devolvió HTTP ${status}: ${errorText.substring(0, 200)}`);
+      return { status, sources: [], groundingUsed: false, error: errorText };
+    } catch (err: unknown) {
+      clearTimeout(timeoutId);
+      const msg = err instanceof Error ? err.message : String(err);
+      registrarLog(`[GeminiService Paso 1 Grounding ERROR]: ${msg}`);
+      return { status: 0, sources: [], groundingUsed: false, error: msg };
+    }
+  }
+
+  /**
    * Ejecuta la llamada REST con backoff exponencial, fallback de modelo y validación Data Dragon.
+   * Orquesta la arquitectura de dos pasos: Paso 1 Investigación (Grounding) y Paso 2 JSON estructurado.
    */
   private async callGeminiWithRetry(params: {
     championId: number;
@@ -271,9 +409,85 @@ export class GeminiService {
     allies?: number[];
     enemies?: number[];
   }): Promise<GeminiMatchupRecommendation> {
-    const { systemInstruction, userPrompt } = buildMatchupPrompt(params);
+    const championName = params.championName || getChampionName(params.championId);
+    const opponentName = params.opponentName || getChampionName(params.opponentId);
 
-    // Lista de modelos a probar: modelo principal (ej: gemini-3.5-flash), luego fallback (gemini-3.1-flash-lite)
+    // Capa 1: Comparación de parches con Data Dragon (determinar eliminados/modificados)
+    let patchDiff: PatchDiffSummary | undefined;
+    if (this.patchDiffService && params.patch) {
+      try {
+        patchDiff = await this.patchDiffService.compararParches(params.patch);
+      } catch (diffErr) {
+        registrarLog(`[GeminiService] No se pudo obtener patch diff para ${params.patch}: ${diffErr}`);
+      }
+    }
+
+    // Capa 3: Estadísticas personales de partidas locales Match-V5
+    let personalStats: PersonalChampionStats | undefined;
+    if (this.dbService) {
+      try {
+        const accounts = this.dbService.getAccounts();
+        const puuid = accounts[0]?.puuid;
+        if (puuid) {
+          personalStats = this.dbService.getPersonalChampionStats(puuid, params.championId, params.opponentId) ?? undefined;
+        }
+      } catch (statsErr) {
+        registrarLog(`[GeminiService] No se pudieron obtener stats personales: ${statsErr}`);
+      }
+    }
+
+    // Capa 2 - Paso 1: Investigación con Grounding (o fallback local transparente si cuota 429)
+    const invPrompt = buildInvestigationPrompt({
+      championName,
+      opponentName,
+      role: params.role,
+      patch: params.patch,
+      patchDiff,
+      personalStats,
+    });
+
+    let researchText = '';
+    let sources: GroundingSource[] = [];
+    let groundingUsed = false;
+    let confidenceLevel: ConfidenceLevel = 'general';
+
+    const groundingResult = await this.executeGroundingResearch(
+      this.model,
+      invPrompt.systemInstruction,
+      invPrompt.userPrompt
+    );
+
+    if (groundingResult.status === 200 && groundingResult.text) {
+      researchText = groundingResult.text;
+      sources = groundingResult.sources;
+      groundingUsed = groundingResult.groundingUsed;
+      confidenceLevel = sources.length > 0 ? 'verified' : 'general';
+      this.groundingUsedToday++;
+      registrarLog(`[GeminiService] Paso 1 (Grounding) completado. Fuentes encontradas: ${sources.length}`);
+    } else {
+      groundingUsed = false;
+      sources = [];
+      confidenceLevel = personalStats && personalStats.totalGames >= 3 ? 'general' : 'sparse';
+      researchText = `Investigación local de contingencia: La búsqueda web en vivo con Google Search no se ejecutó debido a la restricción de cuota de Gemini API (HTTP ${groundingResult.status}: cuota diaria de grounding limitada en free tier sin tarjeta de facturación). Se aplican estrictamente los metadatos oficiales del parche ${params.patch} de Data Dragon y estadísticas locales.`;
+      registrarLog(`[GeminiService] Grounding no disponible (HTTP ${groundingResult.status}). Activando análisis local honesto.`);
+    }
+
+    // Capa 2 - Paso 2: Generación estructurada con esquema estricto (sin herramientas para evitar conflicto)
+    const structuredPrompt = buildTwoStepStructuredPrompt({
+      championId: params.championId,
+      championName,
+      opponentId: params.opponentId,
+      opponentName,
+      role: params.role,
+      patch: params.patch,
+      researchText,
+      sources,
+      patchDiff,
+      personalStats,
+      allies: params.allies,
+      enemies: params.enemies,
+    });
+
     const modelsToTry = [this.model];
     if (this.fallbackModel && this.fallbackModel !== this.model) {
       modelsToTry.push(this.fallbackModel);
@@ -286,7 +500,11 @@ export class GeminiService {
       let delay = this.initialBackoffMs;
 
       while (attempt <= this.maxRetries) {
-        const reqResult = await this.executeGeminiRequest(modelToUse, systemInstruction, userPrompt);
+        const reqResult = await this.executeGeminiRequest(
+          modelToUse,
+          structuredPrompt.systemInstruction,
+          structuredPrompt.userPrompt
+        );
 
         if (reqResult.text) {
           let parsed: unknown;
@@ -298,33 +516,67 @@ export class GeminiService {
             continue;
           }
 
-          // Si disponemos de DataDragonTranslator, traducir y validar nombres a IDs oficiales
+          // Validación determinista contra elementos eliminados (Capa 1)
+          let diffCheckValido = true;
+          let diffMensajeError = '';
+          if (this.patchDiffService && patchDiff) {
+            const rawRec = parsed as RawGeminiRecommendation;
+            const itemCandidates: string[] = [
+              ...(Array.isArray(rawRec.buildRecommendation?.startingItems) ? rawRec.buildRecommendation.startingItems.map(String) : []),
+              rawRec.buildRecommendation?.boots ? String(rawRec.buildRecommendation.boots) : '',
+              ...(Array.isArray(rawRec.buildRecommendation?.coreItems) ? rawRec.buildRecommendation.coreItems.map(String) : []),
+              ...(Array.isArray(rawRec.buildRecommendation?.situationalItems) ? rawRec.buildRecommendation.situationalItems.map((s) => String(s?.itemName || s?.itemId || '')) : []),
+            ].filter(Boolean);
+
+            const runeCandidates: string[] = [
+              rawRec.runesRecommendation?.keystoneName ? String(rawRec.runesRecommendation.keystoneName) : '',
+              ...(Array.isArray(rawRec.runesRecommendation?.primaryRunes) ? rawRec.runesRecommendation.primaryRunes.map(String) : []),
+              ...(Array.isArray(rawRec.runesRecommendation?.secondaryRunes) ? rawRec.runesRecommendation.secondaryRunes.map(String) : []),
+            ].filter(Boolean);
+
+            const diffCheck = this.patchDiffService.validarSinElementosEliminados(itemCandidates, runeCandidates, patchDiff);
+            if (!diffCheck.valido) {
+              diffCheckValido = false;
+              diffMensajeError = `Se detectaron objetos o runas ELIMINADOS en el parche ${params.patch}: ${[...diffCheck.itemsInvalidos, ...diffCheck.runasInvalidas].join(', ')}. Prohibido recomendarlos.`;
+              registrarLog(`[GeminiService] ${diffMensajeError}. Disparando reintento correctivo...`);
+            }
+          }
+
+          // Si dispone de DataDragonTranslator, traducir y validar
           if (this.translator) {
             try {
               await this.translator.initialize(params.patch);
               const validRes = this.translator.translateAndValidate(parsed as RawGeminiRecommendation);
 
-              if (validRes.valid && validRes.recommendation) {
+              if (validRes.valid && validRes.recommendation && diffCheckValido) {
                 const rec = validRes.recommendation;
                 rec.source = 'gemini';
                 rec.modelUsed = modelToUse;
                 rec.generatedAt = new Date().toISOString();
+                rec.confidenceLevel = confidenceLevel;
+                rec.sources = sources;
+                rec.groundingUsed = groundingUsed;
+                rec.researchNotes = researchText.substring(0, 500);
                 rec.debugInfo = {
-                  rawPrompt: userPrompt,
+                  rawPrompt: structuredPrompt.userPrompt,
                   rawResponse: reqResult.text,
-                  validationStatus: 'Validado con Data Dragon exitosamente',
+                  researchPrompt: invPrompt.userPrompt,
+                  rawResearchResponse: researchText,
+                  groundingSourcesFound: sources.length,
+                  validationStatus: 'Validado con Data Dragon exitosamente (Sin elementos eliminados)',
                   resolvedRunes: validRes.resolvedRunes,
-                  resolvedItems: validRes.resolvedItems
+                  resolvedItems: validRes.resolvedItems,
                 };
                 return rec;
               }
 
-              // Si falló la validación inicial, realizar un ÚNICO reintento correctivo con prompt enfocado
-              registrarLog(`[GeminiService] Validación Data Dragon falló: ${validRes.error}. Ejecutando reintento correctivo...`);
+              // Reintento correctivo si falló traducción o contenía eliminados
+              const errorParaCorreccion = !diffCheckValido ? diffMensajeError : (validRes.error || 'Nombres de runas u objetos no reconocidos');
+              registrarLog(`[GeminiService] Corrección requerida: ${errorParaCorreccion}. Ejecutando reintento...`);
               const correction = buildCorrectionPrompt({
-                originalPrompt: userPrompt,
+                originalPrompt: structuredPrompt.userPrompt,
                 rawResponseText: reqResult.text,
-                validationError: validRes.error || 'Nombres de runas u objetos no reconocidos'
+                validationError: errorParaCorreccion,
               });
 
               const retryResult = await this.executeGeminiRequest(modelToUse, correction.systemInstruction, correction.userPrompt);
@@ -337,12 +589,19 @@ export class GeminiService {
                     rec.source = 'gemini';
                     rec.modelUsed = modelToUse;
                     rec.generatedAt = new Date().toISOString();
+                    rec.confidenceLevel = confidenceLevel;
+                    rec.sources = sources;
+                    rec.groundingUsed = groundingUsed;
+                    rec.researchNotes = researchText.substring(0, 500);
                     rec.debugInfo = {
                       rawPrompt: correction.userPrompt,
                       rawResponse: retryResult.text,
+                      researchPrompt: invPrompt.userPrompt,
+                      rawResearchResponse: researchText,
+                      groundingSourcesFound: sources.length,
                       validationStatus: 'Corregido y validado tras reintento',
                       resolvedRunes: retryValid.resolvedRunes,
-                      resolvedItems: retryValid.resolvedItems
+                      resolvedItems: retryValid.resolvedItems,
                     };
                     registrarLog(`[GeminiService] Reintento correctivo exitoso con ${modelToUse}.`);
                     return rec;
@@ -354,22 +613,29 @@ export class GeminiService {
             }
           }
 
-          // Si no hay traductor pero pasa la validación directa
+          // Si no hay traductor pero pasa la validación directa estructural
           if (validateGeminiMatchupResponse(parsed)) {
             const rec = parsed as GeminiMatchupRecommendation;
             rec.source = 'gemini';
             rec.modelUsed = modelToUse;
             rec.generatedAt = new Date().toISOString();
+            rec.confidenceLevel = confidenceLevel;
+            rec.sources = sources;
+            rec.groundingUsed = groundingUsed;
+            rec.researchNotes = researchText.substring(0, 500);
             rec.debugInfo = {
-              rawPrompt: userPrompt,
+              rawPrompt: structuredPrompt.userPrompt,
               rawResponse: reqResult.text,
-              validationStatus: 'Validación estructural directa aprobada'
+              researchPrompt: invPrompt.userPrompt,
+              rawResearchResponse: researchText,
+              groundingSourcesFound: sources.length,
+              validationStatus: 'Validación estructural directa aprobada',
             };
             return rec;
           }
         }
 
-        // Manejo de errores de cuota o servidor (429, 500, 503)
+        // Manejo de errores de cuota o servidor
         if (reqResult.status === 429 || (reqResult.status >= 500 && reqResult.status < 600)) {
           attempt++;
           if (attempt > this.maxRetries) break;
@@ -379,13 +645,12 @@ export class GeminiService {
           continue;
         }
 
-        // Si es 404 (modelo no disponible) u otro error no recuperable, saltar al siguiente modelo
         lastError = reqResult.error || `HTTP ${reqResult.status}`;
         break;
       }
     }
 
-    // Si fallaron todos los modelos y reintentos, generar recomendación honesta de contingencia
+    // Fallback honesto si falló la IA
     registrarLog(`[GeminiService] Todos los intentos de IA fallaron. Motivo: ${lastError}`);
     return this.createFallbackRecommendation(params, `Fallo en IA: ${lastError || 'Modelo no disponible'}`);
   }
@@ -437,6 +702,9 @@ export class GeminiService {
       ...fallback,
       source: 'fallback',
       fallbackReason: reason,
+      confidenceLevel: 'sparse',
+      groundingUsed: false,
+      sources: [],
       generatedAt: new Date().toISOString(),
       debugInfo: {
         validationStatus: `Fallback activo: ${reason}`

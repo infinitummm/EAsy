@@ -212,5 +212,101 @@ ${JSON.stringify(mockRecommendation)}
       expect(invalid).toBe(false);
       expect(tooShort).toBe(false);
     });
+
+    it('getGroundingQuotaStatus reporta cuota transparente para cuenta gratuita', () => {
+      const service = new GeminiService();
+      const quota = service.getGroundingQuotaStatus();
+      expect(quota.groundingAvailable).toBe(false);
+      expect(quota.standardDailyLimit).toBe(1500);
+      expect(quota.quotaNote).toContain('Google AI Studio');
+    });
+
+    it('asigna verified cuando el paso 1 de Grounding retorna fuentes web', async () => {
+      const groundingMockResponse = {
+        candidates: [
+          {
+            content: { parts: [{ text: 'Investigación del parche 14.20 con Aatrox core Eclipse y Sundered Sky.' }] },
+            groundingMetadata: {
+              groundingChunks: [
+                { web: { uri: 'https://riotgames.com/patch-notes-14-20', title: 'Patch 14.20 Notes' } },
+                { web: { uri: 'https://leagueoflegends.com/meta', title: 'Meta Analysis' } },
+              ],
+            },
+          },
+        ],
+      };
+
+      const structuredMockResponse = {
+        candidates: [
+          {
+            content: { parts: [{ text: JSON.stringify(mockRecommendation) }] },
+          },
+        ],
+      };
+
+      globalThis.fetch = vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => groundingMockResponse,
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => structuredMockResponse,
+        } as Response);
+
+      const service = new GeminiService({ apiKey: 'test-key-grounding' });
+      (service as unknown as { minIntervalMs: number }).minIntervalMs = 0;
+
+      const res = await service.getMatchupAdvice({
+        championId: 266,
+        opponentId: 24,
+        role: 'TOP',
+        patch: '14.20.1',
+      });
+
+      expect(res.groundingUsed).toBe(true);
+      expect(res.confidenceLevel).toBe('verified');
+      expect(res.sources?.length).toBe(2);
+      expect(res.sources?.[0].title).toBe('Patch 14.20 Notes');
+    });
+
+    it('activa fallback honesto cuando el paso 1 de Grounding retorna 429 por límite de cuota', async () => {
+      const structuredMockResponse = {
+        candidates: [
+          {
+            content: { parts: [{ text: JSON.stringify(mockRecommendation) }] },
+          },
+        ],
+      };
+
+      globalThis.fetch = vi.fn()
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 429,
+          text: async () => 'RESOURCE_EXHAUSTED: Quota exceeded for Grounding with Google Search Requests',
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => structuredMockResponse,
+        } as Response);
+
+      const service = new GeminiService({ apiKey: 'test-key-grounding' });
+      (service as unknown as { minIntervalMs: number }).minIntervalMs = 0;
+
+      const res = await service.getMatchupAdvice({
+        championId: 266,
+        opponentId: 24,
+        role: 'TOP',
+        patch: '14.20.1',
+      });
+
+      expect(res.groundingUsed).toBe(false);
+      expect(res.sources).toEqual([]);
+      expect(['general', 'sparse']).toContain(res.confidenceLevel);
+      expect(res.researchNotes).toContain('Google Search no se ejecutó');
+    });
   });
 });

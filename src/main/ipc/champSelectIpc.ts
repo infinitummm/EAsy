@@ -9,6 +9,7 @@ import { ILcuClient } from '../../shared/contracts';
 import { GeminiService } from '../ai/GeminiService';
 import { RuneManager } from '../lcu/RuneManager';
 import { ItemSetManager } from '../lcu/ItemSetManager';
+import { PatchDiffService } from '../riot/PatchDiffService';
 import { RunePage, Role, ChampSelectSession, GameflowPhase, BuildRecommendation } from '../../shared/types';
 
 export function setupChampSelectIpc(
@@ -17,7 +18,8 @@ export function setupChampSelectIpc(
   geminiService: GeminiService,
   runeManager?: RuneManager,
   itemSetManager?: ItemSetManager,
-  dataDragonService?: any
+  dataDragonService?: any,
+  patchDiffService?: PatchDiffService
 ): void {
   const difundir = (canal: string, ...args: unknown[]) => {
     const windows = BrowserWindow.getAllWindows();
@@ -221,6 +223,26 @@ export function setupChampSelectIpc(
     } catch (err) {
       return { patch: '16.20.1', championsCount: 170 };
     }
+  });
+
+  // 9. Comparación de parches con Data Dragon (Capa 1)
+  ipcMain.removeHandler(IPC_CHANNELS.PATCH_DIFF_GET);
+  ipcMain.handle(IPC_CHANNELS.PATCH_DIFF_GET, async (_event, patch?: string) => {
+    try {
+      if (patchDiffService) {
+        const targetPatch = patch || (dataDragonService ? await dataDragonService.obtenerVersionActual() : '16.20.1');
+        return await patchDiffService.compararParches(targetPatch);
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  });
+
+  // 10. Consulta de cuota y disponibilidad de Grounding (Capa 5)
+  ipcMain.removeHandler(IPC_CHANNELS.AI_GET_GROUNDING_QUOTA);
+  ipcMain.handle(IPC_CHANNELS.AI_GET_GROUNDING_QUOTA, async () => {
+    return geminiService.getGroundingQuotaStatus();
   });
 
   // Re-emisión de sesión de Champ Select cuando LCU emita eventos

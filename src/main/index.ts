@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, shell } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LcuClient, ChampSelectManager, RuneManager, ItemSetManager, EVENTOS_LCU_CLIENT } from './lcu';
@@ -17,6 +17,7 @@ import { MatchParser } from './riot/MatchParser';
 import { ProfileSyncService } from './riot/ProfileSyncService';
 import { DataDragonService } from './riot/DataDragonService';
 import { DataDragonTranslator } from './riot/DataDragonTranslator';
+import { PatchDiffService } from './riot/PatchDiffService';
 import { DEFAULT_APP_SETTINGS } from '../shared/constants';
 import { IPC_CHANNELS } from '../shared/events';
 
@@ -35,6 +36,7 @@ const matchParser = new MatchParser();
 let dbService: DatabaseService | null = null;
 let securityService: SecurityService | null = null;
 let dataDragonService: DataDragonService | null = null;
+let patchDiffService: PatchDiffService | null = null;
 let champSelectManager: ChampSelectManager | null = null;
 let profileSyncService: ProfileSyncService | null = null;
 let matchupCacheRepo: MatchupCacheRepo | null = null;
@@ -54,6 +56,13 @@ function createWindow() {
       sandbox: false
     },
     title: 'Itero Local - League of Legends Assistant'
+  });
+
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https:') || url.startsWith('http:')) {
+      void shell.openExternal(url);
+    }
+    return { action: 'deny' };
   });
 
   if (process.env.VITE_DEV_SERVER_URL) {
@@ -139,6 +148,8 @@ app.whenReady().then(async () => {
     });
     const dataDragonTranslator = new DataDragonTranslator(dataDragonService);
     geminiService.setTranslator(dataDragonTranslator);
+    patchDiffService = new PatchDiffService(dataDragonService);
+    geminiService.setPatchDiffService(patchDiffService);
 
     // Carga no bloqueante del catálogo de campeones y diccionarios
     void dataDragonService.sincronizarCatalogoCampeones().catch(() => {});
@@ -189,7 +200,7 @@ app.whenReady().then(async () => {
 
   // 5. Registrar canales IPC con todas sus dependencias
   registrarLcuIpc(lcuClient, () => mainWindow?.webContents ?? null);
-  setupChampSelectIpc(null, lcuClient, geminiService, runeManager, itemSetManager, dataDragonService || undefined);
+  setupChampSelectIpc(null, lcuClient, geminiService, runeManager, itemSetManager, dataDragonService || undefined, patchDiffService || undefined);
   registrarSettingsIpc(
     () => mainWindow?.webContents ?? null,
     dbService || undefined,

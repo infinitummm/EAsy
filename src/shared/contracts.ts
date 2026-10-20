@@ -18,7 +18,8 @@ import {
   GeminiMatchupRecommendation,
   AppSettings,
   RegionalRouting,
-  PlatformRouting
+  PlatformRouting,
+  PersonalChampionStats
 } from './types';
 
 // ==========================================
@@ -115,9 +116,10 @@ export interface IDatabaseService {
   getAccounts(): AccountEntity[];
   getAccount(puuid: string): AccountEntity | null;
   upsertAccount(account: AccountEntity): void;
-  saveMatch(summary: ParsedMatchSummary): void;
+  saveMatch(summary: ParsedMatchSummary, opponentId?: number): void;
   hasMatch(matchId: string): boolean;
   getRecentMatches(puuid: string, limit?: number): ParsedMatchSummary[];
+  getPersonalChampionStats(puuid: string, championId: number, opponentId?: number): PersonalChampionStats | null;
   getMatchupCache(cacheKey: string): GeminiMatchupRecommendation | null;
   setMatchupCache(cacheKey: string, data: GeminiMatchupRecommendation, ttlSeconds?: number): void;
   pruneExpiredCache(): number;

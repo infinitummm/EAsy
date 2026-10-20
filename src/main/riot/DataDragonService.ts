@@ -305,6 +305,52 @@ export class DataDragonService {
     return this.cargarRecurso('summoner.json', version, extraerValoresDeData<DatosHechizo>);
   }
 
+  /**
+   * Obtiene los hechizos de invocador con sus IDs, claves, nombres e iconos.
+   * Soporta selección de locale (idioma) distinto al configurado en el servicio.
+   */
+  async obtenerHechizosInvocador(
+    version?: string,
+    idioma?: string
+  ): Promise<Array<{ id: number; key: string; name: string; icon: string }>> {
+    const versionResuelta = version ?? (await this.obtenerVersionActual());
+    const idiomaResuelto = idioma ?? this.idioma;
+    const clave = `summoner-invocador:${versionResuelta}:${idiomaResuelto}`;
+
+    const enMemoria = this.cacheMemoria.get(clave);
+    if (enMemoria !== undefined) {
+      return enMemoria as Array<{ id: number; key: string; name: string; icon: string }>;
+    }
+
+    const enDisco = await this.leerJsonArchivo(this.rutaCacheRecurso(clave));
+    if (enDisco !== null && Array.isArray(enDisco)) {
+      this.cacheMemoria.set(clave, enDisco);
+      return enDisco as Array<{ id: number; key: string; name: string; icon: string }>;
+    }
+
+    const url = `${this.cdnBase}/${versionResuelta}/data/${idiomaResuelto}/summoner.json`;
+    const crudo = await this.obtenerJson(url);
+    const datos = extraerValoresDeData<DatosHechizo>(crudo);
+    const hechizos = datos
+      .map((hechizo) => {
+        const id = Number(hechizo.id);
+        if (!Number.isInteger(id) || id <= 0) {
+          return null;
+        }
+        return {
+          id,
+          key: hechizo.key || hechizo.id || String(id),
+          name: hechizo.name || '',
+          icon: hechizo.image?.full ? `${this.cdnBase}/${versionResuelta}/img/spell/${hechizo.image.full}` : this.urlHechizo(hechizo.image?.full || `${hechizo.key}.png`, versionResuelta),
+        };
+      })
+      .filter((h): h is { id: number; key: string; name: string; icon: string } => h !== null);
+
+    this.cacheMemoria.set(clave, hechizos);
+    await this.escribirJsonArchivo(this.rutaCacheRecurso(clave), hechizos);
+    return hechizos;
+  }
+
   // ==========================================
   // Catálogo dinámico de campeones (REQ-013)
   // ==========================================

@@ -111,6 +111,21 @@ export class DataDragonTranslator {
     return this.patchVersion;
   }
 
+  /**
+   * Obtiene el locale actual utilizado por el traductor (idioma de Data Dragon).
+   * Útil para sincronizar con el locale del cliente LCU.
+   */
+  public getLocale(): string {
+    return (this as any).locale || 'es_ES';
+  }
+
+  /**
+   * Establece el locale/idioma para futuras operaciones (útil para sincronización con LCU).
+   */
+  public setLocale(locale: string): void {
+    (this as any).locale = locale;
+  }
+
   private buildRuneIndex(): void {
     this.runeMap.clear();
     this.styleMap.clear();

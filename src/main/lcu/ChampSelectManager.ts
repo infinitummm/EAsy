@@ -312,6 +312,8 @@ export class ChampSelectManager extends EventEmitter {
 
   /** Último campeón elegido por el manager (para contextualizar hechizos). */
   private objetivoRecordado: number | null = null;
+  /** Última acción procesada para evitar reintentos múltiples en la misma sesión */
+  private ultimaClaveAccion: string | null = null;
 
   constructor(lcu: ILcuClient, opciones: OpcionesChampSelectManager = {}) {
     super();
@@ -410,9 +412,35 @@ export class ChampSelectManager extends EventEmitter {
   private async ejecutar(accion: AccionChampSelect): Promise<void> {
     switch (accion.tipo) {
       case 'pick':
-        await this.lcu.selectChampion(accion.actionId, accion.championId, accion.completada);
-        return;
+        if (accion.completada) {
+          const preferencias = this.obtenerPreferencias();
+          const delaySeconds = typeof preferencias.pickDelaySeconds === 'number' ? preferencias.pickDelaySeconds : 1;
+          const delayMs = Math.max(0, Math.min(5000, delaySeconds * 1000));
+          if (typeof (this.lcu as any).lockInChampion === 'function') {
+            const resultado = await (this.lcu as any).lockInChampion(accion.actionId, accion.championId, delayMs);
+            if (resultado && resultado.success === false) {
+              throw new Error(resultado.error || 'No se pudo confirmar el lock-in del campeón');
+            }
+            return;
+          }
+          await this.lcu.selectChampion(accion.actionId, accion.championId, accion.completada);
+          return;
+        } else {
+          await this.lcu.selectChampion(accion.actionId, accion.championId, accion.completada);
+          return;
+        }
       case 'ban':
+        if (accion.completada) {
+          if (typeof (this.lcu as any).lockInBan === 'function') {
+            const resultado = await (this.lcu as any).lockInBan(accion.actionId, accion.championId);
+            if (resultado && resultado.success === false) {
+              throw new Error(resultado.error || 'No se pudo confirmar el ban');
+            }
+            return;
+          }
+          await this.lcu.banChampion(accion.actionId, accion.championId, accion.completada);
+          return;
+        }
         await this.lcu.banChampion(accion.actionId, accion.championId, accion.completada);
         return;
       case 'hechizos':

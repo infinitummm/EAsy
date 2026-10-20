@@ -37,6 +37,8 @@ interface LlamadaLcu {
 class LcuClientFalso extends EventEmitter {
   readonly llamadas: LlamadaLcu[] = [];
   readonly errores = new Map<string, Error>();
+  pickableChampionIds: number[] = [266, 122, 86];
+  session: ChampSelectSession | null = null;
 
   private registrar(metodo: string, argumentos: unknown[]): void {
     this.llamadas.push({ metodo, argumentos });
@@ -56,6 +58,30 @@ class LcuClientFalso extends EventEmitter {
 
   async setSummonerSpells(spell1Id: number, spell2Id: number): Promise<void> {
     this.registrar('setSummonerSpells', [spell1Id, spell2Id]);
+  }
+
+  async getPickableChampionIds(): Promise<number[]> {
+    this.registrar('getPickableChampionIds', []);
+    return this.pickableChampionIds;
+  }
+
+  async getChampSelectSession(): Promise<ChampSelectSession | null> {
+    this.registrar('getChampSelectSession', []);
+    return this.session;
+  }
+
+  async lockInChampion(
+    actionId: number,
+    championId: number,
+    delayMs?: number
+  ): Promise<{ success: boolean; actionId: number; championId: number; error?: string }> {
+    this.registrar('lockInChampion', [actionId, championId, delayMs]);
+    return { success: true, actionId, championId };
+  }
+
+  async lockInBan(actionId: number, championId: number): Promise<{ success: boolean; actionId: number; championId: number; error?: string }> {
+    this.registrar('lockInBan', [actionId, championId]);
+    return { success: true, actionId, championId };
   }
 
   llamadasDe(metodo: string): LlamadaLcu[] {
@@ -366,7 +392,7 @@ describe('ChampSelectManager (T-4.1)', () => {
 
     it('ejecuta pick, ban y hechizos en una misma sesión', async () => {
       const preferencias = crearPreferencias(
-        { autoPick: true, autoBan: true },
+        { autoPick: true, autoBan: true, pickDelaySeconds: 0 },
         { TOP: { preferredChampions: [266], banChampions: [84], spells: [4, 12] } }
       );
       const sesion = crearSesion({
@@ -382,11 +408,11 @@ describe('ChampSelectManager (T-4.1)', () => {
 
       await manager.procesarSesion(sesion);
 
-      expect(cliente.llamadasDe('banChampion')).toEqual([
-        { metodo: 'banChampion', argumentos: [20, 84, true] },
+      expect(cliente.llamadasDe('lockInBan')).toEqual([
+        { metodo: 'lockInBan', argumentos: [20, 84] },
       ]);
-      expect(cliente.llamadasDe('selectChampion')).toEqual([
-        { metodo: 'selectChampion', argumentos: [30, 266, true] },
+      expect(cliente.llamadasDe('lockInChampion')).toEqual([
+        { metodo: 'lockInChampion', argumentos: [30, 266, 0] },
       ]);
       expect(cliente.llamadasDe('setSummonerSpells')).toEqual([
         { metodo: 'setSummonerSpells', argumentos: [4, 12] },

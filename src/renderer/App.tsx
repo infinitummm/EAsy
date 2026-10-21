@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Swords, User, Settings, Play } from 'lucide-react';
+import { Shield, Swords, User, Settings, Play, Info } from 'lucide-react';
+import { OnboardingModal } from './components/OnboardingModal';
+import { AboutModal } from './components/AboutModal';
 import type { LcuConnectionState, GameflowPhase, AppSettings, ReadyCheckEvent } from '../shared/types';
 import { DEFAULT_APP_SETTINGS } from '../shared/constants';
 import { DashboardView } from './views/DashboardView';
@@ -27,6 +29,7 @@ export default function App() {
     pollingActivo?: boolean;
   }>({});
   const [isPermissionError, setIsPermissionError] = useState<boolean>(false);
+  const [showAbout, setShowAbout] = useState<boolean>(false);
 
   const refrescarEstadoLcu = () => {
     if (window.api && window.api.getLcuState) {
@@ -216,6 +219,18 @@ export default function App() {
           </nav>
         </div>
 
+        {/* Botón Acerca de */}
+        <button
+          type="button"
+          onClick={() => setShowAbout(true)}
+          className="w-full mb-3 px-3 py-2 rounded-lg bg-[#0D192D] border border-[#1E355B] text-xs font-semibold text-[#94A3B8] hover:text-white hover:border-[#0070EB] transition flex items-center justify-between"
+        >
+          <span className="flex items-center space-x-2">
+            <Info className="w-3.5 h-3.5 text-[#00D4FF]" />
+            <span>Acerca de Itero Local</span>
+          </span>
+          <span className="text-[10px] bg-[#1E355B] px-1.5 py-0.5 rounded text-white">v1.0.0</span>
+        </button>
         {/* Estado LCU en el footer de la barra lateral */}
         <div className="bg-[#0D192D] p-3.5 rounded border border-[#1E355B] shadow-lg">
           <div className="flex items-center justify-between text-xs mb-1.5">
@@ -314,6 +329,23 @@ export default function App() {
           />
         )}
       </main>
+
+      {/* Modal Acerca de y Disclaimer Legal Riot */}
+      <AboutModal
+        isOpen={showAbout}
+        onClose={() => setShowAbout(false)}
+        patchVersion="26.20"
+        clientVersion="26.20"
+      />
+
+      {/* Modal Onboarding Inicial */}
+      {!settings.onboardingCompleted && (
+        <OnboardingModal
+          settings={settings}
+          lcuConnected={lcuState === 'connected'}
+          onComplete={handleSaveSettings}
+        />
+      )}
     </div>
   );
 }

@@ -6,7 +6,7 @@ import {
   Check,
   AlertCircle,
   RefreshCw,
-  ShieldCheck,
+  ShieldCheck, Download,
   Activity,
   Save,
   FolderOpen,
@@ -28,6 +28,9 @@ interface SettingsViewProps {
 export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSettings }) => {
   const [riotKey, setRiotKey] = useState<string>(settings.apiKeys.riotApiKeyEncrypted || '');
   const [geminiKey, setGeminiKey] = useState<string>(settings.apiKeys.geminiApiKeyEncrypted || '');
+  const [showAdvancedRiotKey, setShowAdvancedRiotKey] = useState<boolean>(Boolean(settings.apiKeys.riotApiKeyEncrypted));
+  const [exportingDiag, setExportingDiag] = useState<boolean>(false);
+  const [diagMessage, setDiagMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [leaguePath, setLeaguePath] = useState<string>(settings.leagueInstallationPath || '');
   const [showRiotKey, setShowRiotKey] = useState<boolean>(false);
   const [showGeminiKey, setShowGeminiKey] = useState<boolean>(false);
@@ -132,6 +135,35 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
     }
   };
 
+
+  const handleExportDiagnostic = async () => {
+    setExportingDiag(true);
+    setDiagMessage(null);
+    try {
+      if (window.api && window.api.exportDiagnostic) {
+        const res = await window.api.exportDiagnostic();
+        if (res.success && res.filePath) {
+          setDiagMessage({
+            type: 'success',
+            text: `¡Diagnóstico exportado y sanitizado con éxito! Guardado en: ${res.filePath}`
+          });
+        } else {
+          setDiagMessage({
+            type: 'error',
+            text: res.error || 'Error al generar el archivo de diagnóstico.'
+          });
+        }
+      }
+    } catch (err: unknown) {
+      setDiagMessage({
+        type: 'error',
+        text: err instanceof Error ? err.message : String(err)
+      });
+    } finally {
+      setExportingDiag(false);
+    }
+  };
+
   const handleValidateRiotKey = async () => {
     if (!window.api || !riotKey.trim()) return;
     setValidating(true);
@@ -190,27 +222,38 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
         </button>
       </header>
 
-      {/* Sección 1: Riot API Key */}
-      <div className="bg-[#111823] p-6 rounded-lg border border-[#1E282D] space-y-4 shadow">
-        <div className="flex justify-between items-start">
+      {/* Sección Avanzada: Riot API Key (Opcional) */}
+      <div className="bg-[#111823]/70 p-5 rounded-lg border border-[#1E282D] space-y-3 shadow">
+        <div className="flex justify-between items-center cursor-pointer" onClick={() => setShowAdvancedRiotKey(!showAdvancedRiotKey)}>
           <div>
-            <h3 className="text-lg font-semibold text-[#F0E6D2] flex items-center space-x-2">
-              <Key className="w-5 h-5 text-[#C89B3C]" />
-              <span>Riot Games Development API Key</span>
+            <h3 className="text-sm font-semibold text-[#CBD5E1] flex items-center space-x-2">
+              <Key className="w-4 h-4 text-[#8EA2C6]" />
+              <span>Avanzado: Riot Games Development API Key (Opcional)</span>
             </h3>
-            <p className="text-xs text-[#A09B8C] mt-1">
-              Necesaria para consultar historial de partidas (Match-V5) y maestrías. Se almacena localmente y cifrada (AES-256).
+            <p className="text-xs text-[#64748B] mt-0.5">
+              Tus datos de invocador, rango e historial ya se obtienen automáticamente del cliente LoL sin Riot API. Solo configúrala si deseas buscar invocadores remotos.
             </p>
           </div>
-          <a
-            href="https://developer.riotgames.com"
-            target="_blank"
-            rel="noreferrer"
-            className="text-xs text-[#0AC8B9] hover:underline flex items-center space-x-1"
+          <button
+            type="button"
+            className="text-xs font-bold px-3 py-1 bg-[#1E282D] text-[#CBD5E1] rounded hover:bg-[#28343C] transition"
           >
-            <span>Obtener o Renovar Clave (24h)</span>
-          </a>
+            {showAdvancedRiotKey ? 'Ocultar ▲' : 'Configurar ▼'}
+          </button>
         </div>
+
+        {showAdvancedRiotKey && (
+          <div className="pt-3 border-t border-[#1E282D] space-y-3">
+            <div className="flex justify-end">
+              <a
+                href="https://developer.riotgames.com"
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-[#0AC8B9] hover:underline flex items-center space-x-1"
+              >
+                <span>Obtener o Renovar Clave en Riot Portal (24h)</span>
+              </a>
+            </div>
 
         <div className="flex items-center space-x-3">
           <div className="relative flex-1">
@@ -241,8 +284,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
           </button>
         </div>
 
+          </div>
+        )}
+
         {/* Estado de Salud de la Riot Key */}
-        {keyHealth && (
+        {showAdvancedRiotKey && keyHealth && (
           <div
             className={`p-3 rounded text-xs flex items-center space-x-2 border ${
               keyHealth.valid
@@ -277,7 +323,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
               <span>Google Gemini API Key (Motor de IA)</span>
             </h3>
             <p className="text-xs text-[#A09B8C] mt-1">
-              Utilizada para inferir dificultades de matchup, runas optimizadas y planes de early game. (Nivel Gratuito de AI Studio).
+              <strong>(Opcional)</strong> La app funciona al 100% sin IA usando los datos deterministas de OP.GG. Si añades tu clave gratuita de Google AI Studio, se activan explicaciones tácticas adaptadas a la composición.
             </p>
           </div>
           <a

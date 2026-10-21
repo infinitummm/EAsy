@@ -5,9 +5,10 @@
 
 import { ipcMain } from 'electron';
 import { IPC_CHANNELS } from '../../shared/events';
-import { IDatabaseService, IRiotApiClient, AccountEntity } from '../../shared/contracts';
+import { IDatabaseService, IRiotApiClient, ILcuClient, AccountEntity } from '../../shared/contracts';
 import { PlatformRouting, RegionalRouting, ParsedMatchSummary } from '../../shared/types';
 import { ProfileSyncService } from '../riot/ProfileSyncService';
+import { LcuAccountService } from '../lcu/LcuAccountService';
 
 import {
   ErrorRiotApi,
@@ -18,9 +19,10 @@ import {
 export function setupProfileIpc(
   dbService?: IDatabaseService,
   riotClient?: IRiotApiClient,
-  profileSyncService?: ProfileSyncService
+  profileSyncService?: ProfileSyncService,
+  lcuClient?: ILcuClient
 ): void {
-  // 1. Obtener perfil y partidas guardadas en SQLite
+  // 1. Obtener perfil y partidas guardadas en SQLite (con auto-sincronización LCU transparente)
   ipcMain.removeHandler(IPC_CHANNELS.RIOT_GET_PROFILE);
   ipcMain.handle(
     IPC_CHANNELS.RIOT_GET_PROFILE,
@@ -28,6 +30,18 @@ export function setupProfileIpc(
       account: AccountEntity;
       matches: ParsedMatchSummary[];
     }> => {
+      // Si el LCU está conectado y tenemos dbService, sincronizar automáticamente si no hay cuentas
+      if (dbService && lcuClient) {
+        try {
+          const accounts = dbService.getAccounts();
+          if (accounts.length === 0) {
+            await LcuAccountService.sincronizarCuentaLocal(lcuClient, dbService);
+          }
+        } catch {
+          // Continuar con lectura normal si LCU falla
+        }
+      }
+
       if (dbService) {
         try {
           let account = puuid ? dbService.getAccount(puuid) : null;
@@ -148,6 +162,36 @@ export function setupProfileIpc(
         return {
           success: false,
           error: mensaje
+        };
+      }
+    }
+  );
+
+  // 3. Sincronizar cuenta directamente desde el cliente LoL local (LCU) sin requerir Riot API
+  ipcMain.removeHandler(IPC_CHANNELS.LCU_SYNC_LOCAL_ACCOUNT);
+  ipcMain.handle(
+    IPC_CHANNELS.LCU_SYNC_LOCAL_ACCOUNT,
+    async (): Promise<{ success: boolean; account?: AccountEntity; error?: string }> => {
+      if (!lcuClient) {
+        return { success: false, error: 'Cliente LoL (LCU) no disponible en este proceso.' };
+      }
+      if (!dbService) {
+        return { success: false, error: 'Base de datos local no disponible.' };
+      }
+
+      try {
+        const res = await LcuAccountService.sincronizarCuentaLocal(lcuClient, dbService);
+        if (!res) {
+          return {
+            success: false,
+            error: 'No se pudo sincronizar la cuenta. Asegúrate de que el cliente de LoL esté abierto con tu sesión iniciada.'
+          };
+        }
+        return { success: true, account: res.account };
+      } catch (err: unknown) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : String(err)
         };
       }
     }

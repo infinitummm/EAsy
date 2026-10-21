@@ -479,13 +479,13 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                   </div>
                 </div>
 
-                {/* Banner de Fallback si no hay clave de Gemini o si falló */}
-                {draftRecs?.source === 'fallback' && (
+                {/* Banner de Fallback SOLO si ocurrió un error real */}
+                {draftRecs?.source === 'fallback' && draftRecs.error && (
                   <div className="bg-amber-950/30 border border-amber-600/40 p-3 rounded-lg text-xs text-amber-200 flex items-start space-x-2">
                     <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                     <div>
-                      <strong className="text-amber-300">Aviso de Modo Contingencia: </strong>
-                      <span>{draftRecs.fallbackReason || 'Sin clave de Gemini configurada. Mostrando picks estándar del meta.'} Puedes añadir tu Gemini API Key en Ajustes & Keys para análisis adaptativo contextual.</span>
+                      <strong className="text-amber-300">Aviso: </strong>
+                      <span>{draftRecs.fallbackReason || 'Error consultando recomendaciones.'}</span>
                     </div>
                   </div>
                 )}

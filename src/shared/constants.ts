@@ -93,4 +93,6 @@ export const DEFAULT_APP_SETTINGS = {
   },
   activeAccount: null,
   leagueInstallationPath: '',
+  onboardingCompleted: false,
+  preferredLocale: 'es_MX',
 };

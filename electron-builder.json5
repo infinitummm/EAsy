@@ -2,21 +2,27 @@
   "appId": "com.itero.local",
   "productName": "Itero Local",
   "directories": {
-    "output": "C:/Users/Administrator/itero-release"
+    "output": "release"
   },
   "electronDist": "./electron-base",
   "files": [
     "dist/**/*",
-    "package.json"
+    "package.json",
+    "!**/itero.db*",
+    "!**/itero.key*",
+    "!**/itero.salt*",
+    "!**/*.log",
+    "!**/tests/**"
   ],
+  "publish": {
+    "provider": "github",
+    "owner": "infinitummm",
+    "repo": "itero-local"
+  },
   "win": {
     "target": [
       {
         "target": "nsis",
-        "arch": ["x64"]
-      },
-      {
-        "target": "portable",
         "arch": ["x64"]
       }
     ],
@@ -24,9 +30,12 @@
   },
   "nsis": {
     "oneClick": false,
+    "perMachine": false,
     "allowToChangeInstallationDirectory": true,
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
-    "shortcutName": "Itero Local"
+    "shortcutName": "Itero Local",
+    "uninstallDisplayName": "Itero Local (Desinstalar)",
+    "deleteAppDataOnUninstall": false
   }
 }

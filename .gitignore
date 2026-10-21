@@ -4,6 +4,7 @@ node_modules/
 # Compilación y artefactos
 dist/
 dist-electron/
+dist-release/
 out/
 release/
 electron-base/
@@ -23,6 +24,14 @@ yarn-error.log*
 *.sqlite-wal
 *.sqlite-shm
 itero_local.sqlite
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+itero.db*
+itero.key*
+itero.salt*
+itero-diagnostic-*.json
 
 # Archivos de entorno y SO
 .env

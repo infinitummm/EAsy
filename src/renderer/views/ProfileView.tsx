@@ -18,6 +18,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [showAdvancedRiotApi, setShowAdvancedRiotApi] = useState(false);
 
   // Formulario de sincronización
   const [gameName, setGameName] = useState(settings.activeAccount?.gameName || 'IteroPlayer');
@@ -28,6 +29,44 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   useEffect(() => {
     loadProfile();
   }, [settings.activeAccount]);
+
+  const handleSyncLocalAccount = async () => {
+    setSyncing(true);
+    setSyncMessage(null);
+    try {
+      if (window.api && window.api.syncLocalAccount) {
+        const res = await window.api.syncLocalAccount();
+        if (res.success && res.account) {
+          setSyncMessage({
+            type: 'success',
+            text: `¡Cuenta ${res.account.gameName}#${res.account.tagLine} sincronizada directamente desde tu cliente LoL!`
+          });
+          onSaveSettings({
+            activeAccount: {
+              puuid: res.account.puuid,
+              gameName: res.account.gameName,
+              tagLine: res.account.tagLine,
+              platform: res.account.platform,
+              regional: res.account.regional,
+            }
+          });
+          await loadProfile();
+        } else {
+          setSyncMessage({
+            type: 'error',
+            text: res.error || 'Asegúrate de que League of Legends esté abierto con tu sesión iniciada.'
+          });
+        }
+      }
+    } catch (err: unknown) {
+      setSyncMessage({
+        type: 'error',
+        text: err instanceof Error ? err.message : String(err)
+      });
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const loadProfile = async () => {
     setLoading(true);
@@ -229,7 +268,17 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 <span>{account?.gameName || gameName}</span>
                 <span className="text-neutral-500 font-semibold">#{account?.tagLine || tagLine}</span>
               </h2>
-              <div className="flex items-center space-x-2 mt-1">
+              <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={handleSyncLocalAccount}
+                disabled={syncing}
+                className="px-4 py-2.5 bg-[#0070EB] hover:bg-[#005CE6] text-white text-xs font-bold uppercase rounded-lg shadow transition flex items-center space-x-2 disabled:opacity-50"
+              >
+                <span>{syncing ? 'Sincronizando...' : 'Sincronizar desde Cliente LoL'}</span>
+              </button>
+            </div>
+            <div className="flex items-center space-x-2 mt-1">
                 <span className="text-xs bg-indigo-950/70 border border-indigo-800 text-indigo-300 px-2 py-0.5 rounded font-mono uppercase">
                   {account?.platform || platform}
                 </span>
@@ -288,8 +337,29 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         </div>
       </div>
 
-      {/* Sincronización con Riot API */}
-      <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 shadow-lg">
+      {/* Sincronización Avanzada con Riot API (Opcional) */}
+      <div className="bg-neutral-900/60 border border-neutral-800 rounded-xl p-5 shadow-lg">
+        <button
+          type="button"
+          onClick={() => setShowAdvancedRiotApi(!showAdvancedRiotApi)}
+          className="w-full flex items-center justify-between text-left"
+        >
+          <div>
+            <h3 className="text-sm font-bold text-neutral-300 uppercase tracking-wider flex items-center space-x-2">
+              <span className="w-2 h-2 rounded-full bg-neutral-500"></span>
+              <span>Avanzado: Búsqueda con Riot Games API (Opcional)</span>
+            </h3>
+            <p className="text-xs text-neutral-500 mt-0.5">
+              Solo requerido para buscar cuentas remotas sin tener el cliente de LoL abierto. No es necesario para tus partidas locales.
+            </p>
+          </div>
+          <span className="text-xs text-neutral-400 font-bold px-3 py-1 bg-neutral-800 rounded">
+            {showAdvancedRiotApi ? 'Ocultar ▲' : 'Configurar ▼'}
+          </span>
+        </button>
+
+        {showAdvancedRiotApi && (
+          <div className="mt-4 pt-4 border-t border-neutral-800">
         <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-3 flex items-center space-x-2">
           <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
           <span>Sincronizar Datos con Riot Games</span>
@@ -396,6 +466,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             }`}
           >
             {syncMessage.text}
+          </div>
+        )}
           </div>
         )}
       </div>

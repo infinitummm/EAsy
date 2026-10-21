@@ -551,7 +551,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
 
       {/* Banner de Proveniencia Transparente (Requirement 8) */}
       {recommendation && (
-        recommendation.source === 'fallback' ? (
+        recommendation.source === 'fallback' && !recommendation.opggData ? (
           <div className="bg-[#D92546]/20 border-2 border-[#D92546] p-4 rounded-xl text-xs flex items-center justify-between gap-3 text-white">
             <div className="flex items-center space-x-2.5">
               <span className="text-xl">⚠️</span>
@@ -560,7 +560,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
                   Sin análisis de IA: recomendación genérica de contingencia
                 </span>
                 <span className="text-[#CBD5E1] text-xs">
-                  Motivo: {recommendation.fallbackReason || 'Sin API Key configurada o error de validación en la respuesta del modelo.'}
+                  Motivo: {recommendation.fallbackReason || 'Sin conexión o error al consultar fuentes estadísticas.'}
                 </span>
               </div>
             </div>
@@ -568,7 +568,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
               onClick={() => fetchAdvice(championId, opponentId, role, true)}
               className="px-3 py-1.5 bg-[#D92546] hover:bg-[#B51E39] text-white font-bold text-[11px] uppercase rounded"
             >
-              Reintentar con IA
+              Reintentar
             </button>
           </div>
         ) : (

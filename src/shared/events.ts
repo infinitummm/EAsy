@@ -58,6 +58,8 @@ export const IPC_CHANNELS = {
   OPGG_GET_MATCHUP: 'opgg:get-matchup',
   LCU_CLEAN_APP_ASSETS: 'lcu:clean-app-assets',
   LCU_GET_CLIENT_VERSION: 'lcu:get-client-version',
+  LCU_SYNC_LOCAL_ACCOUNT: 'lcu:sync-local-account',
+  SETTINGS_EXPORT_DIAGNOSTIC: 'settings:export-diagnostic',
 } as const;
 
 // ==========================================
@@ -126,6 +128,8 @@ export interface IpcInvokeHandlers {
   }) => Promise<any>;
   [IPC_CHANNELS.LCU_CLEAN_APP_ASSETS]: () => Promise<{ deletedItemSets: number; deletedRunePages: number; success: boolean }>;
   [IPC_CHANNELS.LCU_GET_CLIENT_VERSION]: () => Promise<{ clientVersion?: string; ddragonVersion: string; matches: boolean; displayPatch: string }>;
+  [IPC_CHANNELS.LCU_SYNC_LOCAL_ACCOUNT]: () => Promise<{ success: boolean; account?: AccountEntity; error?: string }>;
+  [IPC_CHANNELS.SETTINGS_EXPORT_DIAGNOSTIC]: () => Promise<{ success: boolean; filePath?: string; error?: string }>;
 }
 
 // ==========================================

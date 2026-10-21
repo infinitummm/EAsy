@@ -2,6 +2,7 @@ import { app, BrowserWindow, shell } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LcuClient, ChampSelectManager, RuneManager, ItemSetManager, EVENTOS_LCU_CLIENT } from './lcu';
+import { LcuAccountService } from './lcu/LcuAccountService';
 import { OpGgClient } from './opgg/OpGgClient';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -21,6 +22,7 @@ import { DataDragonTranslator } from './riot/DataDragonTranslator';
 import { PatchDiffService } from './riot/PatchDiffService';
 import { DEFAULT_APP_SETTINGS } from '../shared/constants';
 import { IPC_CHANNELS } from '../shared/events';
+import { iniciarAutoUpdater } from './updater';
 
 let mainWindow: BrowserWindow | null = null;
 const lcuClient = new LcuClient({
@@ -187,6 +189,9 @@ app.whenReady().then(async () => {
     lcuClient.on(EVENTOS_LCU_CLIENT.ESTADO_CAMBIADO, (estado) => {
       if (estado === 'connected') {
         void dataDragonService?.sincronizarCatalogoCampeones().catch(() => {});
+        if (dbService) {
+          void LcuAccountService.sincronizarCuentaLocal(lcuClient, dbService).catch(() => {});
+        }
       }
     });
   } catch (err) {
@@ -235,9 +240,10 @@ app.whenReady().then(async () => {
     geminiService,
     lcuClient
   );
-  setupProfileIpc(dbService || undefined, riotClient, profileSyncService || undefined);
+  setupProfileIpc(dbService || undefined, riotClient, profileSyncService || undefined, lcuClient);
 
   createWindow();
+  iniciarAutoUpdater(() => mainWindow?.webContents ?? null);
 
   // 6. Iniciar escaneo y conexión automática de LCU
   await lcuClient.initialize().catch((err) => {

@@ -442,6 +442,8 @@ export interface AppSettings {
     regional: RegionalRouting;
   } | null;
   leagueInstallationPath?: string;
+  onboardingCompleted?: boolean;
+  preferredLocale?: string;
 }
 
 // ==========================================

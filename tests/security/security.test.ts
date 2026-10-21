@@ -234,4 +234,48 @@ describe('SecurityService (AES-256-GCM)', () => {
       expect(servicioArchivo.decrypt(servicio.encrypt('espacios'))).toBe('espacios');
     });
   });
+
+  describe('Windows DPAPI / safeStorage y Migracion Transparente', () => {
+    it('cifra y descifra con proveedor DPAPI si esta disponible', () => {
+      const mockSafeStorage = {
+        isEncryptionAvailable: () => true,
+        encryptString: (plain: string) => Buffer.from('dpapi_mock:' + plain),
+        decryptString: (buf: Buffer) => buf.toString('utf-8').replace('dpapi_mock:', ''),
+      };
+
+      const dpapiService = new SecurityService(CLAVE_HEX, mockSafeStorage);
+      expect(dpapiService.isDpapiAvailable()).toBe(true);
+
+      const cifrado = dpapiService.encrypt('mi-gemini-key');
+      expect(cifrado.startsWith('dpapi:')).toBe(true);
+      expect(dpapiService.decrypt(cifrado)).toBe('mi-gemini-key');
+    });
+
+    it('migra transparentemente desde el formato antiguo IV:AuthTag:CipherText a DPAPI', () => {
+      const mockSafeStorage = {
+        isEncryptionAvailable: () => true,
+        encryptString: (plain: string) => Buffer.from('dpapi_mock:' + plain),
+        decryptString: (buf: Buffer) => buf.toString('utf-8').replace('dpapi_mock:', ''),
+      };
+
+      const antiguo = servicio.encrypt('clave-antigua-1234');
+      expect(antiguo.includes(':')).toBe(true);
+      expect(antiguo.startsWith('dpapi:')).toBe(false);
+
+      const dpapiService = new SecurityService(CLAVE_HEX, mockSafeStorage);
+      const resultado = dpapiService.migrarSiEsNecesario(antiguo);
+
+      expect(resultado.migrado).toBe(true);
+      expect(resultado.nuevoTexto.startsWith('dpapi:')).toBe(true);
+      expect(dpapiService.decrypt(resultado.nuevoTexto)).toBe('clave-antigua-1234');
+    });
+
+    it('enmascara claves sin exponerlas completas', async () => {
+      const { enmascararClave } = await import('../../src/main/security/SecurityService');
+      expect(enmascararClave('AIzaSyD-1234567890abcdef')).toBe('AIzaSy...cdef');
+      expect(enmascararClave('RGAPI-11223344-5566-7788')).toBe('RGAPI-...7788');
+      expect(enmascararClave('corta')).toBe('********');
+      expect(enmascararClave('')).toBe('');
+    });
+  });
 });

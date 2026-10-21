@@ -64,6 +64,10 @@ export const api = {
     ipcRenderer.invoke(IPC_CHANNELS.LCU_CLEAN_APP_ASSETS),
   getClientVersion: () =>
     ipcRenderer.invoke(IPC_CHANNELS.LCU_GET_CLIENT_VERSION),
+  syncLocalAccount: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.LCU_SYNC_LOCAL_ACCOUNT),
+  exportDiagnostic: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_EXPORT_DIAGNOSTIC),
 
   // Suscripción a Eventos de Main
   on: (channel: string, callback: (...args: any[]) => void) => {

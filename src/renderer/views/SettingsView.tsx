@@ -44,6 +44,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
   const [dataRefreshMsg, setDataRefreshMsg] = useState<string | null>(null);
   const [quotaInfo, setQuotaInfo] = useState<any>(null);
   const [opggTier, setOpggTier] = useState<any>(settings.opggTier || 'emerald_plus');
+  const [minMatchupSampleThreshold, setMinMatchupSampleThreshold] = useState<number>(settings.minMatchupSampleThreshold || 200);
+  const [allowAiChoiceTop3, setAllowAiChoiceTop3] = useState<boolean>(settings.allowAiChoiceTop3 || false);
   const [cleaningAssets, setCleaningAssets] = useState<boolean>(false);
   const [cleanResultMsg, setCleanResultMsg] = useState<string | null>(null);
   const [versionInfo, setVersionInfo] = useState<{
@@ -146,6 +148,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
   const handleSaveAll = async () => {
     await onSaveSettings({
       opggTier,
+      minMatchupSampleThreshold,
+      allowAiChoiceTop3,
       leagueInstallationPath: leaguePath.trim(),
       apiKeys: {
         riotApiKeyEncrypted: riotKey,
@@ -384,6 +388,56 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
               {cleaningAssets ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
               <span>Borrar importaciones de la app</span>
             </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-[#1E282D]">
+          <div>
+            <label className="text-xs font-semibold text-[#F0E6D2] block mb-1">
+              Umbral Mínimo de Partidas para Matchup (B2):
+            </label>
+            <div className="flex items-center space-x-2">
+              <input
+                type="number"
+                min="50"
+                max="1000"
+                step="50"
+                value={minMatchupSampleThreshold}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10) || 200;
+                  setMinMatchupSampleThreshold(val);
+                  onSaveSettings({ minMatchupSampleThreshold: val });
+                }}
+                className="w-32 bg-[#0A1428] border border-[#1E282D] rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#00D4FF]"
+              />
+              <span className="text-xs text-neutral-400">partidas registradas</span>
+            </div>
+            <p className="text-[10px] text-neutral-400 mt-1">
+              Si un matchup tiene menos de este umbral, la app muestra un aviso y recurre a la build general de Esmeralda+.
+            </p>
+          </div>
+
+          <div className="p-3 bg-[#0A1428] rounded border border-[#1E282D]">
+            <label className="flex items-start space-x-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={allowAiChoiceTop3}
+                onChange={(e) => {
+                  const val = e.target.checked;
+                  setAllowAiChoiceTop3(val);
+                  onSaveSettings({ allowAiChoiceTop3: val });
+                }}
+                className="mt-0.5 w-4 h-4 accent-[#0070EB] rounded cursor-pointer"
+              />
+              <div>
+                <span className="text-xs font-semibold text-white block">
+                  Permitir que la IA elija entre las 3 mejores opciones (B3)
+                </span>
+                <span className="text-[10px] text-neutral-400 block mt-0.5">
+                  Desactivado por defecto. Si se activa, Gemini puede escoger justificadamente entre las 3 opciones de mejor rendimiento de OP.GG. Si está desactivado, se aplica estrictamente la opción óptima calculada por winrate.
+                </span>
+              </div>
+            </label>
           </div>
         </div>
 

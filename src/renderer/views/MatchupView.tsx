@@ -28,6 +28,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
   const [role, setRole] = useState<Role>(initialRole);
   const [activePatch, setActivePatch] = useState<string>(patchVersion || '16.20.1');
   const [isManualOpponent, setIsManualOpponent] = useState<boolean>(false);
+  const [viewMode, setViewMode] = useState<'general' | 'matchup'>('general');
   const [loading, setLoading] = useState(false);
   const [recommendation, setRecommendation] = useState<GeminiMatchupRecommendation | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -106,7 +107,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
   }, [initialRole]);
 
   // Aplicar Runas y Build a LoL conjuntamente
-  const aplicarRunasYBuild = async (rec: GeminiMatchupRecommendation | null = recommendation) => {
+  const aplicarRunasYBuild = async (rec: GeminiMatchupRecommendation | null = recommendation, currentMode = viewMode) => {
     if (!rec || !window.api) return;
     setImportStatus('importing');
     setImportMsg('Inyectando runas y exportando build a LoL...');
@@ -120,11 +121,17 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
         current: true
       };
 
+      const title = rec.buildRecommendation.itemSetTitle || (rec.opponentChampionId > 0 && currentMode === 'matchup'
+        ? `[IL] ${getChampionName(rec.championId)} vs ${getChampionName(rec.opponentChampionId)}`
+        : `[IL] ${getChampionName(rec.championId)} (general)`);
+
       const [runeRes, buildRes] = await Promise.all([
         window.api.applyRunes(runePage).catch((e) => ({ success: false, error: e.message })),
         window.api.applyBuild({
           championId: rec.championId,
-          title: `[IL] ${getChampionName(rec.championId)}`,
+          opponentId: rec.opponentChampionId,
+          role: rec.assignedRole,
+          title,
           build: rec.buildRecommendation
         }).catch((e) => ({ success: false, error: e.message }))
       ]);
@@ -153,13 +160,14 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
     targetChamp = championId,
     targetOpponent = opponentId,
     targetRole = role,
-    forceRefresh = false
+    forceRefresh = false,
+    mode = viewMode
   ) => {
     if (loading || targetChamp <= 0 || targetOpponent <= 0) return;
     setLoading(true);
     setError(null);
 
-    const matchKey = `${targetChamp}-${targetOpponent}-${targetRole}`;
+    const matchKey = `${targetChamp}-${targetOpponent}-${targetRole}-${mode}`;
     lastAnalyzedKeyRef.current = matchKey;
 
     try {
@@ -172,7 +180,8 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
           patch: activePatch,
           allies: [],
           enemies: [],
-          forceRefresh
+          forceRefresh,
+          viewMode: mode
         });
       } else {
         res = getAccurateFallbackRecommendation({
@@ -187,7 +196,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
 
       // Auto-importar automáticamente si está activado
       if (autoImportEnabled) {
-        await aplicarRunasYBuild(res);
+        await aplicarRunasYBuild(res, mode);
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
@@ -234,7 +243,12 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
                   <span className="text-xs text-[#475569]">•</span>
                   <span className="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded bg-[#0A111F] border border-[#00D4FF]/40 text-[11px] text-[#00D4FF]">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#00D4FF]"></span>
-                    <span>Datos de OP.GG ({recommendation.opggData.totalMatches.toLocaleString()} partidas • {recommendation.opggData.elo || 'Esmeralda+'})</span>
+                    <span>
+                      Datos de OP.GG ({recommendation.opggData.totalMatches.toLocaleString()} partidas •{' '}
+                      <strong className="text-white">
+                        {viewMode === 'matchup' ? 'Matchup: todos los rangos' : (recommendation.opggData.eloLabel || 'General: Esmeralda+')}
+                      </strong>)
+                    </span>
                   </span>
                 </>
               )}
@@ -261,7 +275,39 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center space-x-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Toggle de Modo: General vs Matchup (B2) */}
+            <div className="flex items-center space-x-1 bg-[#0A111F] p-1 rounded-lg border border-[#1E355B]">
+              <button
+                type="button"
+                onClick={() => {
+                  setViewMode('general');
+                  fetchAdvice(championId, opponentId, role, false, 'general');
+                }}
+                className={`px-3 py-1.5 rounded text-xs font-bold transition-all ${
+                  viewMode === 'general'
+                    ? 'bg-[#0070EB] text-white shadow-md'
+                    : 'text-[#94A3B8] hover:text-white'
+                }`}
+              >
+                General (Esmeralda+)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setViewMode('matchup');
+                  fetchAdvice(championId, opponentId, role, false, 'matchup');
+                }}
+                className={`px-3 py-1.5 rounded text-xs font-bold transition-all ${
+                  viewMode === 'matchup'
+                    ? 'bg-[#0070EB] text-white shadow-md'
+                    : 'text-[#94A3B8] hover:text-white'
+                }`}
+              >
+                Matchup (todos los rangos)
+              </button>
+            </div>
+
             {/* Toggle de Auto-Importar */}
             <label className="flex items-center space-x-2 cursor-pointer bg-[#0A111F] px-3 py-2 rounded border border-[#1E355B] hover:border-[#2A4878] transition">
               <input
@@ -333,6 +379,35 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
               {importStatus === 'success' ? '✓' : importStatus === 'error' ? '✕' : 'ℹ'}
             </span>
             <span>{importMsg}</span>
+          </div>
+        )}
+
+        {/* Banner de Muestra Reducida en Matchup (B2) */}
+        {viewMode === 'matchup' && (recommendation?.opggData?.totalMatches ?? 0) < 200 && (
+          <div className="mt-4 bg-[#F5A623]/10 border border-[#F5A623]/40 rounded-lg p-3 text-xs text-[#F5A623] flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-md">
+            <span>
+              ⚠️ <strong>Muestra reducida ({recommendation?.opggData?.totalMatches ?? 0} partidas):</strong> Los datos de este enfrentamiento específico son escasos. Se recomienda la <strong>Build General en Esmeralda+</strong>.
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode('general');
+                fetchAdvice(championId, opponentId, role, false, 'general');
+              }}
+              className="px-3 py-1 bg-[#F5A623] text-black font-bold text-xs rounded hover:bg-[#F5A623]/80 transition self-start sm:self-auto shrink-0"
+            >
+              Cambiar a General (Esmeralda+)
+            </button>
+          </div>
+        )}
+
+        {/* Banner de Fallback Honesto si falla OP.GG */}
+        {recommendation?.source === 'fallback' && (
+          <div className="mt-4 bg-[#D92546]/10 border border-[#D92546]/40 rounded-lg p-3 text-xs text-[#D92546] flex items-center space-x-2 shadow-md">
+            <span>⚠️</span>
+            <span>
+              <strong>Aviso de contingencia:</strong> No se pudieron obtener datos de OP.GG. Mostrando configuración de contingencia (genérica).
+            </span>
           </div>
         )}
 

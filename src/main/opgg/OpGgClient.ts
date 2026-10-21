@@ -1,16 +1,12 @@
 /**
  * Cliente para el servidor MCP oficial de OP.GG (Streamable HTTP JSON-RPC 2.0).
  * Conecta a https://mcp-api.op.gg/mcp para obtener estadísticas competitivas reales:
- * - Runas optimizadas con pickrate y winrate
- * - Core items, iniciales, botas y orden de habilidades
- * - Estadísticas específicas de enfrentamiento directo (matchup)
- * 
- * Cumple con:
- * - Cero llamadas durante draft a Gemini (ahorro estricto de tokens).
- * - Caché persistente SQLite con clave `opgg:{campeón}:{posición}:{rival}:{elo}:{parche}`.
- * - Validación y traducción de IDs a Data Dragon en locale del cliente (es_MX / es_ES).
- * - Detección de muestra reducida (< 50 partidas) con fallback a build general.
- * - Limitador de tasa y reintento con backoff exponencial.
+ * - Build base oficial con filtro de Elo (Esmeralda+) vía lol_get_champion_analysis
+ * - Guía de enfrentamiento directo (matchup: todos los rangos) vía lol_get_lane_matchup_guide
+ * - Runas optimizadas, core items, 4° a 6° objeto, botas y starter items (incluido Atlas Mundial para soporte)
+ * - Regla determinista de elección (mayor winrate con muestra suficiente; desempate por pick rate)
+ * - Caché persistente SQLite separada para general y matchup
+ * - Precalentamiento de campeones preferidos
  */
 
 import type { IDatabaseService } from '../../shared/contracts';
@@ -20,7 +16,7 @@ import { DataDragonTranslator } from '../riot/DataDragonTranslator';
 import { registrarLog } from '../lcu/LcuDetector';
 
 export const OPGG_MCP_ENDPOINT = 'https://mcp-api.op.gg/mcp';
-export const UMBRAL_MUESTRA_MINIMA = 50;
+export const UMBRAL_MUESTRA_MINIMA = 200; // REQ-023: umbral predeterminado de 200 partidas
 export const TTL_CACHE_OPGG_SEGUNDOS = 24 * 60 * 60; // 24 horas
 
 export interface OpcionesOpGgClient {
@@ -51,6 +47,14 @@ export function formatChampionForOpGg(nameOrKey: string): string {
     'Renata': 'RENATA_GLASC',
     'Wukong': 'WUKONG',
     'MonkeyKing': 'WUKONG',
+    'K\'Sante': 'KSANTE',
+    'Cho\'Gath': 'CHOGATH',
+    'Dr. Mundo': 'DR_MUNDO',
+    'Kai\'Sa': 'KAISA',
+    'Kha\'Zix': 'KHAZIX',
+    'Kog\'Maw': 'KOGMAW',
+    'Vel\'Koz': 'VELKOZ',
+    'LeBlanc': 'LEBLANC',
   };
   if (especiales[nameOrKey]) return especiales[nameOrKey];
 
@@ -80,7 +84,76 @@ export function roleToOpGgPosition(role: Role): string {
   }
 }
 
-/** Campeones de referencia por posición cuando no hay rival o para build general */
+/**
+ * Parsea respuestas en formato Python Dataclasses que devuelve lol_get_champion_analysis.
+ */
+export function parsePythonDataclasses(rawText: string): any {
+  const parts = rawText.split('\n\n');
+  if (parts.length < 2) {
+    if (rawText.trim().startsWith('{')) return JSON.parse(rawText);
+    throw new Error('Formato de OP.GG MCP no reconocido.');
+  }
+
+  const header = parts[0];
+  const expr = parts.slice(1).join('\n\n').trim();
+
+  const classDefs: Record<string, string[]> = {};
+  const lines = header.split('\n').map((l) => l.trim()).filter(Boolean);
+  for (const line of lines) {
+    const match = line.match(/^class\s+([A-Za-z0-9_]+)\s*:\s*(.*)$/);
+    if (match) {
+      const className = match[1];
+      const fields = match[2].split(',').map((f) => f.trim()).filter(Boolean);
+      classDefs[className] = fields;
+    }
+  }
+
+  const scope: Record<string, any> = {
+    None: null,
+    True: true,
+    False: false,
+  };
+
+  for (const [cls, fields] of Object.entries(classDefs)) {
+    scope[cls] = function (...args: any[]) {
+      const obj: Record<string, any> = {};
+      fields.forEach((f, idx) => {
+        obj[f] = args[idx];
+      });
+      return obj;
+    };
+  }
+
+  const fn = new Function(...Object.keys(scope), `return (${expr});`);
+  return fn(...Object.values(scope));
+}
+
+/**
+ * Regla determinista de selección (B3):
+ * Entre opciones con muestra suficiente, elige la de mejor winrate; en empate (diferencia < 0.5%), la más popular.
+ */
+export function selectOptimalOption<T extends { play: number; win: number; pickRate: number }>(
+  options: T[],
+  totalMatches: number
+): T | undefined {
+  if (!options || options.length === 0) return undefined;
+  if (options.length === 1) return options[0];
+
+  const minPlays = totalMatches >= 1000 ? 50 : Math.max(10, Math.round(totalMatches * 0.05));
+  const eligible = options.filter((o) => o.play >= minPlays);
+  const candidates = eligible.length > 0 ? eligible : options;
+
+  return [...candidates].sort((a, b) => {
+    const winrateA = a.play > 0 ? a.win / a.play : 0;
+    const winrateB = b.play > 0 ? b.win / b.play : 0;
+    if (Math.abs(winrateA - winrateB) > 0.005) {
+      return winrateB - winrateA; // Mayor tasa de victoria
+    }
+    return b.pickRate - a.pickRate; // Mayor presencia en desempate
+  })[0];
+}
+
+/** Campeones de referencia por posición cuando no hay rival */
 const RIVALES_REFERENCIA: Record<Role, string> = {
   TOP: 'Aatrox',
   JUNGLE: 'LeeSin',
@@ -107,9 +180,36 @@ export class OpGgClient {
   }
 
   /**
-   * Construye la clave de caché requerida por el usuario:
-   * `opgg:{campeón}:{posición}:{rival}:{elo}:{parche}`
+   * Clave para análisis general por campeón y rol con Elo (soporta tier):
+   * `opgg:general:{campeón}:{posición}:{elo}:{parche}`
    */
+  public construirClaveGeneral(
+    championId: number,
+    role: Role,
+    elo: string = 'emerald_plus',
+    patch: string = '26.20'
+  ): string {
+    const normPatch = patch.split('.').slice(0, 2).join('.');
+    const pos = roleToOpGgPosition(role);
+    return `opgg:general:${championId}:${pos}:${elo}:${normPatch}`;
+  }
+
+  /**
+   * Clave para matchup directo (la herramienta no soporta tier, por lo que NO se incluye en la clave):
+   * `opgg:matchup:{campeón}:{posición}:{rival}:{parche}`
+   */
+  public construirClaveMatchup(
+    championId: number,
+    role: Role,
+    opponentId: number,
+    patch: string = '26.20'
+  ): string {
+    const normPatch = patch.split('.').slice(0, 2).join('.');
+    const pos = roleToOpGgPosition(role);
+    return `opgg:matchup:${championId}:${pos}:${opponentId}:${normPatch}`;
+  }
+
+  /** Clave de compatibilidad para código existente */
   public construirClaveCache(
     championId: number,
     role: Role,
@@ -124,15 +224,111 @@ export class OpGgClient {
   }
 
   /**
-   * Obtiene la guía de matchup y builds desde OP.GG MCP con caché, validación de IDs y fallback.
+   * BASE: Obtiene el análisis y build competitiva con filtro de Elo real (ej. Esmeralda+)
+   * usando lol_get_champion_analysis.
+   */
+  public async getChampionAnalysis(params: {
+    championId: number;
+    role: Role;
+    elo?: string;
+    patch?: string;
+    forceRefresh?: boolean;
+  }): Promise<OpGgMatchupData> {
+    const { championId, role, forceRefresh } = params;
+    const elo = params.elo || 'emerald_plus';
+    const patch = params.patch || '26.20';
+    const cacheKey = this.construirClaveGeneral(championId, role, elo, patch);
+
+    if (!forceRefresh && this.dbService) {
+      const cached = this.dbService.getMatchupCache(cacheKey);
+      if (cached?.opggData) {
+        registrarLog(`[OpGgClient] Build general recuperada de SQLite: ${cacheKey}`);
+        return cached.opggData;
+      }
+    }
+
+    const myChamp = getChampionById(championId);
+    if (!myChamp) {
+      throw new Error(`Campeón con ID ${championId} no reconocido en catálogo.`);
+    }
+
+    const myChampOpGg = formatChampionForOpGg(myChamp.name);
+    const pos = roleToOpGgPosition(role);
+
+    registrarLog(`[OpGgClient] Consultando lol_get_champion_analysis: ${myChampOpGg} (${pos}, tier=${elo})...`);
+
+    const rawResponseText = await this.ejecutarLlamadaMcpGenerica('lol_get_champion_analysis', {
+      game_mode: 'ranked',
+      champion: myChampOpGg,
+      position: pos,
+      tier: elo,
+      lang: 'en_US',
+      desired_output_fields: [
+        'data.core_items',
+        'data.runes',
+        'data.boots',
+        'data.starter_items',
+        'data.fourth_items',
+        'data.fifth_items',
+        'data.sixth_items',
+        'data.summoner_spells',
+        'data.skills',
+        'data.skill_masteries',
+        'data.weak_counters',
+        'data.strong_counters',
+      ],
+    });
+
+    const parsed = parsePythonDataclasses(rawResponseText);
+    const data = parsed?.data || {};
+
+    const eloLabelMap: Record<string, string> = {
+      emerald_plus: 'Esmeralda+',
+      diamond_plus: 'Diamante+',
+      master_plus: 'Master+',
+      grandmaster: 'Gran Maestro',
+      challenger: 'Retador',
+      all: 'Todos los rangos',
+    };
+    const eloLabel = `General: ${eloLabelMap[elo] || elo}`;
+
+    const matchupData = this.procesarRespuestaOpGg(
+      { data },
+      championId,
+      0,
+      role,
+      patch,
+      elo,
+      true,
+      'general_analysis',
+      eloLabel
+    );
+
+    if (this.dbService) {
+      const rec = this.construirRecomendacionDeterminista(matchupData, myChamp.name, role, patch, true);
+      this.dbService.setMatchupCache(cacheKey, rec, TTL_CACHE_OPGG_SEGUNDOS);
+      registrarLog(`[OpGgClient] Guardada build general en SQLite: ${cacheKey}`);
+    }
+
+    return matchupData;
+  }
+
+  /**
+   * COMPLEMENTO: Obtiene la guía de enfrentamiento directo contra un rival específico
+   * usando lol_get_lane_matchup_guide (todos los rangos).
    */
   public async getLaneMatchupGuide(params: OpGgRequestParams): Promise<OpGgMatchupData> {
     const { championId, opponentId, role, forceRefresh } = params;
-    const elo = params.elo || 'emerald_plus';
     const patch = params.patch || '26.20';
-    const cacheKey = this.construirClaveCache(championId, role, opponentId, elo, patch);
+    const elo = params.elo || 'emerald_plus';
 
-    // 1. Revisar caché local SQLite si no es forceRefresh
+    // Si no hay rival, delegar directamente a la build general
+    if (!opponentId || opponentId <= 0) {
+      return await this.getChampionAnalysis({ championId, role, elo, patch, forceRefresh });
+    }
+
+    const cacheKey = this.construirClaveMatchup(championId, role, opponentId, patch);
+
     if (!forceRefresh && this.dbService) {
       const cached = this.dbService.getMatchupCache(cacheKey);
       if (cached?.opggData) {
@@ -141,131 +337,200 @@ export class OpGgClient {
       }
     }
 
-    // 2. Resolver nombres oficiales de campeones
     const myChamp = getChampionById(championId);
     if (!myChamp) {
       throw new Error(`Campeón con ID ${championId} no reconocido en catálogo.`);
     }
 
+    const oppChamp = getChampionById(opponentId);
+    const oppChampName = oppChamp ? oppChamp.name : `Rival ${opponentId}`;
     const myChampOpGg = formatChampionForOpGg(myChamp.name);
-    let oppChampName = opponentId ? getChampionById(opponentId)?.name : undefined;
-    let isGeneralBuild = false;
-
-    if (!oppChampName) {
-      oppChampName = RIVALES_REFERENCIA[role] || 'Caitlyn';
-      isGeneralBuild = true;
-    }
     const oppChampOpGg = formatChampionForOpGg(oppChampName);
-
-    // 3. Llamar a OP.GG MCP con reintentos y rate limit
     const pos = roleToOpGgPosition(role);
-    registrarLog(`[OpGgClient] Consultando OP.GG MCP: ${myChampOpGg} vs ${oppChampOpGg} (${pos})...`);
-    const rawData = await this.ejecutarLlamadaMcp(myChampOpGg, oppChampOpGg, pos);
 
-    // 4. Mapear y procesar datos con validación contra Data Dragon
+    registrarLog(`[OpGgClient] Consultando lol_get_lane_matchup_guide: ${myChampOpGg} vs ${oppChampOpGg} (${pos})...`);
+
+    const rawResponseText = await this.ejecutarLlamadaMcpGenerica('lol_get_lane_matchup_guide', {
+      position: pos,
+      my_champion: myChampOpGg,
+      opponent_champion: oppChampOpGg,
+      lang: 'en_US',
+    });
+
+    const parsed = JSON.parse(rawResponseText);
+    const matchupPlays = parsed.data?.runes?.[0]?.play || parsed.data?.core_items?.[0]?.play || 0;
+    const isSampleLow = matchupPlays < this.minSampleThreshold;
+
     let matchupData = this.procesarRespuestaOpGg(
-      rawData,
+      parsed,
       championId,
-      opponentId || 0,
+      opponentId,
       role,
       patch,
-      elo,
-      isGeneralBuild
+      'all',
+      isSampleLow,
+      'lane_matchup',
+      'Matchup: todos los rangos'
     );
 
-    // 5. Verificar tamaño de muestra (< 50 partidas)
-    if (!isGeneralBuild && matchupData.totalMatches < this.minSampleThreshold) {
-      registrarLog(
-        `[OpGgClient] Muestra reducida (${matchupData.totalMatches} < ${this.minSampleThreshold} partidas) para ${myChampOpGg} vs ${oppChampOpGg}. Recurriendo a build general de la posición.`
-      );
+    // Si la muestra es reducida (< 200 partidas), complementar con la build general
+    if (isSampleLow) {
       matchupData.isGeneralBuildFallback = true;
-      matchupData.sampleSizeWarning = `Muestra reducida (${matchupData.totalMatches} partidas registradas). Se complementa con la build general de la posición para mayor fiabilidad.`;
-
-      // Si la muestra es extremadamente baja (< 10) o no tiene core items, consultar el benchmark de la posición
-      if (matchupData.totalMatches < 10 || matchupData.coreItems.length === 0) {
-        try {
-          const fallbackOpponent = RIVALES_REFERENCIA[role] || 'Caitlyn';
-          if (fallbackOpponent !== oppChampName) {
-            const generalRaw = await this.ejecutarLlamadaMcp(myChampOpGg, formatChampionForOpGg(fallbackOpponent), pos);
-            const generalData = this.procesarRespuestaOpGg(
-              generalRaw,
-              championId,
-              opponentId || 0,
-              role,
-              patch,
-              elo,
-              true
-            );
-            // Conservar aviso de muestra reducida
-            generalData.isGeneralBuildFallback = true;
-            generalData.sampleSizeWarning = `Muestra reducida (${matchupData.totalMatches} partidas vs ${oppChampName}). Mostrando build general de ${myChamp.name} en ${role}.`;
-            matchupData = generalData;
-          }
-        } catch (fbErr) {
-          registrarLog(`[OpGgClient Advertencia] Fallo al obtener build general de respaldo: ${fbErr}`);
-        }
+      matchupData.sampleSizeWarning = `Muestra reducida (${matchupData.totalMatches} < ${this.minSampleThreshold} partidas vs ${oppChampName}). Se recomienda build general en Esmeralda+.`;
+      try {
+        const generalData = await this.getChampionAnalysis({ championId, role, elo, patch, forceRefresh });
+        matchupData.fourthItems = generalData.fourthItems;
+        matchupData.fifthItems = generalData.fifthItems;
+        matchupData.sixthItems = generalData.sixthItems;
+      } catch (e) {
+        registrarLog(`[OpGgClient] No se pudo complementar con build general: ${e}`);
       }
     }
 
-    // 6. Guardar en caché SQLite
     if (this.dbService) {
-      const mockRecommendation: GeminiMatchupRecommendation = {
-        championId,
-        opponentChampionId: opponentId || 0,
-        assignedRole: role,
-        difficultyRating: 5,
-        matchupSummary: `Datos competitivos de OP.GG para ${myChamp.name} (${role}) en Parche ${patch}.`,
-        runesRecommendation: {
-          primaryStyleId: matchupData.runes[0]?.primaryPageId || 8000,
-          subStyleId: matchupData.runes[0]?.secondaryPageId || 8300,
-          selectedPerkIds: [
-            ...(matchupData.runes[0]?.primaryRuneIds || [8005, 9111, 9104, 8014]),
-            ...(matchupData.runes[0]?.secondaryRuneIds || [8304, 8347]),
-            ...(matchupData.runes[0]?.statModIds || [5008, 5008, 5011]),
-          ],
-          rationale: `Configuración competitiva de OP.GG con ${(matchupData.runes[0]?.pickRate * 100 || 50).toFixed(1)}% de presencia.`,
-        },
-        buildRecommendation: {
-          startingItems: matchupData.starterItems[0]?.ids || [1055, 2003],
-          boots: matchupData.boots[0]?.ids[0] || 3006,
-          coreItems: matchupData.coreItems[0]?.ids || [3078, 3053, 3156],
-          situationalItems: [
-            { itemId: 3026, condition: 'Frente a daño explosivo AD o para revivir en peleas de equipo.' },
-            { itemId: 3156, condition: 'Frente a amenazas de daño mágico o burst AP.' },
-          ],
-          rationale: `Build principal de OP.GG basada en ${matchupData.totalMatches.toLocaleString()} partidas del parche.`,
-        },
-        skillOrder: {
-          priority: matchupData.skillPriority || ['Q', 'W', 'E'],
-          firstThreeLevels: matchupData.skillOrder.slice(0, 3) || ['Q', 'W', 'E'],
-          rationale: 'Orden de maximización estándar con mayor tasa de victoria.',
-        },
-        earlyGameStrategy: {
-          waveManagement: 'Adaptar control de oleada según el nivel y rango del rival.',
-          tradingPlan: matchupData.opponentTip || 'Aprovechar picos de nivel y enfriamientos del rival.',
-          levelSpikes: ['Nivel 2', 'Nivel 3', 'Nivel 6'],
-        },
-        threatAnalysis: {
-          enemyThreats: ['Burst damage', 'Crowd control'],
-          winCondition: 'Escalado hacia juego medio y peleas por objetivos.',
-        },
-        dataSource: 'opgg',
-        opggData: matchupData,
-        patchVersion: patch,
-      };
-
-      this.dbService.setMatchupCache(cacheKey, mockRecommendation, TTL_CACHE_OPGG_SEGUNDOS);
-      registrarLog(`[OpGgClient] Guardado en caché SQLite: ${cacheKey}`);
+      const rec = this.construirRecomendacionDeterminista(matchupData, myChamp.name, role, patch, false);
+      this.dbService.setMatchupCache(cacheKey, rec, TTL_CACHE_OPGG_SEGUNDOS);
+      registrarLog(`[OpGgClient] Guardado matchup en SQLite: ${cacheKey}`);
     }
 
     return matchupData;
   }
 
   /**
-   * Ejecuta la petición HTTP JSON-RPC 2.0 hacia el endpoint MCP de OP.GG.
+   * Precalienta la caché de la build general (Esmeralda+) para campeones preferidos.
    */
-  private async ejecutarLlamadaMcp(myChampion: string, opponentChampion: string, position: string): Promise<any> {
-    // Control de ráfaga: mínimo 400ms entre llamadas consecutivas
+  public async warmupPreferredChampions(
+    preferences: Record<Role, { preferredChampions: number[] }>,
+    elo: string = 'emerald_plus',
+    patch: string = '26.20'
+  ): Promise<number> {
+    let warmed = 0;
+    const roles: Role[] = ['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY'];
+
+    for (const r of roles) {
+      const pref = preferences[r];
+      if (!pref || !Array.isArray(pref.preferredChampions)) continue;
+
+      for (const champId of pref.preferredChampions) {
+        if (!champId || champId <= 0) continue;
+        const cacheKey = this.construirClaveGeneral(champId, r, elo, patch);
+        if (this.dbService && this.dbService.getMatchupCache(cacheKey)) {
+          continue; // Ya en caché
+        }
+        try {
+          await this.getChampionAnalysis({ championId: champId, role: r, elo, patch });
+          warmed++;
+        } catch (err) {
+          registrarLog(`[OpGgClient Warmup] Fallo precalentando campeón ${champId} en ${r}: ${err}`);
+        }
+      }
+    }
+    registrarLog(`[OpGgClient Warmup] Completado. ${warmed} builds precalentadas en caché.`);
+    return warmed;
+  }
+
+  /**
+   * Construye una recomendación de IA determinista usando la regla B3.
+   */
+  public construirRecomendacionDeterminista(
+    matchupData: OpGgMatchupData,
+    myChampName: string,
+    role: Role,
+    patch: string,
+    isGeneral: boolean
+  ): GeminiMatchupRecommendation {
+    const oppChamp = matchupData.opponentChampionId ? getChampionById(matchupData.opponentChampionId) : null;
+    const oppChampName = oppChamp ? oppChamp.name : (matchupData.opponentChampionId ? `Rival ${matchupData.opponentChampionId}` : '');
+
+    const bestRune = selectOptimalOption(matchupData.runes, matchupData.totalMatches) || matchupData.runes[0];
+    const bestCore = selectOptimalOption(matchupData.coreItems, matchupData.totalMatches) || matchupData.coreItems[0];
+    const bestBoots = selectOptimalOption(matchupData.boots, matchupData.totalMatches) || matchupData.boots[0];
+    const bestStarter = selectOptimalOption(matchupData.starterItems, matchupData.totalMatches) || matchupData.starterItems[0];
+
+    // Ítems iniciales: soporte asegura Atlas Mundial (3865)
+    let starterIds = bestStarter?.ids || [1055, 2003];
+    if (role === 'UTILITY' && !starterIds.includes(3865)) {
+      starterIds = [3865, 2003];
+    }
+
+    // Ítems situacionales / 4° a 6°
+    const situationalItems: Array<{ itemId: number; condition: string }> = [];
+    if (matchupData.fourthItems?.[0]?.ids?.[0]) {
+      situationalItems.push({ itemId: matchupData.fourthItems[0].ids[0], condition: '4° objeto prioritario según estadísticas' });
+    }
+    if (matchupData.fifthItems?.[0]?.ids?.[0]) {
+      situationalItems.push({ itemId: matchupData.fifthItems[0].ids[0], condition: '5° objeto para juego medio/tardío' });
+    }
+    if (matchupData.sixthItems?.[0]?.ids?.[0]) {
+      situationalItems.push({ itemId: matchupData.sixthItems[0].ids[0], condition: '6° objeto de cierre' });
+    }
+    if (situationalItems.length === 0) {
+      situationalItems.push(
+        { itemId: 3026, condition: 'Ángel Guardián frente a daño explosivo AD' },
+        { itemId: 3156, condition: 'Fauces de Malmortius frente a burst mágico AP' }
+      );
+    }
+
+    const itemSetTitle = matchupData.opponentChampionId > 0 && !isGeneral
+      ? `[IL] ${myChampName} vs ${oppChampName}`
+      : `[IL] ${myChampName} (general)`;
+
+    const totalStr = matchupData.totalMatches.toLocaleString();
+    const summary = isGeneral
+      ? `Build general recomendada de OP.GG para ${myChampName} (${role}) en ${matchupData.eloLabel || 'Esmeralda+'}. Basada en ${totalStr} partidas del Parche ${patch}.`
+      : `Guía táctica de OP.GG para ${myChampName} vs ${oppChampName} (${matchupData.eloLabel || 'todos los rangos'}). Basada en ${totalStr} partidas del Parche ${patch}.`;
+
+    return {
+      championId: matchupData.myChampionId,
+      opponentChampionId: matchupData.opponentChampionId,
+      assignedRole: role,
+      patchVersion: patch,
+      difficultyRating: 5,
+      matchupSummary: summary,
+      runesRecommendation: {
+        primaryStyleId: bestRune?.primaryPageId || 8000,
+        subStyleId: bestRune?.secondaryPageId || 8300,
+        selectedPerkIds: [
+          ...(bestRune?.primaryRuneIds || [8005, 9111, 9104, 8014]),
+          ...(bestRune?.secondaryRuneIds || [8304, 8347]),
+          ...(bestRune?.statModIds || [5008, 5008, 5011]),
+        ],
+        rationale: `Configuración competitiva seleccionada por tasa de victoria (${((bestRune?.win || 0) / (bestRune?.play || 1) * 100).toFixed(1)}% WR en ${bestRune?.play || 0} partidas).`,
+      },
+      buildRecommendation: {
+        startingItems: starterIds,
+        boots: bestBoots?.ids?.[0] || 3006,
+        coreItems: bestCore?.ids || [3078, 3053, 3156],
+        situationalItems,
+        fourthItems: matchupData.fourthItems?.map((x) => x.ids[0]).filter(Boolean),
+        fifthItems: matchupData.fifthItems?.map((x) => x.ids[0]).filter(Boolean),
+        sixthItems: matchupData.sixthItems?.map((x) => x.ids[0]).filter(Boolean),
+        itemSetTitle,
+        rationale: `Núcleo de objetos con mayor efectividad en ${matchupData.totalMatches.toLocaleString()} partidas del parche.`,
+      },
+      skillOrder: {
+        priority: matchupData.skillPriority || ['Q', 'W', 'E'],
+        firstThreeLevels: matchupData.skillOrder?.slice(0, 3) || ['Q', 'W', 'E'],
+        rationale: 'Prioridad de habilidades optimizada por winrate.',
+      },
+      earlyGameStrategy: {
+        waveManagement: 'Adaptar control de oleada según el empuje del rival y tiempos de jungla.',
+        tradingPlan: matchupData.opponentTip || 'Respetar enfriamientos y picos de nivel tempranos.',
+        levelSpikes: ['Nivel 2', 'Nivel 3', 'Nivel 6'],
+      },
+      threatAnalysis: {
+        enemyThreats: ['Control de masas', 'Daño explosivo'],
+        winCondition: 'Consistencia en objetivos y ventaja de objetos en peleas de equipo.',
+      },
+      dataSource: 'opgg',
+      opggData: matchupData,
+    };
+  }
+
+  /**
+   * Ejecuta peticiones MCP genéricas con control de ráfaga y reintentos ante 429.
+   */
+  private async ejecutarLlamadaMcpGenerica(toolName: string, args: Record<string, any>): Promise<string> {
     const ahora = Date.now();
     const tiempoDesdeUltima = ahora - this.lastRequestTime;
     if (tiempoDesdeUltima < 400) {
@@ -278,13 +543,8 @@ export class OpGgClient {
       id: Date.now(),
       method: 'tools/call',
       params: {
-        name: 'lol_get_lane_matchup_guide',
-        arguments: {
-          position,
-          my_champion: myChampion,
-          opponent_champion: opponentChampion,
-          lang: 'en_US', // OP.GG MCP requiere en_US o ko_KR
-        },
+        name: toolName,
+        arguments: args,
       },
     };
 
@@ -302,11 +562,11 @@ export class OpGgClient {
         });
 
         const statusCode = respuesta.status;
-        this.dbService?.recordApiCall('OPGG', '/mcp/lol_get_lane_matchup_guide', statusCode);
+        this.dbService?.recordApiCall('OPGG', `/mcp/${toolName}`, statusCode);
 
         if (statusCode === 429) {
           const delay = Math.pow(2, intentos) * 500;
-          registrarLog(`[OpGgClient 429] Límite de tasa alcanzado. Esperando ${delay}ms para reintento ${intentos}...`);
+          registrarLog(`[OpGgClient 429] Límite de tasa en ${toolName}. Esperando ${delay}ms...`);
           await new Promise((r) => setTimeout(r, delay));
           continue;
         }
@@ -325,7 +585,7 @@ export class OpGgClient {
           throw new Error('Respuesta de OP.GG MCP vacía.');
         }
 
-        return JSON.parse(rawText);
+        return rawText;
       } catch (err) {
         ultimoError = err;
         if (intentos < maxIntentos) {
@@ -335,11 +595,11 @@ export class OpGgClient {
       }
     }
 
-    throw ultimoError || new Error('Fallo al consultar OP.GG MCP.');
+    throw ultimoError || new Error(`Fallo al consultar ${toolName} en OP.GG MCP.`);
   }
 
   /**
-   * Procesa la estructura cruda de OP.GG extrayendo IDs y traduciendo con DataDragonTranslator en español.
+   * Mapea y normaliza los datos de OP.GG tanto desde formato JSON como desde Dataclasses.
    */
   private procesarRespuestaOpGg(
     raw: any,
@@ -348,12 +608,14 @@ export class OpGgClient {
     position: Role,
     patch: string,
     elo: string,
-    isGeneralBuildFallback: boolean
+    isGeneralBuildFallback: boolean,
+    dataSourceType: 'general_analysis' | 'lane_matchup' = 'general_analysis',
+    eloLabel: string = 'Esmeralda+'
   ): OpGgMatchupData {
     const data = raw?.data || {};
 
-    // 1. Extraer runas
-    const rawRunes = Array.isArray(data.runes) ? data.runes : [];
+    // 1. Extraer runas (puede ser objeto individual o arreglo)
+    const rawRunes = Array.isArray(data.runes) ? data.runes : (data.runes ? [data.runes] : []);
     const runes: OpGgRunePage[] = rawRunes.map((r: any) => ({
       primaryPageId: r.primary_page_id || 8000,
       primaryPageName: this.traducirEstiloRuna(r.primary_page_id),
@@ -363,15 +625,15 @@ export class OpGgClient {
       secondaryPageName: this.traducirEstiloRuna(r.secondary_page_id),
       secondaryRuneIds: Array.isArray(r.secondary_rune_ids) ? r.secondary_rune_ids : [],
       secondaryRuneNames: (r.secondary_rune_ids || []).map((id: number) => this.traducirRuna(id)),
-      statModIds: Array.isArray(r.stat_mod_ids) ? r.stat_mod_ids : [5008, 5008, 5011],
-      statModNames: (r.stat_mod_ids || [5008, 5008, 5011]).map((id: number) => this.traducirRuna(id)),
+      statModIds: Array.isArray(r.stat_mod_ids) ? r.stat_mod_ids : [5008, 5008, 5001],
+      statModNames: (r.stat_mod_ids || [5008, 5008, 5001]).map((id: number) => this.traducirRuna(id)),
       play: r.play || 0,
       win: r.win || 0,
       pickRate: r.pick_rate || 0,
     }));
 
     // 2. Extraer core items
-    const rawCore = Array.isArray(data.core_items) ? data.core_items : [];
+    const rawCore = Array.isArray(data.core_items) ? data.core_items : (data.core_items ? [data.core_items] : []);
     const coreItems = rawCore.map((c: any) => ({
       ids: Array.isArray(c.ids) ? c.ids : [],
       names: (c.ids || []).map((id: number) => this.traducirItem(id)),
@@ -380,18 +642,33 @@ export class OpGgClient {
       pickRate: c.pick_rate || 0,
     }));
 
-    // 3. Extraer ítems iniciales
-    const rawStarters = Array.isArray(data.starter_items) ? data.starter_items : [];
-    const starterItems = rawStarters.map((s: any) => ({
-      ids: Array.isArray(s.ids) ? s.ids : [1055, 2003],
-      names: (s.ids || [1055, 2003]).map((id: number) => this.traducirItem(id)),
-      play: s.play || 0,
-      win: s.win || 0,
-      pickRate: s.pick_rate || 0,
-    }));
+    // 3. Extraer ítems iniciales (para soporte, garantizar Atlas Mundial 3865)
+    const rawStarters = Array.isArray(data.starter_items) ? data.starter_items : (data.starter_items ? [data.starter_items] : []);
+    const starterItems = rawStarters.map((s: any) => {
+      let ids: number[] = Array.isArray(s.ids) ? s.ids : [1055, 2003];
+      if (position === 'UTILITY' && !ids.includes(3865)) {
+        ids = [3865, ...ids.filter((id) => id !== 1055 && id !== 1056)];
+      }
+      return {
+        ids,
+        names: ids.map((id: number) => this.traducirItem(id)),
+        play: s.play || 0,
+        win: s.win || 0,
+        pickRate: s.pick_rate || 0,
+      };
+    });
+    if (starterItems.length === 0 && position === 'UTILITY') {
+      starterItems.push({
+        ids: [3865, 2003],
+        names: ['Atlas Mundial', 'Poción de Vida'],
+        play: 1000,
+        win: 500,
+        pickRate: 1,
+      });
+    }
 
     // 4. Extraer botas
-    const rawBoots = Array.isArray(data.boots) ? data.boots : [];
+    const rawBoots = Array.isArray(data.boots) ? data.boots : (data.boots ? [data.boots] : []);
     const boots = rawBoots.map((b: any) => ({
       ids: Array.isArray(b.ids) ? b.ids : [3006],
       names: (b.ids || [3006]).map((id: number) => this.traducirItem(id)),
@@ -400,8 +677,24 @@ export class OpGgClient {
       pickRate: b.pick_rate || 0,
     }));
 
-    // 5. Extraer hechizos de invocador
-    const rawSpells = Array.isArray(data.summoner_spells) ? data.summoner_spells : [];
+    // 5. Extraer 4°, 5° y 6° ítems
+    const mapItemsGroup = (group: any) => {
+      const arr = Array.isArray(group) ? group : (group ? [group] : []);
+      return arr.map((item: any) => ({
+        ids: Array.isArray(item.ids) ? item.ids : [],
+        names: (item.ids || []).map((id: number) => this.traducirItem(id)),
+        play: item.play || 0,
+        win: item.win || 0,
+        pickRate: item.pick_rate || 0,
+      }));
+    };
+
+    const fourthItems = mapItemsGroup(data.fourth_items);
+    const fifthItems = mapItemsGroup(data.fifth_items);
+    const sixthItems = mapItemsGroup(data.sixth_items);
+
+    // 6. Extraer hechizos de invocador
+    const rawSpells = Array.isArray(data.summoner_spells) ? data.summoner_spells : (data.summoner_spells ? [data.summoner_spells] : []);
     const summonerSpells = rawSpells.map((sp: any) => ({
       ids: (sp.ids || [4, 12]) as [number, number],
       names: (sp.ids || [4, 12]).map((id: number) => this.traducirHechizo(id)),
@@ -410,15 +703,20 @@ export class OpGgClient {
       pickRate: sp.pick_rate || 0,
     }));
 
-    // 6. Orden de habilidades
-    const skillOrder: string[] = data.skills?.[0]?.order || ['Q', 'W', 'E', 'Q', 'Q', 'R'];
-    const skillPriority: string[] = data.skill_masteries?.[0]?.ids || ['Q', 'W', 'E'];
+    // 7. Orden de habilidades
+    const skillOrder: string[] = (Array.isArray(data.skills) ? data.skills[0]?.order : data.skills?.order) || ['Q', 'W', 'E', 'Q', 'Q', 'R'];
+    const skillPriority: string[] = (Array.isArray(data.skill_masteries) ? data.skill_masteries[0]?.ids : data.skill_masteries?.ids) || ['Q', 'W', 'E'];
 
-    // 7. Total de partidas para el cálculo de muestra
-    const totalMatches = runes[0]?.play || coreItems[0]?.play || data.summary?.positions?.[0]?.stats?.play || 0;
+    // 8. Total de partidas para el cálculo de muestra
+    const totalMatches =
+      runes[0]?.play ||
+      coreItems[0]?.play ||
+      data.summary?.positions?.[0]?.stats?.play ||
+      data.summary?.average_stats?.play ||
+      0;
 
-    // 8. Counters
-    const counters = (data.summary?.positions?.[0]?.counters || []).map((cnt: any) => ({
+    // 9. Counters
+    const counters = (data.summary?.positions?.[0]?.counters || data.weak_counters || []).map((cnt: any) => ({
       championId: cnt.champion_id,
       championName: cnt.champion_name,
       winRate: cnt.win_rate || (cnt.play ? cnt.win / cnt.play : 0.5),
@@ -436,6 +734,9 @@ export class OpGgClient {
       starterItems,
       boots,
       coreItems,
+      fourthItems,
+      fifthItems,
+      sixthItems,
       summonerSpells,
       skillOrder,
       skillPriority,
@@ -443,12 +744,13 @@ export class OpGgClient {
       isGeneralBuildFallback,
       opponentTip: data.opponent_champion_tip || undefined,
       counters,
+      dataSourceType,
+      eloLabel,
     };
   }
 
   private traducirItem(id: number): string {
     if (this.translator) {
-      // DataDragonTranslator itemMap
       const itemMap = (this.translator as any).itemMap as Map<string, { id: number; name: string }> | undefined;
       if (itemMap) {
         for (const entry of itemMap.values()) {
@@ -465,7 +767,17 @@ export class OpGgClient {
       3047: 'Punteras de Acero Revestidas',
       3111: 'Botas de Mercurio',
       3158: 'Botas Jonias de la Lucidez',
+      3009: 'Botas de Rapidez',
       3008: 'Grebas Codiciosas',
+      3179: 'Glaive Umbral',
+      3142: 'Filo Fantasma de Youmuu',
+      3814: 'Filo de la Noche',
+      3865: 'Atlas Mundial',
+      3869: 'Oposición Celestial',
+      6696: 'Arco Axiomático',
+      6699: 'Cicloespada Voltaica',
+      6695: 'Colmillo de Serpiente',
+      6697: 'Soberbia',
       3508: 'Segador de Esencia',
       3071: 'Cuchilla Negra',
       3161: 'Lanza de Shojin',
@@ -476,6 +788,9 @@ export class OpGgClient {
       3053: 'Guantelete de Sterak',
       3156: 'Fauces de Malmortius',
       3026: 'Ángel Guardián',
+      3072: 'Sanguinaria',
+      6676: 'El Coleccionista',
+      3036: 'Recuerdos de Lord Dominik',
     };
     return nombresComunes[id] || `Objeto (${id})`;
   }
@@ -495,7 +810,7 @@ export class OpGgClient {
       8017: 'Corte',
       8299: 'Último Esfuerzo',
       8229: 'Cometa Arcano',
-      8992: 'Cometa Arcano', // OP.GG keystone id mapping
+      8992: 'Cometa Arcano',
       8214: 'Invocación de Aery',
       8230: 'Fase Veloz',
       8275: 'Capa del Nimbo',
@@ -515,6 +830,16 @@ export class OpGgClient {
       8473: 'Revestimiento de Huesos',
       8451: 'Sobrecrecimiento',
       8453: 'Revitalizar',
+      8112: 'Electrocutar',
+      8128: 'Cosecha Oscura',
+      9923: 'Lluvia de Espadas',
+      8126: 'Golpe Bajo',
+      8139: 'Sabor a Sangre',
+      8137: 'Sexto Sentido',
+      8138: 'Colección de Ojos',
+      8106: 'Cazador Definitivo',
+      8105: 'Cazador Incansable',
+      8242: 'Inquebrantable',
       5008: '+9 Fuerza Adaptable',
       5005: '+10% Velocidad de Ataque',
       5007: '+8 Aceleración de Habilidad',

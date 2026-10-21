@@ -35,7 +35,7 @@ export const api = {
     ipcRenderer.invoke(IPC_CHANNELS.LCU_HOVER_CHAMPION, championId),
   applyRunes: (page: RunePage): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.LCU_APPLY_RUNES, page),
-  applyBuild: (params: { championId: number; title?: string; build: any }): Promise<{ success: boolean; filePath?: string; error?: string }> =>
+  applyBuild: (params: { championId: number; opponentId?: number; role?: Role; title?: string; build: any }): Promise<{ success: boolean; filePath?: string; error?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.LCU_APPLY_BUILD, params),
 
   // Riot API
@@ -44,8 +44,8 @@ export const api = {
     ipcRenderer.invoke(IPC_CHANNELS.RIOT_SYNC_ACCOUNT, params),
   getProfile: (puuid: string) => ipcRenderer.invoke(IPC_CHANNELS.RIOT_GET_PROFILE, puuid),
 
-  // Gemini AI Matchup & Draft
-  getMatchupAdvice: (params: { championId: number; opponentId: number; role: Role; patch: string; allies: number[]; enemies: number[]; forceRefresh?: boolean }) =>
+  // Gemini AI & OP.GG Matchup & Draft
+  getMatchupAdvice: (params: { championId: number; opponentId: number; role: Role; patch: string; allies: number[]; enemies: number[]; forceRefresh?: boolean; viewMode?: 'general' | 'matchup'; elo?: string; askAi?: boolean }) =>
     ipcRenderer.invoke(IPC_CHANNELS.AI_GET_MATCHUP_ADVICE, params),
   getDraftRecommendations: (params: { role: Role; patch: string; allies: number[]; enemies: number[]; bans: number[]; pickableChampionIds?: number[]; forceRefresh?: boolean }) =>
     ipcRenderer.invoke(IPC_CHANNELS.AI_GET_DRAFT_RECOMMENDATIONS, params),
@@ -58,7 +58,7 @@ export const api = {
     ipcRenderer.invoke(IPC_CHANNELS.PATCH_DIFF_GET, patch),
   getGroundingQuota: () =>
     ipcRenderer.invoke(IPC_CHANNELS.AI_GET_GROUNDING_QUOTA),
-  getOpGgMatchup: (params: { championId: number; opponentId?: number; role: Role; patch?: string; elo?: string; forceRefresh?: boolean }) =>
+  getOpGgMatchup: (params: { championId: number; opponentId?: number; role: Role; patch?: string; elo?: string; forceRefresh?: boolean; viewMode?: 'general' | 'matchup' }) =>
     ipcRenderer.invoke(IPC_CHANNELS.OPGG_GET_MATCHUP, params),
   cleanAppAssets: () =>
     ipcRenderer.invoke(IPC_CHANNELS.LCU_CLEAN_APP_ASSETS),

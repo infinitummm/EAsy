@@ -11,12 +11,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ILcuClient } from '../../shared/contracts';
-import type { BuildRecommendation } from '../../shared/types';
+import type { BuildRecommendation, Role } from '../../shared/types';
 import { getChampionById } from '../../shared/champions';
 import { registrarLog } from './LcuDetector';
 
 export interface ParametrosAplicarBuild {
   championId: number;
+  opponentId?: number;
+  role?: Role;
   title?: string;
   build: BuildRecommendation;
 }
@@ -62,9 +64,27 @@ export class ItemSetManager {
   public construirItemSet(params: ParametrosAplicarBuild): Record<string, unknown> {
     const champ = getChampionById(params.championId);
     const champName = champ ? champ.name : `Campeón ${params.championId}`;
-    const titulo = params.title || `[IL] ${champName}`;
 
-    const itemsInicio = (params.build.startingItems || [1055, 2003]).map((id: number) => ({
+    let titulo = params.title;
+    if (!titulo) {
+      if (params.opponentId && params.opponentId > 0) {
+        const opp = getChampionById(params.opponentId);
+        const oppName = opp ? opp.name : `Rival ${params.opponentId}`;
+        titulo = `[IL] ${champName} vs ${oppName}`;
+      } else {
+        titulo = `[IL] ${champName} (general)`;
+      }
+    }
+
+    // Iniciales: asegurar soporte Atlas Mundial (3865) si no está presente
+    let rawStarters = params.build.startingItems || [1055, 2003];
+    if (params.role === 'UTILITY' || params.championId === 555) {
+      if (!rawStarters.includes(3865)) {
+        rawStarters = [3865, ...rawStarters.filter((id) => id !== 1055 && id !== 1056)];
+      }
+    }
+
+    const itemsInicio = rawStarters.map((id: number) => ({
       id: String(id),
       count: 1,
     }));
@@ -90,6 +110,17 @@ export class ItemSetManager {
       ? itemsCoreFiltered
       : (params.build.coreItems || [3078, 3053, 3156]).map((id: number) => ({ id: String(id), count: 1 }));
 
+    // Opciones finales: 4° a 6° objeto (si están presentes)
+    const finalItemsIds: number[] = [
+      ...(params.build.fourthItems || []),
+      ...(params.build.fifthItems || []),
+      ...(params.build.sixthItems || []),
+    ];
+    const itemsFinales = finalItemsIds.map((id) => ({
+      id: String(id),
+      count: 1,
+    }));
+
     const itemsSituacionales = (params.build.situationalItems || []).map((s: { itemId: number; condition?: string }) => ({
       id: String(s.itemId),
       count: 1,
@@ -105,6 +136,69 @@ export class ItemSetManager {
       { id: '2139', count: 1 }, // Elixir de hechicería
     ];
 
+    const blocks: Array<Record<string, unknown>> = [
+      {
+        type: 'Objetos Iniciales (Inicio)',
+        recMath: false,
+        minSummonerLevel: -1,
+        maxSummonerLevel: -1,
+        showIfSummonerSpell: '',
+        hideIfSummonerSpell: '',
+        items: itemsInicio,
+      },
+      {
+        type: 'Botas Recomendadas (Botas)',
+        recMath: false,
+        minSummonerLevel: -1,
+        maxSummonerLevel: -1,
+        showIfSummonerSpell: '',
+        hideIfSummonerSpell: '',
+        items: itemsBotas,
+      },
+      {
+        type: 'Objetos Centrales (Core Build)',
+        recMath: false,
+        minSummonerLevel: -1,
+        maxSummonerLevel: -1,
+        showIfSummonerSpell: '',
+        hideIfSummonerSpell: '',
+        items: itemsCore,
+      },
+    ];
+
+    if (itemsFinales.length > 0) {
+      blocks.push({
+        type: 'Opciones Finales (4° a 6° Objeto)',
+        recMath: false,
+        minSummonerLevel: -1,
+        maxSummonerLevel: -1,
+        showIfSummonerSpell: '',
+        hideIfSummonerSpell: '',
+        items: itemsFinales,
+      });
+    }
+
+    blocks.push(
+      {
+        type: 'Opciones Situacionales (Situacional)',
+        recMath: false,
+        minSummonerLevel: -1,
+        maxSummonerLevel: -1,
+        showIfSummonerSpell: '',
+        hideIfSummonerSpell: '',
+        items: itemsSituacionales,
+      },
+      {
+        type: 'Consumibles & Pociones (Consumibles)',
+        recMath: false,
+        minSummonerLevel: -1,
+        maxSummonerLevel: -1,
+        showIfSummonerSpell: '',
+        hideIfSummonerSpell: '',
+        items: itemsConsumibles,
+      }
+    );
+
     return {
       title: titulo,
       associatedMaps: [11, 12],
@@ -115,53 +209,7 @@ export class ItemSetManager {
       sortrank: 1,
       startedFrom: 'blank',
       type: 'custom',
-      blocks: [
-        {
-          type: 'Objetos Iniciales (Inicio)',
-          recMath: false,
-          minSummonerLevel: -1,
-          maxSummonerLevel: -1,
-          showIfSummonerSpell: '',
-          hideIfSummonerSpell: '',
-          items: itemsInicio,
-        },
-        {
-          type: 'Botas Recomendadas (Botas)',
-          recMath: false,
-          minSummonerLevel: -1,
-          maxSummonerLevel: -1,
-          showIfSummonerSpell: '',
-          hideIfSummonerSpell: '',
-          items: itemsBotas,
-        },
-        {
-          type: 'Objetos Centrales (Core Build)',
-          recMath: false,
-          minSummonerLevel: -1,
-          maxSummonerLevel: -1,
-          showIfSummonerSpell: '',
-          hideIfSummonerSpell: '',
-          items: itemsCore,
-        },
-        {
-          type: 'Opciones Situacionales (Situacional)',
-          recMath: false,
-          minSummonerLevel: -1,
-          maxSummonerLevel: -1,
-          showIfSummonerSpell: '',
-          hideIfSummonerSpell: '',
-          items: itemsSituacionales,
-        },
-        {
-          type: 'Consumibles & Pociones (Consumibles)',
-          recMath: false,
-          minSummonerLevel: -1,
-          maxSummonerLevel: -1,
-          showIfSummonerSpell: '',
-          hideIfSummonerSpell: '',
-          items: itemsConsumibles,
-        },
-      ],
+      blocks,
     };
   }
 

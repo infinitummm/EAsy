@@ -263,6 +263,10 @@ export interface GeminiMatchupRecommendation {
     coreItems: number[];
     situationalItems: Array<{ itemId: number; condition: string }>;
     boots?: number;
+    fourthItems?: number[];
+    fifthItems?: number[];
+    sixthItems?: number[];
+    itemSetTitle?: string;
     rationale: string;
   };
   skillOrder: {
@@ -390,15 +394,24 @@ export interface OpGgMatchupData {
   opponentTip?: string;
   laneAdvantage?: string;
   counters?: Array<{ championId: number; championName: string; winRate: number; play: number }>;
+  dataSourceType?: 'general_analysis' | 'lane_matchup';
+  eloLabel?: string;
 }
 
-export type BuildRecommendation = GeminiMatchupRecommendation['buildRecommendation'];
+export type BuildRecommendation = GeminiMatchupRecommendation['buildRecommendation'] & {
+  fourthItems?: number[];
+  fifthItems?: number[];
+  sixthItems?: number[];
+  itemSetTitle?: string;
+};
 
 // ==========================================
 // Configuración de la Aplicación
 // ==========================================
 export interface AppSettings {
   opggTier?: 'all' | 'emerald_plus' | 'diamond_plus' | 'master_plus' | 'grandmaster' | 'challenger';
+  minMatchupSampleThreshold?: number; // Umbral de partidas para matchup (default: 200)
+  allowAiChoiceTop3?: boolean; // Permitir que la IA escoja entre top 3 (default: false)
   autoAccept: {
     enabled: boolean;
     delaySeconds: number;

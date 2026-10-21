@@ -158,6 +158,25 @@ app.whenReady().then(async () => {
       translator: dataDragonTranslator,
     });
 
+    // Precalentamiento en segundo plano de builds generales para campeones preferidos (B5)
+    const currentDb = dbService;
+    if (opggClient && currentDb) {
+      setTimeout(() => {
+        try {
+          const settings = currentDb.getSettings();
+          if (settings?.autoChampSelect?.rolePreferences) {
+            void opggClient?.warmupPreferredChampions(
+              settings.autoChampSelect.rolePreferences,
+              settings.opggTier || 'emerald_plus',
+              '26.20'
+            ).catch((e) => {
+              console.warn('[Main] Error en warmup de campeones:', e);
+            });
+          }
+        } catch {}
+      }, 2000);
+    }
+
     // Carga no bloqueante del catálogo de campeones y diccionarios
     void dataDragonService.sincronizarCatalogoCampeones().catch(() => {});
     dataDragonTranslator.initialize().catch((err) => {

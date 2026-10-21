@@ -11,6 +11,8 @@ import { RuneManager } from '../lcu/RuneManager';
 import { ItemSetManager } from '../lcu/ItemSetManager';
 import { OpGgClient } from '../opgg/OpGgClient';
 import { PatchDiffService } from '../riot/PatchDiffService';
+import { getChampionById } from '../../shared/champions';
+import { registrarLog } from '../lcu/LcuDetector';
 import { RunePage, Role, ChampSelectSession, GameflowPhase, BuildRecommendation } from '../../shared/types';
 
 export function setupChampSelectIpc(
@@ -112,7 +114,7 @@ export function setupChampSelectIpc(
     }
   });
 
-  // 3. Consulta de recomendación táctica y de matchup con Gemini AI
+  // 3. Consulta de recomendación táctica y de matchup con OP.GG MCP y asistencia IA
   ipcMain.removeHandler(IPC_CHANNELS.AI_GET_MATCHUP_ADVICE);
   ipcMain.handle(
     IPC_CHANNELS.AI_GET_MATCHUP_ADVICE,
@@ -126,8 +128,50 @@ export function setupChampSelectIpc(
         allies: number[];
         enemies: number[];
         forceRefresh?: boolean;
+        viewMode?: 'general' | 'matchup';
+        elo?: string;
+        askAi?: boolean;
       }
     ) => {
+      if (opggClient) {
+        try {
+          const isGeneral = params.viewMode === 'general' || !params.opponentId || params.opponentId <= 0;
+          let opggData;
+          if (isGeneral) {
+            opggData = await opggClient.getChampionAnalysis({
+              championId: params.championId,
+              role: params.role,
+              elo: params.elo || 'emerald_plus',
+              patch: params.patch || '26.20',
+              forceRefresh: params.forceRefresh,
+            });
+          } else {
+            opggData = await opggClient.getLaneMatchupGuide({
+              championId: params.championId,
+              opponentId: params.opponentId,
+              role: params.role,
+              patch: params.patch || '26.20',
+              elo: params.elo || 'emerald_plus',
+              forceRefresh: params.forceRefresh,
+            });
+          }
+
+          const champ = getChampionById(params.championId);
+          const champName = champ ? champ.name : `Campeón ${params.championId}`;
+          const rec = opggClient.construirRecomendacionDeterminista(
+            opggData,
+            champName,
+            params.role,
+            params.patch || '26.20',
+            isGeneral
+          );
+
+          return rec;
+        } catch (opggErr) {
+          registrarLog(`[AI_GET_MATCHUP_ADVICE] Error en OP.GG MCP: ${opggErr}. Recurriendo a fallback.`);
+        }
+      }
+
       return await geminiService.getMatchupAdvice(params);
     }
   );
@@ -256,17 +300,27 @@ export function setupChampSelectIpc(
       _event,
       params: {
         championId: number;
-        opponentId: number;
+        opponentId?: number;
         role: Role;
         patch?: string;
         elo?: string;
         forceRefresh?: boolean;
+        viewMode?: 'general' | 'matchup';
       }
     ) => {
       if (!opggClient) {
         throw new Error('OpGgClient no inicializado en el proceso principal.');
       }
-      return await opggClient.getLaneMatchupGuide(params);
+      if (params.viewMode === 'general' || !params.opponentId || params.opponentId <= 0) {
+        return await opggClient.getChampionAnalysis({
+          championId: params.championId,
+          role: params.role,
+          elo: params.elo,
+          patch: params.patch,
+          forceRefresh: params.forceRefresh,
+        });
+      }
+      return await opggClient.getLaneMatchupGuide(params as any);
     }
   );
 

@@ -65,6 +65,8 @@ export const ROLE_LABELS: Record<Role, string> = {
 // ==========================================
 export const DEFAULT_APP_SETTINGS = {
   opggTier: 'emerald_plus' as const,
+  minMatchupSampleThreshold: 200,
+  allowAiChoiceTop3: false,
   autoAccept: {
     enabled: true,
     delaySeconds: 2,

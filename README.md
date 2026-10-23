@@ -76,7 +76,7 @@ Por seguridad, el auto-pick viene apagado por defecto. Pero si tienes que aparta
 
 ## Cómo instalarlo en 1 minuto
 
-1. Entra a la sección de [Releases](https://github.com/infinitummm/itero-local/releases) y descarga el instalador: **`EAsy Setup 1.0.1.exe`**.
+1. Entra a la sección de [Releases](https://github.com/infinitummm/EAsy/releases) y descarga el instalador: **`EAsy Setup 1.0.1.exe`**.
 2. Haz doble clic para instalar. Se instala en tu carpeta de usuario (`%LOCALAPPDATA%\Programs\EAsy`) sin pedir permisos de Administrador ni tocar archivos protegidos de Windows.
 3. **¿Te sale el aviso azul de Windows SmartScreen ("Windows protegió su PC")?**  
    Es totalmente normal: como EAsy es un proyecto independiente nuevo y no paga un certificado comercial de Microsoft de cientos de dólares al año, Windows te avisará la primera vez.  
@@ -93,8 +93,8 @@ Si quieres trastear con el código o compilar tu propia versión:
 
 ```bash
 # 1. Clonar el repositorio
-git clone https://github.com/infinitummm/itero-local.git
-cd itero-local
+git clone https://github.com/infinitummm/EAsy.git
+cd EAsy
 
 # 2. Instalar dependencias
 npm install

@@ -1,96 +1,129 @@
-# EAsy - League of Legends Desktop Assistant
+# EAsy (Export Assets)
 
-Asistente de escritorio local, monousuario y en tiempo real para League of Legends en Windows.
-
-## Stack Tecnológico
-- **Shell de Escritorio:** Electron 44+ (Node.js 24+)
-- **Frontend:** React 18 + TypeScript + Vite + Tailwind CSS
-- **Base de Datos:** SQLite local embebido (`node:sqlite` nativo o `better-sqlite3`)
-- **Suite de Pruebas:** Vitest
+> **Haciéndole la vida fácil a los loleros.**  
+> Un asistente de escritorio local, rápido y sin rodeos para League of Legends en Windows.
 
 ---
 
-## Comandos de Desarrollo y Empaquetado
+## ¿De dónde viene el nombre y cuál es la idea?
 
-### 1. Abrir la App en Modo Desarrollo
-Inicia el servidor Vite con recarga en caliente (HMR) y levanta la ventana de Electron automáticamente:
+**EAsy** nace de dos cosas:
+1. **Export Assets**: porque exporta e inyecta runas, builds y conjuntos de objetos directamente a tu cliente de League of Legends en un solo clic.
+2. **Easy (fácil)**: porque la meta es quitarle la molestia a los que jugamos LoL todos los días.
+
+Se acabó tener 5 pestañas de navegador abiertas que te comen la RAM mientras juegas, buscar guías en páginas lentas a 10 segundos de que empiece la partida, o tener que armar las runas a las carreras con el reloj en contra. **EAsy se encarga de lo tedioso para que tú solo te concentres en ganar tu línea.**
+
+---
+
+## Un vistazo a la app
+
+La interfaz está inspirada en la estética **Dark Hour** de *Persona 3 Reload* (azul marino profundo, cortes diagonales y tipografía inclinada): limpia, legible y optimizada para no consumir recursos mientras juegas.
+
+### Pantalla de Inicio
+*Monitoreo en tiempo real del estado de tu cliente de LoL y control rápido de Auto-Accept con retardo configurable.*
+![Pantalla de Inicio de EAsy](docs/screenshots/dashboard.png)
+
+### Selección de Campeón
+*Detección automática de tu rol, tu campeón y el rival predicho, con estadísticas y recomendaciones de OP.GG.*
+![Selección de Campeón en EAsy](docs/screenshots/champselect.png)
+
+### Ajustes y Diagnóstico
+*Configuración de tus campeones preferidos, bans automáticos por rol, elo de referencia y panel de soporte.*
+![Ajustes y Diagnóstico](docs/screenshots/settings.png)
+
+---
+
+## Todo lo que EAsy hace por ti
+
+### 1. Auto-Accept con retardo configurable
+¿Fuiste a servirte agua o al baño mientras buscabas partida y sonó la cola? EAsy acepta la partida por ti. Puedes configurar un retardo de 1 a 4 segundos para que la aceptación sea natural.
+
+### 2. Cero registros y cero claves obligatorias
+No necesitas crearte cuentas en ninguna web, ni pagar nada, ni conseguir claves de desarrollador para jugar. Abres League of Legends, abres EAsy y listo: detecta tu cuenta, nivel, rango de ranked y partidas directamente desde tu propio cliente en tu PC.
+
+### 3. Detección automática en Selección de Campeón
+En cuanto entras a la sala de selección, EAsy detecta:
+- En qué línea juegas (Superior, Jungla, Medio, Tirador o Soporte).
+- El campeón que tienes seleccionado o en hover.
+- Quién es tu rival directo en línea.
+
+### 4. Runas óptimas a un solo clic
+Con un solo botón, inyecta la página de runas completa y validada directo al cliente oficial. En tu lista de páginas aparecerá como **EAsy**, y cada vez que importes una nueva, limpia automáticamente las anteriores para que no se te acumule basura.
+
+### 5. Conjuntos de objetos (Item Sets) en la tienda in-game
+Te arma la build completa directamente en la tienda del juego:
+- **Objetos iniciales** (incluyendo soporte como Atlas Mundial si vas de support).
+- **Botas recomendadas**.
+- **Objetos centrales (Core Build)**.
+- **Opciones situacionales** adaptadas al daño del rival.
+- **Consumibles y pociones**.
+
+### 6. Metagame y estadísticas reales de OP.GG
+Las recomendaciones no son inventadas: vienen de millones de partidas analizadas en el parche actual (**26.20**). Además, puedes elegir con qué nivel de juego quieres comparar tus datos (Esmeralda+, Diamante+, Máster+ o todos los rangos).
+
+### 7. Todos los campeones al día
+El catálogo de campeones se sincroniza de forma dinámica con Data Dragon oficial y el cliente de LoL. Resuelve automáticamente campeones nuevos y recién salidos (como Yunara), sin listas fijas en el código.
+
+### 8. Auto-Pick y Auto-Ban de respaldo
+Por seguridad, el auto-pick viene apagado por defecto. Pero si tienes que apartarte del teclado durante la fase de selección, puedes armar una lista de prioridades de campeones y de bans para cada posición. EAsy elegirá o bloqueará el primer campeón disponible de tu lista.
+
+### 9. Opciones avanzadas (100% opcionales)
+- **Inteligencia Artificial con Google Gemini**: Si quieres explicaciones detalladas y razonamientos de por qué funciona cada objeto contra la composición enemiga, puedes conectar tu clave gratuita de Google AI Studio.
+- **Riot Games Developer Key**: Si quieres buscar el historial de invocadores remotos o amigos que no están en tu PC, puedes ingresar una clave de Riot Developer.
+- *Si no pones ninguna clave, la app sigue funcionando al 100% con OP.GG y tu cliente local.*
+
+---
+
+## Cómo instalarlo en 1 minuto
+
+1. Entra a la sección de [Releases](https://github.com/infinitummm/itero-local/releases) y descarga el instalador: **`EAsy Setup 1.0.1.exe`**.
+2. Haz doble clic para instalar. Se instala en tu carpeta de usuario (`%LOCALAPPDATA%\Programs\EAsy`) sin pedir permisos de Administrador ni tocar archivos protegidos de Windows.
+3. **¿Te sale el aviso azul de Windows SmartScreen ("Windows protegió su PC")?**  
+   Es totalmente normal: como EAsy es un proyecto independiente nuevo y no paga un certificado comercial de Microsoft de cientos de dólares al año, Windows te avisará la primera vez.  
+   - Haz clic en **"Más información"**.  
+   - Luego en **"Ejecutar de todas formas"**.  
+   - Solo te lo preguntará una vez.
+4. Abre League of Legends, abre EAsy ¡y a jugar!
+
+---
+
+## Para desarrolladores (Compilar desde el código)
+
+Si quieres trastear con el código o compilar tu propia versión:
+
 ```bash
+# 1. Clonar el repositorio
+git clone https://github.com/infinitummm/itero-local.git
+cd itero-local
+
+# 2. Instalar dependencias
+npm install
+
+# 3. Correr en modo desarrollo con recarga rápida (HMR)
 npm run dev
-```
 
-### 2. Generar el Ejecutable Portable (.exe) para Windows
-Compila el frontend y el backend y empaqueta el binario standalone sin dependencias:
-```bash
-npm run dist:portable
-```
-- **¿Dónde queda el ejecutable?**
-  El archivo `.exe` se genera dentro del directorio `release/` en la raíz del proyecto:
-  ```text
-  release/EAsy Setup 1.0.1.exe
-  ```
-  *(Nota: También puedes generar tanto el instalador NSIS como el portable ejecutando `npm run dist`).*
-
-### 3. Ejecutar la Suite de Pruebas
-```bash
+# 4. Correr la suite de pruebas unitarias (391 tests)
 npm test
+
+# 5. Generar el instalador ejecutable para Windows (.exe)
+npx electron-builder --win nsis
 ```
 
----
-
-## Primera Configuración (API Keys y Cuentas)
-
-La aplicación es **100% local**: no tiene servidores intermedios y almacena todas tus credenciales y datos en una base de datos local SQLite cifrada con **AES-256-GCM**.
-
-### 1. ¿Qué API Keys necesitas?
-Para aprovechar todas las funcionalidades inteligentes de EAsy necesitas dos claves gratuitas:
-
-1. **Riot Games Developer API Key (Gratis):**
-   - **Para qué sirve:** Descargar tu historial de partidas (Match-V5), estadísticas de ranked (League-V4), maestrías de campeones y verificar el estado de los servidores.
-   - **Cómo obtenerla:** Inicia sesión con tu cuenta de Riot Games en [Riot Developer Portal](https://developer.riotgames.com/) y copia la *Development API Key*.
-   - **Importante:** Las claves de desarrollo de Riot expiran cada **24 horas**. La aplicación monitorea el estado de la clave en tiempo real y te mostrará un aviso visual destacado si tu clave ha caducado.
-
-2. **Google Gemini API Key (Gratis):**
-   - **Para qué sirve:** Motor de inteligencia artificial para el análisis táctico en vivo de matchups (dificultad 1-10, plan de early game, amenazas de la composición enemiga), cálculo óptimo de árboles de runas y sugerencias de builds iniciales, core y situacionales.
-   - **Cómo obtenerla:** Genera tu clave en el nivel gratuito de [Google AI Studio](https://aistudio.google.com/).
-   - **Control de Cuota:** La app implementa un limitador Token Bucket local (15 peticiones/min y 1,500/día) con caché en SQLite para evitar agotar tu cuota.
-
-### 2. ¿Dónde poner las Keys en la Aplicación?
-1. Abre la aplicación con `npm run dev` (o ejecuta el `.exe`).
-2. En la barra de navegación lateral izquierda, haz clic en **"Ajustes & Keys"** (icono de engranaje).
-3. Introduce tu **Riot API Key** y tu **Gemini API Key** en sus respectivos campos.
-4. Haz clic en **"Guardar Ajustes"**. Las claves se cifran inmediatamente en disco con una clave simétrica local de 32 bytes (`itero.key`).
-5. En la misma pantalla o en la pestaña **"Mi Perfil"**, puedes ingresar tu **Riot ID** (`Nombre#Tag`) y tu región (por ejemplo `americas` / `la1`) y pulsar **"Sincronizar Cuenta"** para descargar tu historial y maestrías.
+El instalador quedará en `release/EAsy Setup 1.0.1.exe`.
 
 ---
 
-## Persistencia en SQLite y Reconstrucción Nativa
+## Privacidad y Seguridad
 
-El proyecto soporta de forma transparente dos motores de persistencia síncrona en SQLite:
-
-### 1. `node:sqlite` (Recomendado y por Defecto)
-El módulo `node:sqlite` está integrado de forma nativa en Node.js 22.5+ y Electron 44+.
-- No requiere compiladores externos ni dependencias C++.
-- No requiere rebuild tras actualizar versiones de Electron.
-- Usa la clase nativa `DatabaseSync`.
-
-### 2. `better-sqlite3` (Alternativa con Addon C++)
-Si se desea utilizar `better-sqlite3`:
-1. Instalar la dependencia: `npm install better-sqlite3` y `@electron/rebuild` como devDependency.
-2. Comando exacto para reconstruir el módulo nativo para Electron en Windows:
-   ```bash
-   npx @electron/rebuild -f -w better-sqlite3
-   ```
-   *(Nota: Requiere tener instalado Visual Studio con el componente "Desktop development with C++" para compilar mediante node-gyp).*
+- **100% en tu ordenador**: EAsy no envía tus datos a servidores externos ni recopila telemetría.
+- **Base de datos local**: Tus ajustes, historial y preferencias se guardan en tu equipo en SQLite (`%APPDATA%\proyecto-itero`) cifradas localmente con Windows DPAPI y AES-256-GCM.
+- **Limpieza segura**: Puedes borrar en cualquier momento las páginas y conjuntos creados por la app desde la sección *Avanzado / Diagnóstico* en Ajustes.
 
 ---
 
-## Estructura del Repositorio y Documentación
+## Descargo legal
 
-- [`docs/SPEC.md`](docs/SPEC.md): Especificación funcional y reglas de Riot Games.
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): Arquitectura, modelo de procesos y matriz de carpetas por agente.
-- [`docs/CONTRACTS.md`](docs/CONTRACTS.md): Contratos de interfaces TypeScript, eventos, esquema de BD e IPC.
-- [`docs/TASKS.md`](docs/TASKS.md): Plan maestro de tareas organizadas por fases.
-- [`docs/PROMPT_OPENCODE.md`](docs/PROMPT_OPENCODE.md): Instrucciones completas para el agente implementador en Orca.
-- [`docs/REQUESTS.md`](docs/REQUESTS.md): Canal formal de solicitudes de cambio de contrato (REQ-001 a REQ-009 resueltos).
-- [`docs/PROGRESS.md`](docs/PROGRESS.md): Registro de progreso de tareas de Antigravity y OpenCode.
+Este proyecto es una aplicación creada por fans sin fines de lucro. No está afiliada, respaldada ni asociada con **Riot Games, Inc.**, **Atlus Co., Ltd.** ni **Sega Corporation**.
 
+- *League of Legends* y todos los activos relacionados son marcas comerciales o marcas registradas de Riot Games, Inc.
+- Las referencias visuales y tipográficas inspiradas en *Persona 3 Reload* pertenecen a Atlus y Sega.

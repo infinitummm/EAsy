@@ -188,34 +188,48 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen w-screen bg-[#08101E] text-[#E2E8F0] select-none p3r-bg-pattern">
-      {/* Barra Lateral de Navegación Estilo Persona 3 Reload */}
-      <aside className="w-64 bg-[#0A111F] border-r border-[#1E355B] flex flex-col justify-between p-4 shadow-xl z-20">
+    <div className="flex h-screen w-screen bg-[#030814] text-[#E2E8F0] select-none p3r-bg-darkhour overflow-hidden">
+      {/* Barra Lateral de Navegación Persona 3 Reload */}
+      <aside className="w-68 bg-[#040A17] border-r-2 border-[#16335F] flex flex-col justify-between p-4 shadow-2xl z-20 shrink-0">
         <div>
-          {/* Logo / Header P3R */}
-          <div className="relative mb-6 pb-4 border-b border-[#1E355B]">
+          {/* Logo / Header P3R Dark Hour */}
+          <div className="relative mb-6 pb-4 border-b-2 border-[#16335F]">
+            <div className="flex items-center justify-between mb-2">
+              <span className="flex items-center space-x-1.5 text-[10px] font-mono tracking-widest text-[#00E5FF] uppercase font-bold">
+                <svg className="w-3.5 h-3.5 text-[#00E5FF] fill-current" viewBox="0 0 24 24">
+                  <path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z" />
+                </svg>
+                <span>DARK HOUR // 00:00</span>
+              </span>
+              <span className="text-[9px] font-mono bg-[#16335F]/60 text-[#7E9BB8] px-1.5 py-0.5 border border-[#16335F]">
+                SEES-03
+              </span>
+            </div>
+
             <div className="flex items-center space-x-3 px-1">
-              <div className="w-9 h-9 rounded bg-[#0070EB] flex items-center justify-center font-bold text-white transform -skew-x-6 text-sm">
-                <span className="transform skew-x-6 tracking-wider">IT</span>
+              <div className="w-10 h-10 bg-[#0066FF] flex items-center justify-center font-black text-white transform -skew-x-8 p3r-shadow-blue border-l-2 border-white">
+                <span className="transform skew-x-8 tracking-wider font-p3r text-base">IT</span>
               </div>
               <div>
-                <h1 className="font-bold text-white text-base tracking-wider flex items-center space-x-1">
+                <h1 className="font-black text-white text-lg tracking-wider flex items-center space-x-1 font-p3r leading-none">
                   <span>ITERO</span>
-                  <span className="text-[#60A5FA] text-xs font-mono font-semibold">LOCAL</span>
+                  <span className="text-[#00E5FF]">LOCAL</span>
                 </h1>
-                <p className="text-[10px] text-[#94A3B8] font-medium tracking-wide uppercase">Asistente de LoL</p>
+                <p className="text-[10px] text-[#7E9BB8] font-bold tracking-widest uppercase mt-0.5 font-p3r-head">
+                  TACTICAL COMPANION
+                </p>
               </div>
             </div>
           </div>
 
-          {/* Menú de Navegación P3R */}
-          <nav className="space-y-1.5">
+          {/* Menú de Navegación P3R con Selección Dinámica e Inversión */}
+          <nav className="space-y-2">
             {[
-              { id: 'dashboard', label: 'DASHBOARD', icon: Shield },
-              { id: 'champSelect', label: 'CHAMP SELECT', icon: Play },
-              { id: 'matchups', label: 'MATCHUPS & BUILDS', icon: Swords },
-              { id: 'profile', label: 'MI PERFIL', icon: User },
-              { id: 'settings', label: 'AJUSTES & KEYS', icon: Settings },
+              { id: 'dashboard', label: 'DASHBOARD', code: '01', icon: Shield },
+              { id: 'champSelect', label: 'CHAMP SELECT', code: '02', icon: Play },
+              { id: 'matchups', label: 'MATCHUPS & BUILDS', code: '03', icon: Swords },
+              { id: 'profile', label: 'MI PERFIL', code: '04', icon: User },
+              { id: 'settings', label: 'AJUSTES & KEYS', code: '05', icon: Settings },
             ].map((tab) => {
               const isActive = activeTab === tab.id;
               const Icon = tab.icon;
@@ -223,15 +237,27 @@ export default function App() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`w-full group relative flex items-center space-x-3 px-3.5 py-2.5 rounded-sm text-xs font-bold tracking-wider transition-all duration-150 transform -skew-x-6 ${
+                  className={`w-full group relative flex items-center justify-between px-4 py-2.5 text-xs font-black tracking-wider transition-all duration-150 transform -skew-x-8 cursor-pointer ${
                     isActive
-                      ? 'bg-[#0070EB] text-white border-l-4 border-white shadow-md'
-                      : 'text-[#94A3B8] hover:text-white hover:bg-[#1E355B]/40 hover:border-l-2 hover:border-[#0070EB]'
+                      ? 'bg-[#00E5FF] text-[#030814] p3r-shadow-blue border-l-4 border-[#0066FF]'
+                      : 'bg-[#061022] text-[#7E9BB8] hover:text-white hover:bg-[#0C1B38] hover:border-[#0066FF] border border-[#16335F] hover:translate-x-1'
                   }`}
                 >
-                  <div className="transform skew-x-6 flex items-center space-x-3">
-                    <Icon className={`w-4 h-4 transition-transform group-hover:scale-105 ${isActive ? 'text-white' : 'text-[#64748B]'}`} />
-                    <span>{tab.label}</span>
+                  <div className="transform skew-x-8 flex items-center space-x-3">
+                    <Icon
+                      className={`w-4 h-4 transition-transform ${
+                        isActive ? 'text-[#030814]' : 'text-[#0066FF] group-hover:text-[#00E5FF]'
+                      }`}
+                    />
+                    <span className="font-p3r-head">{tab.label}</span>
+                  </div>
+
+                  <div className="transform skew-x-8 flex items-center space-x-1.5 font-mono text-[10px]">
+                    {isActive ? (
+                      <span className="text-[#030814] font-black">▶</span>
+                    ) : (
+                      <span className="text-[#4A627E] group-hover:text-[#00E5FF]">{tab.code}</span>
+                    )}
                   </div>
                 </button>
               );
@@ -239,87 +265,96 @@ export default function App() {
           </nav>
         </div>
 
-        {/* Notificación visual de actualización disponible / descargada */}
+        {/* Notificación visual de actualización */}
         {updateInfo && (
-          <div className="mb-3 p-2.5 rounded-lg bg-emerald-950/80 border border-emerald-500/50 shadow-lg text-xs space-y-1.5 animate-fade-in">
-            <div className="flex items-center space-x-2 text-emerald-300 font-bold">
+          <div className="mb-3 p-3 bg-[#031A12] border-2 border-[#00E676] text-xs space-y-2 p3r-cut-tr p3r-shadow-hard animate-p3r-slide">
+            <div className="flex items-center space-x-2 text-[#00E676] font-bold font-p3r-head">
               <RefreshCw className={`w-3.5 h-3.5 ${!updateInfo.downloaded ? 'animate-spin' : ''}`} />
-              <span className="truncate">{updateInfo.downloaded ? `¡v${updateInfo.version} Lista!` : `Descargando v${updateInfo.version}...`}</span>
+              <span className="truncate">
+                {updateInfo.downloaded ? `¡v${updateInfo.version} Lista!` : `Descargando v${updateInfo.version}...`}
+              </span>
             </div>
             {updateInfo.downloaded ? (
               <button
                 type="button"
                 onClick={() => window.api?.installUpdate?.()}
-                className="w-full py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[11px] font-bold transition shadow"
+                className="w-full py-1.5 px-2 bg-[#00E676] hover:bg-[#00C853] text-[#030814] text-[11px] font-black uppercase tracking-wider transform -skew-x-8 transition shadow cursor-pointer font-p3r-head"
               >
-                Reiniciar para Actualizar
+                <span className="transform skew-x-8 inline-block">Reiniciar para Actualizar</span>
               </button>
             ) : (
-              <p className="text-[10px] text-emerald-400/80">Descargando actualización en segundo plano...</p>
+              <p className="text-[10px] text-[#00E676]/80 font-mono">Descargando parche en segundo plano...</p>
             )}
           </div>
         )}
 
-        {/* Botón Acerca de */}
-        <button
-          type="button"
-          onClick={() => setShowAbout(true)}
-          className="w-full mb-3 px-3 py-2 rounded-lg bg-[#0D192D] border border-[#1E355B] text-xs font-semibold text-[#94A3B8] hover:text-white hover:border-[#0070EB] transition flex items-center justify-between"
-        >
-          <span className="flex items-center space-x-2">
-            <Info className="w-3.5 h-3.5 text-[#00D4FF]" />
-            <span>Acerca de Itero Local</span>
-          </span>
-          <span className="text-[10px] bg-[#1E355B] px-1.5 py-0.5 rounded text-white">{appVersion}</span>
-        </button>
-        {/* Estado LCU en el footer de la barra lateral */}
-        <div className="bg-[#0D192D] p-3.5 rounded border border-[#1E355B] shadow-lg">
-          <div className="flex items-center justify-between text-xs mb-1.5">
-            <span className="text-[#94A3B8] text-[11px] uppercase tracking-wider font-semibold">CLIENTE LOL:</span>
-            <span
-              className={`font-bold flex items-center text-[11px] ${
-                lcuState === 'connected'
-                  ? 'text-[#10B981]'
-                  : lcuState === 'connecting'
-                  ? 'text-[#F5A623]'
-                  : 'text-[#D92546]'
-              }`}
-            >
-              <span
-                className={`w-2 h-2 rounded-full mr-1.5 ${
-                  lcuState === 'connected'
-                    ? 'bg-[#10B981]'
-                    : lcuState === 'connecting'
-                    ? 'bg-[#F5A623]'
-                    : 'bg-[#D92546]'
-                }`}
-              />
-              {lcuState === 'connected' ? 'ONLINE' : lcuState === 'connecting' ? 'SYNCING...' : 'OFFLINE'}
+        <div>
+          {/* Botón Acerca de */}
+          <button
+            type="button"
+            onClick={() => setShowAbout(true)}
+            className="w-full mb-3 px-3.5 py-2 bg-[#061022] hover:bg-[#0C1B38] border border-[#16335F] hover:border-[#0066FF] text-xs font-bold text-[#7E9BB8] hover:text-white transition transform -skew-x-8 flex items-center justify-between cursor-pointer"
+          >
+            <span className="transform skew-x-8 flex items-center space-x-2">
+              <Info className="w-3.5 h-3.5 text-[#00E5FF]" />
+              <span className="font-p3r-head tracking-wider">Acerca de Itero</span>
             </span>
-          </div>
-          <div className="text-[11px] text-[#64748B] flex items-center justify-between border-t border-[#1E355B] pt-1.5 mt-1">
-            <span>GAMEFLOW:</span>
-            <span className="text-white font-semibold font-mono">{gameflow}</span>
+            <span className="transform skew-x-8 text-[10px] bg-[#16335F] px-1.5 py-0.5 text-white font-mono">
+              {appVersion}
+            </span>
+          </button>
+
+          {/* Estado LCU en el footer de la barra lateral */}
+          <div className="bg-[#050E20] p-3.5 border-2 border-[#16335F] p3r-bevel p3r-shadow-hard">
+            <div className="flex items-center justify-between text-xs mb-1.5">
+              <span className="text-[#7E9BB8] text-[10px] uppercase tracking-wider font-black font-p3r-head">
+                CLIENTE LOL:
+              </span>
+              <span
+                className={`font-black flex items-center text-[10px] font-mono tracking-wider ${
+                  lcuState === 'connected'
+                    ? 'text-[#00E676]'
+                    : lcuState === 'connecting'
+                    ? 'text-[#FFE277]'
+                    : 'text-[#FF1744]'
+                }`}
+              >
+                <span
+                  className={`w-2 h-2 mr-1.5 transform rotate-45 ${
+                    lcuState === 'connected'
+                      ? 'bg-[#00E676]'
+                      : lcuState === 'connecting'
+                      ? 'bg-[#FFE277]'
+                      : 'bg-[#FF1744]'
+                  }`}
+                />
+                {lcuState === 'connected' ? 'ONLINE' : lcuState === 'connecting' ? 'SYNC...' : 'OFFLINE'}
+              </span>
+            </div>
+            <div className="text-[11px] text-[#7E9BB8] flex items-center justify-between border-t border-[#16335F] pt-1.5 mt-1">
+              <span className="font-p3r-head text-[10px] uppercase font-bold">GAMEFLOW:</span>
+              <span className="text-[#00E5FF] font-bold font-mono text-xs">{gameflow}</span>
+            </div>
           </div>
         </div>
       </aside>
 
       {/* Contenido Principal */}
-      <main className="flex-1 overflow-y-auto p-8 bg-[#08101E]">
+      <main className="flex-1 overflow-y-auto p-8 bg-[#030814] p3r-bg-darkhour">
         {isPermissionError && (
-          <div className="mb-6 p-4 rounded bg-amber-950/40 border border-amber-600/50 flex items-start space-x-3 text-amber-200 text-sm shadow-md">
+          <div className="mb-6 p-4 bg-[#211503] border-2 border-[#FFE277] flex items-start space-x-3.5 text-[#FFE277] text-xs p3r-bevel p3r-shadow-hard">
             <span className="text-xl shrink-0">⚠️</span>
             <div className="flex-1">
-              <h4 className="font-semibold text-amber-300">Aviso de Privilegios de Windows</h4>
-              <p className="mt-0.5 text-xs text-amber-200/90 leading-relaxed">
+              <h4 className="font-bold text-white uppercase tracking-wider font-p3r-head">Aviso de Privilegios de Windows</h4>
+              <p className="mt-1 text-xs text-[#CBD5E1] leading-relaxed">
                 Se detectó League of Legends en ejecución, pero Windows bloqueó la lectura del proceso por diferencia de privilegios. Ejecuta Itero Local con el mismo nivel de permisos que League of Legends (ambos como Administrador o ambos como usuario estándar), o configura la ruta de instalación en la pestaña <strong>Ajustes & Keys</strong>.
               </p>
             </div>
             <button
               onClick={() => setActiveTab('settings')}
-              className="px-3 py-1 bg-amber-600/30 hover:bg-amber-600/50 text-amber-200 text-xs font-semibold rounded transition shrink-0"
+              className="px-4 py-2 bg-[#FFE277] hover:bg-[#FFD54F] text-[#030814] text-xs font-black uppercase tracking-wider transform -skew-x-8 transition shrink-0 cursor-pointer p3r-shadow-hard font-p3r-head"
             >
-              Configurar Ruta
+              <span className="transform skew-x-8 inline-block">Configurar Ruta</span>
             </button>
           </div>
         )}

@@ -3,6 +3,7 @@ node_modules/
 
 # Compilación y artefactos
 dist/
+dist-*/
 dist-electron/
 dist-release/
 out/

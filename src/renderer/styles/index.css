@@ -2,61 +2,176 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: 'P3R-Display';
+  src: url('../../assets/p3r/Montserrat-BlackItalic.ttf') format('truetype');
+  font-weight: 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'P3R-Heading';
+  src: url('../../assets/p3r/Montserrat-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
-  font-family: 'Segoe UI', system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
   color-scheme: dark;
 }
 
 body {
   margin: 0;
   padding: 0;
-  background-color: #08101E;
+  background-color: #030814;
   color: #E2E8F0;
   overflow: hidden;
 }
 
-/* Persona 3 Reload Scrollbar */
+/* Persona 3 Reload Scrollbar - Hard-edge, angular */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #0A111F;
+  background: #050E20;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1E355B;
-  border-radius: 3px;
+  background: #16335F;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #0070EB;
+  background: #0066FF;
 }
 
-/* P3R Geometric & Visual Styles */
-.p3r-skew {
-  transform: skewX(-6deg);
-}
-.p3r-unskew {
-  transform: skewX(6deg);
-}
-
-.p3r-card {
-  background: #0D192D;
-  border: 1px solid #1E355B;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-}
-
-.p3r-card-active {
-  background: #11223F;
-  border: 1px solid #0070EB;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
-}
-
-/* Subtle clean grid background */
-.p3r-bg-pattern {
-  background-color: #08101E;
+/* P3R Background Grid & Hatch Patterns */
+.p3r-bg-darkhour {
+  background-color: #030814;
   background-image: 
-    linear-gradient(rgba(30, 53, 91, 0.15) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(30, 53, 91, 0.15) 1px, transparent 1px);
+    linear-gradient(rgba(0, 102, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 102, 255, 0.04) 1px, transparent 1px);
   background-size: 32px 32px;
 }
 
+.p3r-hatch {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(0, 102, 255, 0.05),
+    rgba(0, 102, 255, 0.05) 2px,
+    transparent 2px,
+    transparent 8px
+  );
+}
+
+.p3r-hatch-active {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(0, 229, 255, 0.12),
+    rgba(0, 229, 255, 0.12) 2px,
+    transparent 2px,
+    transparent 6px
+  );
+}
+
+/* Hard Shadows without blur */
+.p3r-shadow-hard {
+  box-shadow: 4px 4px 0px 0px rgba(0, 0, 0, 0.95);
+}
+
+.p3r-shadow-hard-lg {
+  box-shadow: 7px 7px 0px 0px rgba(0, 0, 0, 0.95);
+}
+
+.p3r-shadow-blue {
+  box-shadow: 4px 4px 0px 0px #003B8F;
+}
+
+.p3r-shadow-cyan {
+  box-shadow: 4px 4px 0px 0px #007799;
+}
+
+/* P3R Beveled & Angular Cut-paths */
+.p3r-bevel {
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+}
+
+.p3r-cut-corner {
+  clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
+}
+
+.p3r-cut-tr {
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
+}
+
+.p3r-cut-bl {
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+}
+
+.p3r-cut-diag-r {
+  clip-path: polygon(0 0, 100% 0, calc(100% - 20px) 100%, 0 100%);
+}
+
+.p3r-cut-diag-l {
+  clip-path: polygon(20px 0, 100% 0, 100% 100%, 0 100%);
+}
+
+/* Skew Utilities (Compensated) */
+.p3r-skew {
+  transform: skewX(-8deg);
+}
+.p3r-unskew {
+  transform: skewX(8deg);
+}
+
+/* P3R Display Font Class */
+.font-p3r {
+  font-family: 'P3R-Display', 'Montserrat', sans-serif;
+  letter-spacing: 0.05em;
+}
+
+.font-p3r-head {
+  font-family: 'P3R-Heading', 'Montserrat', sans-serif;
+  letter-spacing: 0.03em;
+}
+
+/* Animations (Transform & Opacity only) */
+@keyframes p3r-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-16px) skewX(-8deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) skewX(-8deg);
+  }
+}
+
+@keyframes p3r-wipe-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-p3r-slide {
+  animation: p3r-slide-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-p3r-wipe {
+  animation: p3r-wipe-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

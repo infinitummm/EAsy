@@ -20,6 +20,8 @@ import type { KeyHealthStatus } from '../../shared/contracts';
 import { RolePreferencesEditor } from '../components/RolePreferencesEditor';
 import { formatFullPatchLabel } from '../../shared/patchUtils';
 import { ChampionInfo, obtenerTodosLosCampeones } from '../../shared/champions';
+import { P3rButton } from '../components/p3r/P3rButton';
+import { P3rBadge } from '../components/p3r/P3rBadge';
 
 interface SettingsViewProps {
   settings: AppSettings;
@@ -215,111 +217,109 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <header className="flex justify-between items-center border-b border-[#1B3B6F]/70 pb-4">
+    <div className="max-w-5xl mx-auto space-y-6 select-none pb-8">
+      <header className="flex justify-between items-center border-b-2 border-[#16335F] pb-4">
         <div>
-          <div className="inline-block px-2.5 py-0.5 mb-1.5 bg-[#00D4FF]/15 border border-[#00D4FF]/40 text-[#00F0FF] text-[10px] font-black tracking-widest uppercase transform -skew-x-6">
-            SYSTEM PREFERENCES // CONFIG
+          <div className="inline-block px-2.5 py-0.5 mb-1.5 bg-[#0066FF] text-white text-[10px] font-black tracking-widest uppercase transform -skew-x-8 font-p3r-head p3r-shadow-blue border-l-2 border-white">
+            <span className="transform skew-x-8 inline-block">SEES // SYSTEM PREFERENCES</span>
           </div>
-          <h2 className="text-2xl font-black text-white tracking-wide flex items-center space-x-2">
+          <h2 className="text-3xl font-black text-white tracking-wider flex items-center space-x-2 font-p3r uppercase">
             <span>AJUSTES & CLAVES DE API</span>
-            <span className="text-[#00D4FF] font-mono text-sm">// P3R</span>
           </h2>
-          <p className="text-xs text-[#6F92BF] font-mono mt-0.5">Gestión de credenciales cifradas (AES-256) y parámetros del sistema</p>
+          <p className="text-xs text-[#7E9BB8] font-mono mt-0.5">Gestión de credenciales seguras (DPAPI / AES-256) y parámetros locales</p>
         </div>
-        <button
+
+        <P3rButton
+          variant="cyan"
+          size="lg"
           onClick={handleSaveAll}
-          className="flex items-center space-x-2 bg-gradient-to-r from-[#00D4FF] to-[#0088FF] hover:from-[#00F0FF] hover:to-[#0077FF] text-[#030813] font-black text-xs uppercase tracking-widest px-5 py-2.5 rounded shadow-[0_0_15px_rgba(0,212,255,0.4)] transition transform -skew-x-6 active:scale-95"
+          icon={savedSuccess ? <Check className="w-4 h-4 text-[#030814]" /> : <Save className="w-4 h-4 text-[#030814]" />}
         >
-          <div className="transform skew-x-6 flex items-center space-x-2">
-            {savedSuccess ? <Check className="w-4 h-4 text-[#030813]" /> : <Save className="w-4 h-4 text-[#030813]" />}
-            <span>{savedSuccess ? '¡GUARDADO!' : 'GUARDAR AJUSTES'}</span>
-          </div>
-        </button>
+          {savedSuccess ? '¡GUARDADO!' : 'GUARDAR AJUSTES'}
+        </P3rButton>
       </header>
 
       {/* Sección Avanzada: Riot API Key (Opcional) */}
-      <div className="bg-[#111823]/70 p-5 rounded-lg border border-[#1E282D] space-y-3 shadow">
+      <div className="bg-[#050E20] p-6 border-2 border-[#16335F] p3r-bevel p3r-shadow-hard space-y-3">
         <div className="flex justify-between items-center cursor-pointer" onClick={() => setShowAdvancedRiotKey(!showAdvancedRiotKey)}>
           <div>
-            <h3 className="text-sm font-semibold text-[#CBD5E1] flex items-center space-x-2">
-              <Key className="w-4 h-4 text-[#8EA2C6]" />
+            <h3 className="text-sm font-black text-white flex items-center space-x-2 uppercase font-p3r tracking-wider">
+              <span className="w-2.5 h-2.5 bg-[#0066FF] transform rotate-45"></span>
               <span>Avanzado: Riot Games Development API Key (Opcional)</span>
             </h3>
-            <p className="text-xs text-[#64748B] mt-0.5">
+            <p className="text-xs text-[#7E9BB8] mt-0.5">
               Tus datos de invocador, rango e historial ya se obtienen automáticamente del cliente LoL sin Riot API. Solo configúrala si deseas buscar invocadores remotos.
             </p>
           </div>
           <button
             type="button"
-            className="text-xs font-bold px-3 py-1 bg-[#1E282D] text-[#CBD5E1] rounded hover:bg-[#28343C] transition"
+            className="text-xs font-black px-3 py-1 bg-[#030814] text-[#00E5FF] border border-[#16335F] transform -skew-x-8 uppercase font-p3r-head cursor-pointer"
           >
-            {showAdvancedRiotKey ? 'Ocultar ▲' : 'Configurar ▼'}
+            <span className="transform skew-x-8 inline-block">{showAdvancedRiotKey ? 'Ocultar ▲' : 'Configurar ▼'}</span>
           </button>
         </div>
 
         {showAdvancedRiotKey && (
-          <div className="pt-3 border-t border-[#1E282D] space-y-3">
+          <div className="pt-3 border-t-2 border-[#16335F] space-y-3">
             <div className="flex justify-end">
               <a
                 href="https://developer.riotgames.com"
                 target="_blank"
                 rel="noreferrer"
-                className="text-xs text-[#0AC8B9] hover:underline flex items-center space-x-1"
+                className="text-xs text-[#00E5FF] hover:underline flex items-center space-x-1 font-mono"
               >
-                <span>Obtener o Renovar Clave en Riot Portal (24h)</span>
+                <span>Obtener o Renovar Clave en Riot Portal (24h) ↗</span>
               </a>
             </div>
 
-        <div className="flex items-center space-x-3">
-          <div className="relative flex-1">
-            <input
-              type={showRiotKey ? 'text' : 'password'}
-              value={riotKey}
-              onChange={(e) => setRiotKey(e.target.value)}
-              placeholder="RGAPI-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-              className="w-full bg-[#0A1428] border border-[#1E282D] rounded px-4 py-2 text-sm text-[#F0E6D2] focus:outline-none focus:border-[#C89B3C] font-mono"
-            />
-            <button
-              type="button"
-              onClick={() => setShowRiotKey(!showRiotKey)}
-              className="absolute right-3 top-2.5 text-[#A09B8C] hover:text-[#F0E6D2]"
-            >
-              {showRiotKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          </div>
+            <div className="flex items-center space-x-3">
+              <div className="relative flex-1">
+                <input
+                  type={showRiotKey ? 'text' : 'password'}
+                  value={riotKey}
+                  onChange={(e) => setRiotKey(e.target.value)}
+                  placeholder="RGAPI-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                  className="w-full bg-[#030814] border border-[#16335F] focus:border-[#00E5FF] px-4 py-2.5 text-sm text-white focus:outline-none font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowRiotKey(!showRiotKey)}
+                  className="absolute right-3 top-3 text-[#7E9BB8] hover:text-white"
+                >
+                  {showRiotKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
 
-          <button
-            type="button"
-            onClick={handleValidateRiotKey}
-            disabled={validating || !riotKey.trim()}
-            className="bg-[#1E282D] hover:bg-[#28343C] text-[#F0E6D2] text-xs font-semibold px-4 py-2.5 rounded transition flex items-center space-x-2 disabled:opacity-50"
-          >
-            {validating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-            <span>Validar</span>
-          </button>
-        </div>
-
+              <P3rButton
+                variant="secondary"
+                size="md"
+                onClick={handleValidateRiotKey}
+                disabled={validating || !riotKey.trim()}
+                icon={validating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4 text-[#00E5FF]" />}
+              >
+                Validar
+              </P3rButton>
+            </div>
           </div>
         )}
 
         {/* Estado de Salud de la Riot Key */}
         {showAdvancedRiotKey && keyHealth && (
           <div
-            className={`p-3 rounded text-xs flex items-center space-x-2 border ${
+            className={`p-3 text-xs flex items-center space-x-2 border-2 p3r-cut-tr ${
               keyHealth.valid
-                ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300'
+                ? 'bg-[#031A12] border-[#00E676] text-[#00E676]'
                 : keyHealth.isExpired
-                ? 'bg-rose-950/30 border-rose-500/30 text-rose-300'
-                : 'bg-amber-950/30 border-amber-500/30 text-amber-300'
+                ? 'bg-[#2A050A] border-[#FF1744] text-[#FF1744]'
+                : 'bg-[#2A1705] border-[#FFE277] text-[#FFE277]'
             }`}
           >
             {keyHealth.valid ? (
-              <Check className="w-4 h-4 shrink-0 text-emerald-400" />
+              <Check className="w-4 h-4 shrink-0 text-[#00E676]" />
             ) : (
-              <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+              <AlertCircle className="w-4 h-4 shrink-0 text-[#FF1744]" />
             )}
-            <span>
+            <span className="font-p3r-head">
               {keyHealth.valid
                 ? 'Clave de Riot activa y respondiendo correctamente.'
                 : keyHealth.isExpired
@@ -331,14 +331,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
       </div>
 
       {/* Sección 2: Google Gemini API Key */}
-      <div className="bg-[#111823] p-6 rounded-lg border border-[#1E282D] space-y-4 shadow">
+      <div className="bg-[#050E20] p-6 border-2 border-[#16335F] p3r-bevel p3r-shadow-hard space-y-4">
         <div className="flex justify-between items-start">
           <div>
-            <h3 className="text-lg font-semibold text-[#F0E6D2] flex items-center space-x-2">
-              <Key className="w-5 h-5 text-[#0AC8B9]" />
-              <span>Google Gemini API Key (Motor de IA)</span>
+            <h3 className="text-base font-black text-white flex items-center space-x-2 uppercase font-p3r tracking-wider">
+              <span className="w-2.5 h-2.5 bg-[#00E5FF] transform rotate-45"></span>
+              <span>Google Gemini API Key (Motor de IA Táctico)</span>
             </h3>
-            <p className="text-xs text-[#A09B8C] mt-1">
+            <p className="text-xs text-[#7E9BB8] mt-1">
               <strong>(Opcional)</strong> La app funciona al 100% sin IA usando los datos deterministas de OP.GG. Si añades tu clave gratuita de Google AI Studio, se activan explicaciones tácticas adaptadas a la composición.
             </p>
           </div>
@@ -346,9 +346,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
             href="https://aistudio.google.com/app/apikey"
             target="_blank"
             rel="noreferrer"
-            className="text-xs text-[#0AC8B9] hover:underline"
+            className="text-xs text-[#00E5FF] hover:underline font-mono"
           >
-            <span>Obtener Clave Gratuita de Gemini</span>
+            <span>Obtener Clave Gratuita ↗</span>
           </a>
         </div>
 
@@ -358,12 +358,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
             value={geminiKey}
             onChange={(e) => setGeminiKey(e.target.value)}
             placeholder="AIzaSy..."
-            className="w-full bg-[#0A1428] border border-[#1E282D] rounded px-4 py-2 text-sm text-[#F0E6D2] focus:outline-none focus:border-[#0AC8B9] font-mono"
+            className="w-full bg-[#030814] border border-[#16335F] focus:border-[#00E5FF] px-4 py-2.5 text-sm text-white focus:outline-none font-mono"
           />
           <button
             type="button"
             onClick={() => setShowGeminiKey(!showGeminiKey)}
-            className="absolute right-3 top-2.5 text-[#A09B8C] hover:text-[#F0E6D2]"
+            className="absolute right-3 top-3 text-[#7E9BB8] hover:text-white"
           >
             {showGeminiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
@@ -378,31 +378,29 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
       />
 
       
-      {/* Sección 2.8: Configuración de Datos OP.GG y Limpieza de Activos (REQ-022) */}
-      <div className="bg-[#111823] p-6 rounded-lg border border-[#1E282D] space-y-4 shadow">
+      {/* Sección 2.8: Configuración de Datos OP.GG y Limpieza de Activos */}
+      <div className="bg-[#050E20] p-6 border-2 border-[#16335F] p3r-bevel p3r-shadow-hard space-y-4">
         <div className="flex justify-between items-start">
           <div>
-            <h3 className="text-lg font-semibold text-[#F0E6D2] flex items-center space-x-2">
-              <Activity className="w-5 h-5 text-[#00D4FF]" />
+            <h3 className="text-base font-black text-white flex items-center space-x-2 uppercase font-p3r tracking-wider">
+              <span className="w-2.5 h-2.5 bg-[#00E5FF] transform rotate-45"></span>
               <span>Estadísticas de Meta Competitivo (OP.GG MCP)</span>
             </h3>
-            <p className="text-xs text-[#A09B8C] mt-1">
+            <p className="text-xs text-[#7E9BB8] mt-1">
               Filtro de nivel de juego para tasas de victoria, builds, runas y enfrentamientos (Streamable HTTP oficial de OP.GG).
             </p>
           </div>
           {versionInfo && (
-            <span className="text-xs font-mono font-bold px-2.5 py-1 rounded bg-[#0A1428] border border-[#00D4FF]/40 text-[#00D4FF]">
-              {versionInfo.displayPatch}
-            </span>
+            <P3rBadge label={versionInfo.displayPatch} variant="cyan" />
           )}
         </div>
 
         {versionInfo?.ddragonOutdated && (
-          <div className="p-3 rounded text-xs bg-amber-950/40 border border-amber-600/40 text-amber-200 flex items-start space-x-2">
-            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <div className="p-3 bg-[#2A1705] border-2 border-[#FFE277] text-xs text-[#FFE277] flex items-start space-x-2 p3r-cut-tr">
+            <AlertTriangle className="w-4 h-4 text-[#FFE277] shrink-0 mt-0.5" />
             <div>
-              <strong className="text-amber-300">Aviso de Parche Nuevo:</strong>
-              <p className="mt-0.5">
+              <strong className="text-white font-p3r-head uppercase">Aviso de Parche Nuevo:</strong>
+              <p className="mt-0.5 leading-relaxed">
                 Datos del parche anterior hasta que Riot publique el nuevo catálogo en Data Dragon.
               </p>
             </div>
@@ -411,7 +409,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="text-xs font-semibold text-[#F0E6D2] block mb-1">
+            <label className="text-[10px] font-black text-[#7E9BB8] uppercase block mb-1 font-p3r-head">
               Rango / Elo de Referencia para Builds:
             </label>
             <select
@@ -421,7 +419,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
                 setOpggTier(val);
                 onSaveSettings({ opggTier: val });
               }}
-              className="w-full bg-[#0A1428] border border-[#1E282D] rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#00D4FF]"
+              className="w-full bg-[#030814] border border-[#16335F] focus:border-[#00E5FF] px-3 py-2 text-xs text-white focus:outline-none font-mono"
             >
               <option value="emerald_plus">Esmeralda + (Recomendado - Mi Elo)</option>
               <option value="diamond_plus">Diamante +</option>
@@ -430,36 +428,38 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
               <option value="challenger">Challenger</option>
               <option value="all">Todos los Rangos (Agregado)</option>
             </select>
-            <p className="text-[10px] text-neutral-400 mt-1">
-              Clave de caché: <code className="font-mono text-[#00D4FF]">opgg:&#123;champ&#125;:&#123;pos&#125;:&#123;rival&#125;:{opggTier}:26.20</code>
+            <p className="text-[10px] text-[#7E9BB8] mt-1 font-mono">
+              Clave de caché: <code className="text-[#00E5FF]">opgg:&#123;champ&#125;:&#123;pos&#125;:&#123;rival&#125;:{opggTier}:26.20</code>
             </p>
           </div>
 
-          <div className="flex flex-col justify-between p-3 bg-[#0A1428] rounded border border-[#1E282D]">
+          <div className="flex flex-col justify-between p-3.5 bg-[#030814] border border-[#16335F] p3r-cut-tr">
             <div>
-              <div className="text-xs font-semibold text-white">Limpieza de Importaciones en LoL</div>
-              <p className="text-[11px] text-neutral-400 mt-0.5">
+              <div className="text-xs font-black text-white uppercase font-p3r-head">Limpieza de Importaciones en LoL</div>
+              <p className="text-[11px] text-[#7E9BB8] mt-0.5">
                 Elimina páginas de runas y conjuntos de objetos creados por la app ([IL] Itero Local).
               </p>
             </div>
-            <button
-              type="button"
-              onClick={handleCleanAssets}
-              disabled={cleaningAssets}
-              className="mt-2.5 bg-[#D92546]/80 hover:bg-[#D92546] text-white text-xs font-bold px-3 py-1.5 rounded transition flex items-center justify-center space-x-2 disabled:opacity-50"
-            >
-              {cleaningAssets ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-              <span>Borrar importaciones de la app</span>
-            </button>
+            <div className="mt-2.5">
+              <P3rButton
+                variant="danger"
+                size="sm"
+                onClick={handleCleanAssets}
+                disabled={cleaningAssets}
+                icon={cleaningAssets ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+              >
+                Borrar importaciones de la app
+              </P3rButton>
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-[#1E282D]">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t-2 border-[#16335F]">
           <div>
-            <label className="text-xs font-semibold text-[#F0E6D2] block mb-1">
+            <label className="text-[10px] font-black text-[#7E9BB8] uppercase block mb-1 font-p3r-head">
               Umbral Mínimo de Partidas para Matchup (B2):
             </label>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 font-mono">
               <input
                 type="number"
                 min="50"
@@ -471,16 +471,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
                   setMinMatchupSampleThreshold(val);
                   onSaveSettings({ minMatchupSampleThreshold: val });
                 }}
-                className="w-32 bg-[#0A1428] border border-[#1E282D] rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#00D4FF]"
+                className="w-32 bg-[#030814] border border-[#16335F] focus:border-[#00E5FF] px-3 py-2 text-xs text-white focus:outline-none"
               />
-              <span className="text-xs text-neutral-400">partidas registradas</span>
+              <span className="text-xs text-[#7E9BB8]">partidas registradas</span>
             </div>
-            <p className="text-[10px] text-neutral-400 mt-1">
+            <p className="text-[10px] text-[#7E9BB8] mt-1">
               Si un matchup tiene menos de este umbral, la app muestra un aviso y recurre a la build general de Esmeralda+.
             </p>
           </div>
 
-          <div className="p-3 bg-[#0A1428] rounded border border-[#1E282D]">
+          <div className="p-3.5 bg-[#030814] border border-[#16335F] p3r-cut-tr">
             <label className="flex items-start space-x-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -490,14 +490,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
                   setAllowAiChoiceTop3(val);
                   onSaveSettings({ allowAiChoiceTop3: val });
                 }}
-                className="mt-0.5 w-4 h-4 accent-[#0070EB] rounded cursor-pointer"
+                className="mt-0.5 w-4 h-4 accent-[#0066FF] cursor-pointer"
               />
               <div>
-                <span className="text-xs font-semibold text-white block">
+                <span className="text-xs font-black text-white uppercase block font-p3r-head">
                   Permitir que la IA elija entre las 3 mejores opciones (B3)
                 </span>
-                <span className="text-[10px] text-neutral-400 block mt-0.5">
-                  Desactivado por defecto. Si se activa, Gemini puede escoger justificadamente entre las 3 opciones de mejor rendimiento de OP.GG. Si está desactivado, se aplica estrictamente la opción óptima calculada por winrate.
+                <span className="text-[10px] text-[#7E9BB8] block mt-0.5 leading-relaxed">
+                  Desactivado por defecto. Si se activa, Gemini puede escoger justificadamente entre las 3 opciones de mejor rendimiento de OP.GG.
                 </span>
               </div>
             </label>
@@ -505,65 +505,65 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
         </div>
 
         {cleanResultMsg && (
-          <div className="p-2.5 rounded text-xs bg-emerald-950/40 border border-emerald-600/40 text-emerald-300">
+          <div className="p-3 text-xs bg-[#031A12] border-2 border-[#00E676] text-[#00E676] font-bold p3r-cut-tr">
             {cleanResultMsg}
           </div>
         )}
       </div>
 
       {/* Sección 3: Conexión con League of Legends (LCU API) */}
-      <div className="bg-[#111823] p-6 rounded-lg border border-[#1E282D] space-y-4 shadow">
+      <div className="bg-[#050E20] p-6 border-2 border-[#16335F] p3r-bevel p3r-shadow-hard space-y-4">
         <div className="flex justify-between items-start">
           <div>
-            <h3 className="text-lg font-semibold text-[#F0E6D2] flex items-center space-x-2">
-              <HardDrive className="w-5 h-5 text-[#C89B3C]" />
+            <h3 className="text-base font-black text-white flex items-center space-x-2 uppercase font-p3r tracking-wider">
+              <span className="w-2.5 h-2.5 bg-[#FFE277] transform rotate-45"></span>
               <span>Ruta de Instalación de League of Legends (LCU)</span>
             </h3>
-            <p className="text-xs text-[#A09B8C] mt-1">
+            <p className="text-xs text-[#7E9BB8] mt-1">
               La app detecta el cliente automáticamente mediante 4 métodos secuenciales. Si tu juego está en una carpeta no estándar, puedes seleccionarla aquí.
             </p>
           </div>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <div className="relative flex-1">
             <input
               type="text"
               value={leaguePath}
               onChange={(e) => setLeaguePath(e.target.value)}
               placeholder="Ej: C:\Riot Games\League of Legends"
-              className="w-full bg-[#0A1428] border border-[#1E282D] rounded px-4 py-2 text-sm text-[#F0E6D2] focus:outline-none focus:border-[#C89B3C] font-mono"
+              className="w-full bg-[#030814] border border-[#16335F] focus:border-[#00E5FF] px-4 py-2.5 text-xs text-white focus:outline-none font-mono"
             />
           </div>
 
-          <button
-            type="button"
+          <P3rButton
+            variant="secondary"
+            size="md"
             onClick={handleSelectFolder}
-            className="bg-[#1E282D] hover:bg-[#28343C] text-[#F0E6D2] text-xs font-semibold px-4 py-2.5 rounded transition flex items-center space-x-2"
+            icon={<FolderOpen className="w-4 h-4 text-[#00E5FF]" />}
           >
-            <FolderOpen className="w-4 h-4" />
-            <span>Examinar...</span>
-          </button>
+            Examinar...
+          </P3rButton>
 
-          <button
-            type="button"
+          <P3rButton
+            variant="cyan"
+            size="md"
             onClick={handleTestLcuConnection}
             disabled={testingLcu}
-            className="bg-[#C89B3C] hover:bg-[#D8AB4C] text-black text-xs font-bold px-4 py-2.5 rounded transition flex items-center space-x-2 disabled:opacity-50"
+            icon={testingLcu ? <RefreshCw className="w-4 h-4 animate-spin text-[#030814]" /> : <Terminal className="w-4 h-4 text-[#030814]" />}
           >
-            {testingLcu ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Terminal className="w-4 h-4" />}
-            <span>Probar Conexión</span>
-          </button>
+            Probar Conexión
+          </P3rButton>
         </div>
 
         {/* Alerta de Permisos si se detectó */}
         {lcuReport?.isPermissionError && (
-          <div className="p-3 rounded text-xs bg-amber-950/40 border border-amber-600/40 text-amber-200 flex items-start space-x-2.5">
-            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div className="p-3.5 text-xs bg-[#2A1705] border-2 border-[#FFE277] text-[#FFE277] flex items-start space-x-2.5 p3r-cut-tr">
+            <AlertTriangle className="w-5 h-5 text-[#FFE277] shrink-0 mt-0.5" />
             <div>
-              <strong className="text-amber-300">Aviso de Privilegios de Windows:</strong>
-              <p className="mt-0.5">
-                Se detectó el proceso de League of Legends pero Windows denegó la lectura de su línea de comandos. Ejecuta Itero Local con el mismo nivel de privilegios que League of Legends (ambos como Administrador o ambos como usuario normal).
+              <strong className="text-white font-p3r-head uppercase">Aviso de Privilegios de Windows:</strong>
+              <p className="mt-0.5 leading-relaxed">
+                Se detectó el proceso de League of Legends pero Windows denegó la lectura de su línea de comandos. Ejecuta Itero Local con el mismo nivel de privilegios que League of Legends (ambos como Administrador o ambos como usuario estándar).
               </p>
             </div>
           </div>
@@ -571,52 +571,49 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
 
         {/* Diagnóstico detallado por método y pasos de conexión */}
         {lcuReport && (
-          <div className="space-y-3 mt-3 pt-3 border-t border-[#1E282D]">
+          <div className="space-y-3 mt-3 pt-3 border-t-2 border-[#16335F]">
             <div className="flex justify-between items-center text-xs font-semibold">
-              <span className="text-[#F0E6D2]">Resultado de la Prueba de Conexión LCU:</span>
-              <span className={lcuReport.success ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
-                {lcuReport.success ? '✓ Conexión Completada' : '✕ Fallo en la Conexión'}
-              </span>
+              <span className="text-white font-p3r-head uppercase">Resultado de la Prueba de Conexión LCU:</span>
+              <P3rBadge
+                label={lcuReport.success ? 'Conexión Completada' : 'Fallo en la Conexión'}
+                variant={lcuReport.success ? 'green' : 'red'}
+              />
             </div>
 
-            {/* Pasos de conexión completos: a, b, c, d */}
+            {/* Pasos de conexión completos */}
             {lcuReport.testSteps && lcuReport.testSteps.length > 0 && (
               <div className="space-y-2">
-                <div className="text-[11px] font-bold text-[#C89B3C] uppercase tracking-wider">
+                <div className="text-[10px] font-black text-[#FFE277] uppercase tracking-wider font-p3r-head">
                   Etapas de Conexión Verificadas:
                 </div>
                 {lcuReport.testSteps.map((ts, idx) => (
                   <div
                     key={idx}
-                    className={`p-3 rounded text-xs border ${
+                    className={`p-3 text-xs border-2 p3r-cut-tr ${
                       ts.status === 'success'
-                        ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-200'
+                        ? 'bg-[#031A12] border-[#00E676] text-[#00E676]'
                         : ts.status === 'skipped'
-                        ? 'bg-[#0A1428] border-[#1E282D] text-gray-400 opacity-60'
-                        : 'bg-rose-950/30 border-rose-500/40 text-rose-200'
+                        ? 'bg-[#030814] border-[#16335F] text-[#7E9BB8] opacity-60'
+                        : 'bg-[#2A050A] border-[#FF1744] text-[#FF1744]'
                     }`}
                   >
                     <div className="flex items-center justify-between font-bold">
                       <span className="flex items-center space-x-2">
-                        <span className={ts.status === 'success' ? 'text-emerald-400' : ts.status === 'skipped' ? 'text-gray-400' : 'text-rose-400'}>
-                          {ts.status === 'success' ? '✓' : ts.status === 'skipped' ? '○' : '✕'}
-                        </span>
-                        <span className="text-[#F0E6D2]">{ts.name}</span>
+                        <span>{ts.status === 'success' ? '✓' : ts.status === 'skipped' ? '○' : '✕'}</span>
+                        <span className="text-white font-p3r-head uppercase">{ts.name}</span>
                       </span>
-                      <span className={`text-[10px] uppercase font-mono px-2 py-0.5 rounded ${
-                        ts.status === 'success' ? 'bg-emerald-900/50 text-emerald-300' : ts.status === 'skipped' ? 'bg-gray-800 text-gray-400' : 'bg-rose-900/50 text-rose-300'
-                      }`}>
+                      <span className="text-[10px] uppercase font-mono px-2 py-0.5 border border-current">
                         {ts.status === 'success' ? 'ÉXITO' : ts.status === 'skipped' ? 'OMITIDO' : 'FALLO'}
                       </span>
                     </div>
-                    <div className="mt-1 text-xs text-[#E6E0D4] font-medium">
+                    <div className="mt-1 text-xs text-[#CBD5E1]">
                       {ts.summary}
                     </div>
-                    <div className="mt-0.5 text-[11px] font-mono text-[#A09B8C]">
+                    <div className="mt-0.5 text-[11px] font-mono text-[#7E9BB8]">
                       {ts.details}
                     </div>
                     {ts.error && (
-                      <div className="mt-1 text-[11px] font-mono text-rose-300 bg-black/40 p-1.5 rounded">
+                      <div className="mt-1 text-[11px] font-mono text-[#FF1744] bg-black/40 p-1.5 border border-[#FF1744]/40">
                         Error: {ts.error}
                       </div>
                     )}
@@ -626,31 +623,29 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
             )}
 
             {/* Desglose de métodos de detección A, B, C, D */}
-            <div className="space-y-1.5 mt-3 pt-2 border-t border-[#1E282D]/60">
-              <div className="text-[11px] font-bold text-[#A09B8C] uppercase tracking-wider">
+            <div className="space-y-1.5 mt-3 pt-2 border-t border-[#16335F]">
+              <div className="text-[10px] font-black text-[#7E9BB8] uppercase tracking-wider font-p3r-head">
                 Métodos de Detección Evaluados:
               </div>
               {lcuReport.steps.map((step, idx) => (
                 <div
                   key={idx}
-                  className={`p-2 rounded text-xs border ${
+                  className={`p-2 text-xs border ${
                     step.success
-                      ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-200'
-                      : 'bg-[#0A1428] border-[#1E282D] text-[#A09B8C]'
+                      ? 'bg-[#031A12] border-[#00E676] text-[#00E676]'
+                      : 'bg-[#030814] border-[#16335F] text-[#7E9BB8]'
                   }`}
                 >
                   <div className="flex items-center justify-between font-semibold">
                     <span className="flex items-center space-x-2">
-                      <span className={step.success ? 'text-emerald-400' : 'text-rose-400 font-bold'}>
-                        {step.success ? '✓' : '✕'}
-                      </span>
-                      <span className={step.success ? 'text-[#F0E6D2]' : 'text-[#C5C0B2]'}>{step.name}</span>
+                      <span>{step.success ? '✓' : '✕'}</span>
+                      <span className={step.success ? 'text-white' : 'text-[#7E9BB8]'}>{step.name}</span>
                     </span>
-                    <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-[#111A24]">
+                    <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 bg-[#050E20] border border-[#16335F]">
                       {step.step}
                     </span>
                   </div>
-                  <div className="mt-0.5 text-[11px] text-[#A09B8C]">
+                  <div className="mt-0.5 text-[11px] text-[#7E9BB8] font-mono">
                     {step.details}
                   </div>
                 </div>
@@ -658,8 +653,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
             </div>
 
             {lcuReport.logFilePath && (
-              <p className="text-[10px] text-[#6B7280] mt-1 truncate">
-                Archivo de log registrado en: <span className="font-mono text-[#A09B8C]">{lcuReport.logFilePath}</span>
+              <p className="text-[10px] text-[#4A627E] mt-1 truncate font-mono">
+                Archivo de log registrado en: <span className="text-[#00E5FF]">{lcuReport.logFilePath}</span>
               </p>
             )}
           </div>
@@ -667,58 +662,56 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
       </div>
 
       {/* Sección 4: Catálogo y Datos del Juego (Data Dragon & LCU) */}
-      <div className="bg-[#111823] p-6 rounded-lg border border-[#1E282D] space-y-4 shadow">
+      <div className="bg-[#050E20] p-6 border-2 border-[#16335F] p3r-bevel p3r-shadow-hard space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h3 className="text-lg font-semibold text-[#F0E6D2] flex items-center space-x-2">
-              <RefreshCw className="w-5 h-5 text-[#00F0FF]" />
-              <span>Datos del Juego & Parche Actual</span>
+            <h3 className="text-base font-black text-white flex items-center space-x-2 uppercase font-p3r tracking-wider">
+              <span className="w-2.5 h-2.5 bg-[#0066FF] transform rotate-45"></span>
+              <span>Datos del Juego & Parche Actual // Catálogo</span>
             </h3>
-            <p className="text-xs text-[#A09B8C] mt-1">
+            <p className="text-xs text-[#7E9BB8] mt-1">
               Catálogo sincronizado dinámicamente con Data Dragon oficial y LCU local. Resuelve automáticamente campeones nuevos (como Yunara).
             </p>
           </div>
 
-          <button
-            type="button"
+          <P3rButton
+            variant="primary"
+            size="md"
             onClick={handleRefreshGameData}
             disabled={refreshingData}
-            className="flex items-center space-x-2 bg-[#0070EB] hover:bg-[#005CE6] text-white text-xs font-bold px-4 py-2.5 rounded transition disabled:opacity-50 self-start sm:self-auto transform -skew-x-6"
+            icon={<RefreshCw className={`w-4 h-4 ${refreshingData ? 'animate-spin' : ''}`} />}
           >
-            <div className="transform skew-x-6 flex items-center space-x-2">
-              <RefreshCw className={`w-4 h-4 ${refreshingData ? 'animate-spin' : ''}`} />
-              <span>{refreshingData ? 'Actualizando...' : 'Actualizar datos del juego'}</span>
-            </div>
-          </button>
+            {refreshingData ? 'Actualizando...' : 'Actualizar datos del juego'}
+          </P3rButton>
         </div>
 
-        <div className="p-3 bg-[#0A1428] rounded border border-[#1E282D] flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex flex-wrap items-center gap-3">
+        <div className="p-4 bg-[#030814] border border-[#16335F] flex flex-wrap items-center justify-between gap-3 text-xs p3r-cut-tr">
+          <div className="flex flex-wrap items-center gap-3 font-mono">
             <div className="flex items-center space-x-2">
-              <span className="text-[#A09B8C]">Parche detectado:</span>
-              <span className="font-mono text-emerald-400 font-bold bg-[#111A24] px-2.5 py-1 rounded border border-[#1E282D]">
+              <span className="text-[#7E9BB8]">Parche:</span>
+              <span className="text-[#00E676] font-bold bg-[#050E20] px-2.5 py-1 border border-[#16335F]">
                 v{formatFullPatchLabel(patchVersion)}
               </span>
             </div>
 
             <div className="flex items-center space-x-2">
-              <span className="text-[#A09B8C]">Data Dragon:</span>
-              <span className="font-mono text-cyan-300 bg-[#111A24] px-2.5 py-1 rounded border border-[#1E282D]">
+              <span className="text-[#7E9BB8]">Data Dragon:</span>
+              <span className="text-[#00E5FF] bg-[#050E20] px-2.5 py-1 border border-[#16335F]">
                 {versionInfo?.ddragonVersion || patchVersion}
               </span>
             </div>
 
             <div className="flex items-center space-x-2">
-              <span className="font-mono text-amber-300 font-semibold bg-amber-950/40 border border-amber-600/30 px-2.5 py-1 rounded">
+              <span className="text-[#FFE277] font-bold bg-[#2A1705] border border-[#FFE277]/40 px-2.5 py-1">
                 {championsCount} campeones cargados
               </span>
             </div>
 
-            <span className="text-gray-400 text-[11px]">• Sincronización en tiempo real</span>
+            <span className="text-[#4A627E] text-[11px]">• Sincronización en tiempo real</span>
           </div>
 
           {dataRefreshMsg && (
-            <div className="text-xs text-emerald-300 font-semibold bg-emerald-950/40 border border-emerald-500/30 px-3 py-1 rounded">
+            <div className="text-xs text-[#00E676] font-bold bg-[#031A12] border border-[#00E676]/40 px-3 py-1">
               {dataRefreshMsg}
             </div>
           )}
@@ -726,26 +719,28 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
       </div>
 
       {/* Sección 5: Monitor de Cuotas y Límites de Tasa */}
-      <div className="bg-[#111823] p-6 rounded-lg border border-[#1E282D] space-y-4 shadow">
-        <h3 className="text-lg font-semibold text-[#F0E6D2] flex items-center space-x-2">
-          <Activity className="w-5 h-5 text-[#C89B3C]" />
+      <div className="bg-[#050E20] p-6 border-2 border-[#16335F] p3r-bevel p3r-shadow-hard space-y-4">
+        <h3 className="text-base font-black text-white flex items-center space-x-2 uppercase font-p3r tracking-wider">
+          <span className="w-2.5 h-2.5 bg-[#00E5FF] transform rotate-45"></span>
           <span>Monitor de Límites de Tasa y Cuotas de IA (Frente 2)</span>
         </h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          <div className="bg-[#0A1428] p-4 rounded border border-[#1E282D]">
-            <div className="font-semibold text-[#F0E6D2] mb-1">Riot Games API (Dev Tier)</div>
-            <div className="text-[#A09B8C] space-y-1">
-              <div>Límite corto: <strong>20 peticiones / 1 segundo</strong></div>
-              <div>Límite largo: <strong>100 peticiones / 2 minutos</strong></div>
-              <div className="text-emerald-400 font-mono mt-2">✓ Rate Limiter Token Bucket Activo</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
+          <div className="bg-[#030814] p-4 border border-[#16335F] p3r-cut-tr">
+            <div className="font-bold text-white mb-2 font-p3r-head uppercase">Riot Games API (Dev Tier)</div>
+            <div className="text-[#7E9BB8] space-y-1.5">
+              <div>Límite corto: <strong className="text-white">20 peticiones / 1 segundo</strong></div>
+              <div>Límite largo: <strong className="text-white">100 peticiones / 2 minutos</strong></div>
+              <div className="text-[#00E676] font-bold mt-2 pt-2 border-t border-[#16335F]">
+                ✓ Rate Limiter Token Bucket Activo
+              </div>
             </div>
           </div>
 
-          <div className="bg-[#0A1428] p-4 rounded border border-[#1E282D]">
-            <div className="font-semibold text-[#F0E6D2] mb-1">Google Gemini API (Free Tier)</div>
-            <div className="text-[#A09B8C] space-y-1">
-              <div>Límite estándar: <strong>15 RPM / 1,500 RPD</strong></div>
+          <div className="bg-[#030814] p-4 border border-[#16335F] p3r-cut-tr">
+            <div className="font-bold text-white mb-2 font-p3r-head uppercase">Google Gemini API (Free Tier)</div>
+            <div className="text-[#7E9BB8] space-y-1.5">
+              <div>Límite estándar: <strong className="text-white">15 RPM / 1,500 RPD</strong></div>
               <div>
                 Peticiones hoy:{' '}
                 <strong className="text-white">
@@ -754,29 +749,29 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
               </div>
               <div>
                 Google Search Grounding:{' '}
-                <span className="text-amber-400 font-medium">
+                <span className="text-[#FFE277] font-bold">
                   {quotaInfo?.groundingAvailable ? 'Disponible' : '0 cuota libre (HTTP 429)'}
                 </span>
               </div>
-              <div className="text-emerald-400 font-mono mt-2">
-                ✓ Proveedor Activo: Gemini 3.5 Flash (Conmutación automática ante 429)
+              <div className="text-[#00E676] font-bold mt-2 pt-2 border-t border-[#16335F]">
+                ✓ Motor Táctico: Gemini 3.5 Flash
               </div>
             </div>
           </div>
         </div>
 
         {quotaInfo?.quotaNote && (
-          <div className="p-3 bg-[#070D19] rounded border border-[#1E282D] text-[11px] text-[#8EA2C6] leading-relaxed">
-            <strong className="text-white">Diagnóstico de Cuota Google AI Studio: </strong>
+          <div className="p-3 bg-[#030814] border border-[#16335F] text-[11px] text-[#7E9BB8] leading-relaxed p3r-cut-tr">
+            <strong className="text-white font-p3r-head uppercase">Diagnóstico de Cuota Google AI Studio: </strong>
             {quotaInfo.quotaNote}
           </div>
         )}
       </div>
 
       {/* Footer de versión y estado */}
-      <div className="pt-4 border-t border-[#1E355B]/60 flex items-center justify-between text-[11px] text-[#64748B] font-mono">
+      <div className="pt-4 border-t-2 border-[#16335F] flex items-center justify-between text-[11px] text-[#7E9BB8] font-mono">
         <div>
-          <span>Itero Local Assistant</span> • <span>Parche Activo: <strong className="text-white">v{formatFullPatchLabel(patchVersion)}</strong></span>
+          <span>ITERO LOCAL // SEES</span> • <span>Parche Activo: <strong className="text-white">v{formatFullPatchLabel(patchVersion)}</strong></span>
         </div>
         <div>
           <span>DDragon & LCU Dynamic Sync</span> • <span>Arquitectura 100% Local</span>

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { AccountEntity } from '../../shared/contracts';
 import { ParsedMatchSummary, PlatformRouting, RegionalRouting, AppSettings } from '../../shared/types';
+import { P3rButton } from '../components/p3r/P3rButton';
+import { P3rBadge } from '../components/p3r/P3rBadge';
 
 interface ProfileViewProps {
   settings: AppSettings;
@@ -242,11 +244,18 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       : '0.0';
 
   return (
-    <div className="space-y-6">
-      {/* Tarjeta Principal de Perfil */}
-      <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 shadow-lg">
+    <div className="space-y-6 select-none">
+      {/* Tarjeta Principal de Perfil // Estilo P3R Status */}
+      <div className="bg-[#050E20] border-2 border-[#16335F] p-6 p3r-bevel p3r-shadow-hard relative">
+        <div className="flex items-center space-x-2 mb-4">
+          <span className="px-2.5 py-0.5 bg-[#0066FF] text-white text-[10px] font-black tracking-widest uppercase transform -skew-x-8 font-p3r-head p3r-shadow-blue border-l-2 border-white">
+            <span className="transform skew-x-8 inline-block">SEES // OPERATIVE DOSSIER</span>
+          </span>
+          <P3rBadge label="ESTADO EN VIVO" variant="cyan" />
+        </div>
+
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-5">
             <div className="relative">
               <img
                 src={`https://ddragon.leagueoflegends.com/cdn/${patchVersion}/img/profileicon/${
@@ -256,53 +265,55 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 onError={(e) => {
                   (e.target as HTMLElement).style.display = 'none';
                 }}
-                className="w-16 h-16 rounded-2xl border-2 border-indigo-500 bg-neutral-950 object-cover shadow-md"
+                className="w-18 h-18 border-2 border-[#0066FF] bg-[#030814] object-cover p3r-shadow-blue p3r-cut-tr"
               />
-              <span className="absolute -bottom-2 -right-1 bg-neutral-900 border border-neutral-700 text-[10px] font-bold text-neutral-200 px-1.5 py-0.5 rounded-full">
-                Lvl {account?.summonerLevel || 1}
+              <span className="absolute -bottom-2 -right-1 bg-[#0066FF] text-white text-[10px] font-black px-2 py-0.5 transform -skew-x-8 font-mono border-l border-white">
+                <span className="transform skew-x-8 inline-block">LVL {account?.summonerLevel || 1}</span>
               </span>
             </div>
 
             <div>
-              <h2 className="text-xl font-extrabold text-white flex items-center space-x-2">
+              <h2 className="text-2xl font-black text-white flex items-center space-x-2 font-p3r uppercase tracking-wider">
                 <span>{account?.gameName || gameName}</span>
-                <span className="text-neutral-500 font-semibold">#{account?.tagLine || tagLine}</span>
+                <span className="text-[#00E5FF] font-mono text-lg font-bold">#{account?.tagLine || tagLine}</span>
               </h2>
-              <div className="flex items-center space-x-2">
-              <button
-                type="button"
-                onClick={handleSyncLocalAccount}
-                disabled={syncing}
-                className="px-4 py-2.5 bg-[#0070EB] hover:bg-[#005CE6] text-white text-xs font-bold uppercase rounded-lg shadow transition flex items-center space-x-2 disabled:opacity-50"
-              >
-                <span>{syncing ? 'Sincronizando...' : 'Sincronizar desde Cliente LoL'}</span>
-              </button>
-            </div>
-            <div className="flex items-center space-x-2 mt-1">
-                <span className="text-xs bg-indigo-950/70 border border-indigo-800 text-indigo-300 px-2 py-0.5 rounded font-mono uppercase">
-                  {account?.platform || platform}
-                </span>
-                <span className="text-xs text-neutral-400">
-                  {account?.regional || regional}
-                </span>
+
+              <div className="flex flex-wrap items-center gap-3 mt-2">
+                <P3rButton
+                  variant="cyan"
+                  size="sm"
+                  onClick={handleSyncLocalAccount}
+                  disabled={syncing}
+                >
+                  {syncing ? 'Sincronizando...' : 'Sincronizar desde Cliente LoL'}
+                </P3rButton>
+
+                <div className="flex items-center space-x-2 font-mono text-xs">
+                  <span className="bg-[#030814] border border-[#16335F] text-[#00E5FF] px-2 py-0.5 uppercase font-bold">
+                    {account?.platform || platform}
+                  </span>
+                  <span className="text-[#7E9BB8]">
+                    {account?.regional || regional}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Rango Clasificatorio */}
-          <div className="bg-neutral-950/60 p-4 rounded-xl border border-neutral-800 flex items-center space-x-4">
-            <div className="w-10 h-10 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold text-lg">
-              🏆
+          {/* Rango Clasificatorio P3R */}
+          <div className="bg-[#030814] p-4 border border-[#16335F] flex items-center space-x-4 p3r-cut-tr p3r-shadow-hard">
+            <div className="w-12 h-12 bg-[#0066FF] text-white flex items-center justify-center font-black text-base transform -skew-x-8 p3r-shadow-blue border-l-2 border-white">
+              <span className="transform skew-x-8 font-p3r">RANK</span>
             </div>
             <div>
-              <span className="text-[10px] text-neutral-400 uppercase font-semibold block">
+              <span className="text-[10px] text-[#7E9BB8] uppercase font-black tracking-wider block font-p3r-head">
                 Clasificatoria Solo / Dúo
               </span>
-              <div className="text-sm font-black text-white flex items-center space-x-1.5">
-                <span>{account?.tier || 'UNRANKED'}</span>
+              <div className="text-base font-black text-white flex items-center space-x-1.5 font-p3r uppercase tracking-wider">
+                <span className="text-[#00E5FF]">{account?.tier || 'UNRANKED'}</span>
                 <span>{account?.rank || ''}</span>
                 {account?.tier && account.tier !== 'UNRANKED' && (
-                  <span className="text-xs text-amber-400 font-normal">
+                  <span className="text-xs text-[#FFE277] font-normal font-mono">
                     ({account.leaguePoints} LP)
                   </span>
                 )}
@@ -312,171 +323,157 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         </div>
 
         {/* Estadísticas Clave */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-5 border-t border-neutral-800">
-          <div className="bg-neutral-950/40 p-3 rounded-lg border border-neutral-800/80">
-            <span className="text-[11px] text-neutral-400 block">Partidas Registradas</span>
-            <span className="text-lg font-bold text-white">{totalMatches}</span>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-5 border-t-2 border-[#16335F] font-mono">
+          <div className="bg-[#030814] p-3.5 border border-[#16335F] p3r-cut-tr">
+            <span className="text-[10px] text-[#7E9BB8] uppercase font-black block font-p3r-head">Partidas Registradas</span>
+            <span className="text-xl font-black text-white mt-0.5 block">{totalMatches}</span>
           </div>
 
-          <div className="bg-neutral-950/40 p-3 rounded-lg border border-neutral-800/80">
-            <span className="text-[11px] text-neutral-400 block">Porcentaje de Victoria</span>
-            <span className={`text-lg font-bold ${winrate >= 50 ? 'text-emerald-400' : 'text-rose-400'}`}>
+          <div className="bg-[#030814] p-3.5 border border-[#16335F] p3r-cut-tr">
+            <span className="text-[10px] text-[#7E9BB8] uppercase font-black block font-p3r-head">Porcentaje de Victoria</span>
+            <span className={`text-xl font-black mt-0.5 block ${winrate >= 50 ? 'text-[#00E676]' : 'text-[#FF1744]'}`}>
               {winrate}%
             </span>
           </div>
 
-          <div className="bg-neutral-950/40 p-3 rounded-lg border border-neutral-800/80">
-            <span className="text-[11px] text-neutral-400 block">KDA Promedio</span>
-            <span className="text-lg font-bold text-amber-400">{avgKda}</span>
+          <div className="bg-[#030814] p-3.5 border border-[#16335F] p3r-cut-tr">
+            <span className="text-[10px] text-[#7E9BB8] uppercase font-black block font-p3r-head">KDA Promedio</span>
+            <span className="text-xl font-black text-[#FFE277] mt-0.5 block">{avgKda}</span>
           </div>
 
-          <div className="bg-neutral-950/40 p-3 rounded-lg border border-neutral-800/80">
-            <span className="text-[11px] text-neutral-400 block">Súbditos / Min</span>
-            <span className="text-lg font-bold text-cyan-400">{avgCsMin}</span>
+          <div className="bg-[#030814] p-3.5 border border-[#16335F] p3r-cut-tr">
+            <span className="text-[10px] text-[#7E9BB8] uppercase font-black block font-p3r-head">Súbditos / Min</span>
+            <span className="text-xl font-black text-[#00E5FF] mt-0.5 block">{avgCsMin}</span>
           </div>
         </div>
       </div>
 
       {/* Sincronización Avanzada con Riot API (Opcional) */}
-      <div className="bg-neutral-900/60 border border-neutral-800 rounded-xl p-5 shadow-lg">
+      <div className="bg-[#050E20] border-2 border-[#16335F] p-5 p3r-bevel p3r-shadow-hard">
         <button
           type="button"
           onClick={() => setShowAdvancedRiotApi(!showAdvancedRiotApi)}
-          className="w-full flex items-center justify-between text-left"
+          className="w-full flex items-center justify-between text-left cursor-pointer"
         >
           <div>
-            <h3 className="text-sm font-bold text-neutral-300 uppercase tracking-wider flex items-center space-x-2">
-              <span className="w-2 h-2 rounded-full bg-neutral-500"></span>
-              <span>Avanzado: Búsqueda con Riot Games API (Opcional)</span>
+            <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center space-x-2 font-p3r">
+              <span className="w-2.5 h-2.5 bg-[#0066FF] transform rotate-45"></span>
+              <span>Avanzado: Búsqueda Remota con Riot Games API (Opcional)</span>
             </h3>
-            <p className="text-xs text-neutral-500 mt-0.5">
-              Solo requerido para buscar cuentas remotas sin tener el cliente de LoL abierto. No es necesario para tus partidas locales.
+            <p className="text-xs text-[#7E9BB8] mt-0.5">
+              Solo requerido para buscar cuentas remotas sin tener el cliente de LoL abierto.
             </p>
           </div>
-          <span className="text-xs text-neutral-400 font-bold px-3 py-1 bg-neutral-800 rounded">
-            {showAdvancedRiotApi ? 'Ocultar ▲' : 'Configurar ▼'}
+          <span className="text-xs text-[#00E5FF] font-black px-3 py-1 bg-[#030814] border border-[#16335F] transform -skew-x-8 uppercase font-p3r-head">
+            <span className="transform skew-x-8 inline-block">{showAdvancedRiotApi ? 'Ocultar ▲' : 'Configurar ▼'}</span>
           </span>
         </button>
 
         {showAdvancedRiotApi && (
-          <div className="mt-4 pt-4 border-t border-neutral-800">
-        <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-3 flex items-center space-x-2">
-          <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
-          <span>Sincronizar Datos con Riot Games</span>
-        </h3>
-        <p className="text-xs text-neutral-400 mb-4">
-          Descarga automáticamente tus estadísticas clasificatorias, maestría de campeones e historial reciente usando tu API Key oficial.
-        </p>
+          <div className="mt-4 pt-4 border-t-2 border-[#16335F]">
+            <h3 className="text-xs font-black text-white uppercase tracking-wider mb-2 flex items-center space-x-2 font-p3r-head">
+              <span className="w-2 h-2 bg-[#00E5FF]"></span>
+              <span>Sincronizar Datos con Riot Games</span>
+            </h3>
+            <p className="text-xs text-[#7E9BB8] mb-4">
+              Descarga automáticamente tus estadísticas clasificatorias, maestría de campeones e historial reciente usando tu API Key oficial.
+            </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-4">
-          <div>
-            <label className="text-[11px] text-neutral-400 block mb-1">Riot ID o Nombre (ej: Infi o Infi#1505)</label>
-            <input
-              type="text"
-              value={gameName}
-              placeholder="Infi o Infi#1505"
-              onChange={(e) => {
-                const val = e.target.value;
-                if (val.includes('#')) {
-                  const parts = val.split('#');
-                  setGameName(parts[0].trim());
-                  if (parts[1] !== undefined) {
-                    setTagLine(parts[1].replace(/#/g, '').trim());
-                  }
-                } else {
-                  setGameName(val);
-                }
-              }}
-              className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono"
-            />
-          </div>
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-4 font-mono">
+              <div>
+                <label className="text-[10px] text-[#7E9BB8] font-black uppercase block mb-1 font-p3r-head">Riot ID o Nombre (ej: Infi#1505)</label>
+                <input
+                  type="text"
+                  value={gameName}
+                  placeholder="Infi o Infi#1505"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val.includes('#')) {
+                      const parts = val.split('#');
+                      setGameName(parts[0].trim());
+                      if (parts[1] !== undefined) {
+                        setTagLine(parts[1].replace(/#/g, '').trim());
+                      }
+                    } else {
+                      setGameName(val);
+                    }
+                  }}
+                  className="w-full bg-[#030814] border border-[#16335F] focus:border-[#00E5FF] px-3 py-2 text-xs text-white focus:outline-none"
+                />
+              </div>
 
-          <div>
-            <label className="text-[11px] text-neutral-400 block mb-1">Tag Line (sin #)</label>
-            <input
-              type="text"
-              value={tagLine}
-              placeholder="1505"
-              onChange={(e) => setTagLine(e.target.value.replace(/#/g, '').trim())}
-              className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono"
-            />
-          </div>
+              <div>
+                <label className="text-[10px] text-[#7E9BB8] font-black uppercase block mb-1 font-p3r-head">Tag Line (sin #)</label>
+                <input
+                  type="text"
+                  value={tagLine}
+                  placeholder="1505"
+                  onChange={(e) => setTagLine(e.target.value.replace(/#/g, '').trim())}
+                  className="w-full bg-[#030814] border border-[#16335F] focus:border-[#00E5FF] px-3 py-2 text-xs text-white focus:outline-none"
+                />
+              </div>
 
-          <div>
-            <label className="text-[11px] text-neutral-400 block mb-1">Plataforma</label>
-            <select
-              value={platform}
-              onChange={(e) => {
-                const p = e.target.value as PlatformRouting;
-                setPlatform(p);
-                setRegional(PLATFORM_ROUTING_MAP[p] || 'americas');
-              }}
-              className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
+              <div>
+                <label className="text-[10px] text-[#7E9BB8] font-black uppercase block mb-1 font-p3r-head">Plataforma</label>
+                <select
+                  value={platform}
+                  onChange={(e) => {
+                    const p = e.target.value as PlatformRouting;
+                    setPlatform(p);
+                    setRegional(PLATFORM_ROUTING_MAP[p] || 'americas');
+                  }}
+                  className="w-full bg-[#030814] border border-[#16335F] focus:border-[#00E5FF] px-3 py-2 text-xs text-white focus:outline-none"
+                >
+                  <option value="la1">LAN (la1) → Americas</option>
+                  <option value="la2">LAS (la2) → Americas</option>
+                  <option value="na1">NA (na1) → Americas</option>
+                  <option value="br1">BR (br1) → Americas</option>
+                  <option value="euw1">EUW (euw1) → Europe</option>
+                  <option value="eun1">EUN (eun1) → Europe</option>
+                  <option value="kr">KR (kr) → Asia</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] text-[#7E9BB8] font-black uppercase block mb-1 font-p3r-head">Enrutamiento Regional</label>
+                <input
+                  type="text"
+                  readOnly
+                  value={PLATFORM_ROUTING_MAP[platform] || regional}
+                  className="w-full bg-[#030814]/60 border border-[#16335F]/60 px-3 py-2 text-xs text-[#00E5FF] cursor-not-allowed"
+                />
+              </div>
+            </div>
+
+            <P3rButton
+              variant="secondary"
+              size="md"
+              onClick={handleSync}
+              disabled={syncing}
             >
-              <option value="la1">LAN (la1) → Americas</option>
-              <option value="la2">LAS (la2) → Americas</option>
-              <option value="na1">NA (na1) → Americas</option>
-              <option value="br1">BR (br1) → Americas</option>
-              <option value="euw1">EUW (euw1) → Europe</option>
-              <option value="eun1">EUN (eun1) → Europe</option>
-              <option value="kr">KR (kr) → Asia</option>
-            </select>
-          </div>
+              {syncing ? 'Sincronizando con Riot API...' : 'Sincronizar Historial y Rango'}
+            </P3rButton>
 
-          <div>
-            <label className="text-[11px] text-neutral-400 block mb-1">Enrutamiento Regional (Auto)</label>
-            <input
-              type="text"
-              readOnly
-              value={PLATFORM_ROUTING_MAP[platform] || regional}
-              className="w-full bg-neutral-950/60 border border-neutral-800/60 rounded-lg px-3 py-2 text-xs text-cyan-400 font-mono cursor-not-allowed"
-            />
-          </div>
-        </div>
-
-        <button
-          onClick={handleSync}
-          disabled={syncing}
-          className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 text-white font-medium text-xs rounded-lg shadow-md transition-all flex items-center space-x-2"
-        >
-          {syncing ? (
-            <>
-              <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
-              </svg>
-              <span>Sincronizando con Riot API...</span>
-            </>
-          ) : (
-            <>
-              <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              <span>Sincronizar Historial y Rango</span>
-            </>
-          )}
-        </button>
-
-        {syncMessage && (
-          <div
-            className={`mt-3 p-3 rounded-lg text-xs font-medium ${
-              syncMessage.type === 'success'
-                ? 'bg-emerald-950/40 border border-emerald-800 text-emerald-300'
-                : 'bg-rose-950/40 border border-rose-800 text-rose-300'
-            }`}
-          >
-            {syncMessage.text}
-          </div>
-        )}
+            {syncMessage && (
+              <div
+                className={`mt-3 p-3 text-xs font-bold border-2 p3r-cut-tr ${
+                  syncMessage.type === 'success'
+                    ? 'bg-[#031A12] border-[#00E676] text-[#00E676]'
+                    : 'bg-[#2A050A] border-[#FF1744] text-[#FF1744]'
+                }`}
+              >
+                {syncMessage.text}
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Partidas Recientes */}
-      <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 shadow-lg">
-        <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center space-x-2">
-          <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
-          <span>Historial de Partidas Recientes</span>
+      {/* Partidas Recientes // Estilo P3R */}
+      <div className="bg-[#050E20] border-2 border-[#16335F] p-6 p3r-bevel p3r-shadow-hard">
+        <h3 className="text-sm font-black text-white uppercase tracking-wider mb-4 flex items-center space-x-2 font-p3r">
+          <span className="w-2.5 h-2.5 bg-[#00E5FF] transform rotate-45"></span>
+          <span>HISTORIAL DE PARTIDAS RECIENTES // BATTLE LOG</span>
         </h3>
 
         {matches.length > 0 ? (
@@ -484,51 +481,53 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             {matches.map((m) => (
               <div
                 key={m.matchId}
-                className={`p-3.5 rounded-lg border flex flex-wrap items-center justify-between gap-3 ${
+                className={`p-3.5 border-2 flex flex-wrap items-center justify-between gap-3 p3r-cut-tr transition-all ${
                   m.win
-                    ? 'bg-emerald-950/20 border-emerald-800/40'
-                    : 'bg-rose-950/20 border-rose-800/40'
+                    ? 'bg-[#031512] border-[#00E676]/60 hover:border-[#00E676]'
+                    : 'bg-[#1A050A] border-[#FF1744]/60 hover:border-[#FF1744]'
                 }`}
               >
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-3.5">
                   <span
-                    className={`w-2 h-10 rounded-full ${
-                      m.win ? 'bg-emerald-500' : 'bg-rose-500'
+                    className={`w-2 h-10 ${
+                      m.win ? 'bg-[#00E676]' : 'bg-[#FF1744]'
                     }`}
                   ></span>
                   <div>
                     <div className="flex items-center space-x-2">
-                      <span className="text-xs font-bold text-white">
-                        {m.championName} (ID {m.championId})
+                      <span className="text-xs font-black text-white uppercase font-p3r-head tracking-wider">
+                        {m.championName} <span className="font-mono text-[#7E9BB8] font-normal">(ID {m.championId})</span>
                       </span>
-                      <span className="text-[10px] bg-neutral-800 text-neutral-300 px-1.5 py-0.2 rounded font-mono">
+                      <span className="text-[10px] bg-[#030814] border border-[#16335F] text-[#00E5FF] px-1.5 py-0.2 font-mono">
                         {m.role}
                       </span>
                     </div>
-                    <span className="text-[11px] text-neutral-400">
-                      {m.win ? 'Victoria' : 'Derrota'} • {Math.floor(m.gameDuration / 60)} min
+                    <span className="text-[11px] text-[#7E9BB8] font-mono">
+                      <strong className={m.win ? 'text-[#00E676]' : 'text-[#FF1744]'}>
+                        {m.win ? 'VICTORIA' : 'DERROTA'}
+                      </strong> • {Math.floor(m.gameDuration / 60)} min
                     </span>
                   </div>
                 </div>
 
                 <div className="flex items-center space-x-6 text-xs font-mono">
                   <div>
-                    <span className="text-neutral-400 block text-[10px]">KDA</span>
+                    <span className="text-[#7E9BB8] block text-[10px] uppercase font-bold">KDA</span>
                     <span className="text-white font-bold">
-                      {m.kills}/{m.deaths}/{m.assists} ({m.kda} KDA)
+                      {m.kills}/{m.deaths}/{m.assists} ({m.kda})
                     </span>
                   </div>
 
                   <div>
-                    <span className="text-neutral-400 block text-[10px]">CS</span>
-                    <span className="text-cyan-300">
+                    <span className="text-[#7E9BB8] block text-[10px] uppercase font-bold">CS</span>
+                    <span className="text-[#00E5FF] font-bold">
                       {m.cs} ({m.csPerMinute}/m)
                     </span>
                   </div>
 
                   <div>
-                    <span className="text-neutral-400 block text-[10px]">Oro</span>
-                    <span className="text-amber-400">
+                    <span className="text-[#7E9BB8] block text-[10px] uppercase font-bold">Oro</span>
+                    <span className="text-[#FFE277] font-bold">
                       {m.goldEarned.toLocaleString()}
                     </span>
                   </div>
@@ -537,7 +536,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             ))}
           </div>
         ) : (
-          <p className="text-xs text-neutral-400 text-center py-6">
+          <p className="text-xs text-[#7E9BB8] text-center py-8 font-mono bg-[#030814] border border-[#16335F] p3r-cut-tr">
             No hay partidas almacenadas aún en la base de datos local SQLite. Pulsa sincronizar para descargar tu historial.
           </p>
         )}

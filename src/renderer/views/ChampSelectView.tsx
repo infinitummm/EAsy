@@ -25,6 +25,8 @@ import {
   Ban,
   Check
 } from 'lucide-react';
+import { P3rButton } from '../components/p3r/P3rButton';
+import { P3rBadge } from '../components/p3r/P3rBadge';
 
 interface ChampSelectViewProps {
   settings: AppSettings;
@@ -249,30 +251,30 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Selector de sub-vistas Estilo Persona 3 Reload */}
-      <div className="flex items-center space-x-3 border-b border-[#1E355B] pb-3">
+      <div className="flex items-center space-x-3 border-b-2 border-[#16335F] pb-3">
         <button
           onClick={() => setActiveTab('live')}
-          className={`px-4 py-2 rounded text-xs font-bold tracking-wider transition-all duration-150 flex items-center space-x-2 transform -skew-x-6 ${
+          className={`px-5 py-2 text-xs font-black tracking-wider transition-all duration-150 flex items-center space-x-2 transform -skew-x-8 cursor-pointer ${
             activeTab === 'live'
-              ? 'bg-[#0070EB] text-white shadow-md'
-              : 'text-[#94A3B8] hover:text-white hover:bg-[#0D192D]'
+              ? 'bg-[#00E5FF] text-[#030814] p3r-shadow-blue border-l-4 border-[#0066FF] font-p3r-head'
+              : 'bg-[#050E20] text-[#7E9BB8] hover:text-white hover:bg-[#0C1B38] border border-[#16335F]'
           }`}
         >
-          <div className="transform skew-x-6 flex items-center space-x-2">
-            <span className="w-2 h-2 rounded-full bg-white"></span>
+          <div className="transform skew-x-8 flex items-center space-x-2">
+            <span className={`w-2 h-2 transform rotate-45 ${activeTab === 'live' ? 'bg-[#030814]' : 'bg-[#0066FF]'}`}></span>
             <span>SELECCIÓN EN VIVO</span>
           </div>
         </button>
 
         <button
           onClick={() => setActiveTab('preferences')}
-          className={`px-4 py-2 rounded text-xs font-bold tracking-wider transition-all duration-150 flex items-center space-x-2 transform -skew-x-6 ${
+          className={`px-5 py-2 text-xs font-black tracking-wider transition-all duration-150 flex items-center space-x-2 transform -skew-x-8 cursor-pointer ${
             activeTab === 'preferences'
-              ? 'bg-[#0070EB] text-white shadow-md'
-              : 'text-[#94A3B8] hover:text-white hover:bg-[#0D192D]'
+              ? 'bg-[#00E5FF] text-[#030814] p3r-shadow-blue border-l-4 border-[#0066FF] font-p3r-head'
+              : 'bg-[#050E20] text-[#7E9BB8] hover:text-white hover:bg-[#0C1B38] border border-[#16335F]'
           }`}
         >
-          <div className="transform skew-x-6 flex items-center space-x-2">
+          <div className="transform skew-x-8 flex items-center space-x-2">
             <svg className="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
             </svg>
@@ -291,40 +293,42 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
           {session ? (
             <div className="space-y-6">
               {/* HUD Superior: Fase y Temporizador P3R */}
-              <div className="bg-[#0D192D] border border-[#1E355B] rounded-xl p-5 shadow-xl flex flex-wrap items-center justify-between gap-4 relative">
+              <div className="bg-[#050E20] border-2 border-[#16335F] p-5 p3r-bevel p3r-shadow-hard flex flex-wrap items-center justify-between gap-4 relative">
                 <div className="flex items-center space-x-4">
-                  <div className="w-10 h-10 rounded bg-[#0A111F] border border-[#0070EB] flex items-center justify-center font-bold text-[#0070EB]">
-                    <span className="text-xs font-mono uppercase">LCU</span>
+                  <div className="w-12 h-12 bg-[#0066FF] border-l-2 border-white flex items-center justify-center font-black text-white transform -skew-x-8 p3r-shadow-blue">
+                    <span className="transform skew-x-8 text-xs font-mono font-black uppercase">LCU</span>
                   </div>
                   <div>
                     <div className="flex items-center space-x-2">
-                      <span className="w-2 h-2 rounded-full bg-[#10B981]" />
-                      <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-                        FASE: {session.timer.phase || 'SELECCIÓN'}
+                      <span className="w-2.5 h-2.5 bg-[#00E676] transform rotate-45" />
+                      <h3 className="text-sm font-black text-white uppercase tracking-wider font-p3r">
+                        FASE // {session.timer.phase || 'SELECCIÓN'}
                       </h3>
                     </div>
-                    <p className="text-xs text-[#94A3B8] mt-0.5">
-                      POSICIÓN DETECTADA: <strong className="text-white">{localRole}</strong> | CELDA: {session.localPlayerCellId}
+                    <p className="text-xs text-[#7E9BB8] mt-0.5 font-medium">
+                      POSICIÓN DETECTADA: <strong className="text-white font-mono">{localRole}</strong> | CELDA: <span className="font-mono text-[#00E5FF] font-bold">#{session.localPlayerCellId}</span>
                     </p>
                   </div>
                 </div>
 
                 {/* Temporizador fiel en tiempo real */}
-                <div className="flex items-center space-x-3 bg-[#0A111F] px-4 py-2.5 rounded-lg border border-[#1E355B]">
+                <div className="flex items-center space-x-3 bg-[#030814] px-4 py-2 border border-[#16335F] p3r-cut-tr">
                   <div className="text-right">
-                    <span className="text-[10px] text-[#94A3B8] uppercase tracking-wider block font-semibold">
+                    <span className="text-[10px] text-[#7E9BB8] uppercase tracking-wider block font-black font-p3r-head">
                       TIEMPO RESTANTE
                     </span>
-                    <span className="text-xs text-[#64748B]">EN SEGUNDOS</span>
+                    <span className="text-[10px] text-[#4A627E] font-mono">SEGUNDOS</span>
                   </div>
                   <div
-                    className={`text-3xl font-bold font-mono tracking-tight px-3 py-1 rounded border ${
+                    className={`text-3xl font-black font-mono tracking-tight px-3 py-1 border transform -skew-x-8 ${
                       remainingSeconds <= 10
-                        ? 'text-[#D92546] border-[#D92546] bg-[#D92546]/10'
-                        : 'text-white border-[#1E355B] bg-[#11223F]'
+                        ? 'text-[#FF1744] border-2 border-[#FF1744] bg-[#FF1744]/15'
+                        : 'text-white border-2 border-[#0066FF] bg-[#050E20]'
                     }`}
                   >
-                    {remainingSeconds.toString().padStart(2, '0')}s
+                    <span className="transform skew-x-8 inline-block">
+                      {remainingSeconds.toString().padStart(2, '0')}s
+                    </span>
                   </div>
                 </div>
               </div>
@@ -333,48 +337,52 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
               <div className="space-y-3">
                 {/* Banner de Turno Dinámico */}
                 {isMyPickTurn ? (
-                  <div className="bg-gradient-to-r from-[#0070EB] via-[#0052B4] to-[#0070EB] border border-[#00F0FF]/50 p-4 rounded-xl shadow-lg flex items-center justify-between animate-pulse">
-                    <div className="flex items-center space-x-3">
-                      <Sparkles className="w-6 h-6 text-[#00F0FF]" />
+                  <div className="bg-[#050E20] border-2 border-[#00E5FF] p-4.5 p3r-bevel p3r-shadow-blue flex items-center justify-between animate-p3r-slide">
+                    <div className="flex items-center space-x-3.5">
+                      <div className="w-10 h-10 bg-[#00E5FF] text-[#030814] flex items-center justify-center transform -skew-x-8">
+                        <Sparkles className="w-6 h-6 transform skew-x-8 font-black" />
+                      </div>
                       <div>
-                        <h4 className="text-sm font-black text-white uppercase tracking-wider">
+                        <h4 className="text-base font-black text-white uppercase tracking-wider font-p3r">
                           ¡ES TU TURNO DE ELEGIR CAMPEÓN!
                         </h4>
-                        <p className="text-xs text-blue-100">
-                          Haz clic en &ldquo;SELECCIONAR EN LOL&rdquo; en cualquiera de las recomendaciones de abajo para reflejar el pick directamente en tu cliente.
+                        <p className="text-xs text-[#B8F2FF]">
+                          Haz clic en &ldquo;SELECCIONAR EN LOL&rdquo; en cualquiera de las recomendaciones tácticas para reflejar el pick directamente en el cliente.
                         </p>
                       </div>
                     </div>
-                    <span className="bg-black/40 text-[#00F0FF] text-xs font-mono font-bold px-3 py-1 rounded border border-[#00F0FF]/40">
-                      TURNO ACTIVO
+                    <span className="bg-[#00E5FF] text-[#030814] text-xs font-mono font-black px-4 py-1.5 uppercase tracking-wider transform -skew-x-8 border-l-2 border-white">
+                      <span className="transform skew-x-8 inline-block">TURNO ACTIVO</span>
                     </span>
                   </div>
                 ) : isMyBanTurn ? (
-                  <div className="bg-gradient-to-r from-[#B45309] to-[#78350F] border border-[#F59E0B]/50 p-4 rounded-xl shadow-lg flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <Ban className="w-6 h-6 text-[#FBBF24]" />
+                  <div className="bg-[#1F0A0A] border-2 border-[#FFE277] p-4.5 p3r-bevel p3r-shadow-hard flex items-center justify-between animate-p3r-slide">
+                    <div className="flex items-center space-x-3.5">
+                      <div className="w-10 h-10 bg-[#FFE277] text-[#030814] flex items-center justify-center transform -skew-x-8">
+                        <Ban className="w-6 h-6 transform skew-x-8 font-black" />
+                      </div>
                       <div>
-                        <h4 className="text-sm font-black text-white uppercase tracking-wider">
+                        <h4 className="text-base font-black text-white uppercase tracking-wider font-p3r">
                           ¡FASE DE BLOQUEO (BAN) EN CURSO!
                         </h4>
-                        <p className="text-xs text-amber-100">
-                          Banea tu objetivo prioritario en el cliente de League of Legends.
+                        <p className="text-xs text-[#FFE277]/90">
+                          Banea tu objetivo prioritario en el cliente de League of Legends antes de que expire el tiempo.
                         </p>
                       </div>
                     </div>
-                    <span className="bg-black/40 text-[#FBBF24] text-xs font-mono font-bold px-3 py-1 rounded border border-[#FBBF24]/40">
-                      BANEO
+                    <span className="bg-[#FFE277] text-[#030814] text-xs font-mono font-black px-4 py-1.5 uppercase tracking-wider transform -skew-x-8">
+                      <span className="transform skew-x-8 inline-block">FASE BAN</span>
                     </span>
                   </div>
                 ) : (
-                  <div className="bg-[#0D192D] border border-[#1E355B] px-4 py-2.5 rounded-lg flex items-center justify-between text-xs">
-                    <div className="flex items-center space-x-2 text-[#94A3B8]">
-                      <span className="w-2 h-2 rounded-full bg-[#0070EB] animate-ping" />
-                      <span>
+                  <div className="bg-[#050E20] border border-[#16335F] p3r-cut-tr px-4 py-2.5 flex items-center justify-between text-xs">
+                    <div className="flex items-center space-x-2 text-[#7E9BB8]">
+                      <span className="w-2 h-2 bg-[#0066FF] transform rotate-45" />
+                      <span className="font-p3r-head uppercase text-[11px] font-bold">
                         DRAFT EN CURSO: {currentGlobalAction ? (currentGlobalAction.isAllyAction ? 'Turno de aliado eligiendo' : 'Turno de enemigo eligiendo') : 'Esperando turnos de pick'}
                       </span>
                     </div>
-                    <span className="text-[11px] font-mono text-[#64748B]">
+                    <span className="text-[11px] font-mono text-[#00E5FF]">
                       {pickableIds.length > 0 ? `${pickableIds.length} campeones elegibles detectados en LCU` : 'Sincronizando elegibles...'}
                     </span>
                   </div>
@@ -383,108 +391,102 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                 {/* Barra Compacta de Bans de Ambos Equipos */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
                   {/* Bans Aliados */}
-                  <div className="bg-[#0A111F] p-3 rounded-lg border border-[#1E355B] flex items-center justify-between">
+                  <div className="bg-[#050E20] p-3 border border-[#16335F] p3r-cut-tr flex items-center justify-between">
                     <div className="flex items-center space-x-2">
-                      <Shield className="w-4 h-4 text-[#60A5FA]" />
-                      <span className="text-[#94A3B8] font-bold uppercase text-[11px]">Bans Aliados:</span>
+                      <Shield className="w-4 h-4 text-[#00E5FF]" />
+                      <span className="text-[#7E9BB8] font-black uppercase text-[11px] font-p3r-head">Bans Aliados:</span>
                     </div>
-                    <div className="flex items-center space-x-1.5">
+                    <div className="flex items-center space-x-2">
                       {alliedBans.length > 0 ? (
                         alliedBans.map((bId) => (
                           <div key={bId} className="relative group" title={getChampionName(bId)}>
                             <img
                               src={getChampionIconUrl(bId)}
                               alt={getChampionName(bId)}
-                              className="w-6 h-6 rounded object-cover border border-[#0070EB]/60 grayscale hover:grayscale-0 transition"
+                              className="w-7 h-7 object-cover border border-[#0066FF] grayscale hover:grayscale-0 transition"
                             />
-                            <div className="absolute inset-0 bg-red-600/30 rounded flex items-center justify-center">
+                            <div className="absolute inset-0 bg-[#FF1744]/40 flex items-center justify-center">
                               <span className="text-[10px] text-white font-black">✕</span>
                             </div>
                           </div>
                         ))
                       ) : (
-                        <span className="text-[11px] text-[#64748B]">Sin bloqueos</span>
+                        <span className="text-[11px] text-[#4A627E]">Sin bloqueos</span>
                       )}
                     </div>
                   </div>
 
                   {/* Bans Enemigos */}
-                  <div className="bg-[#0A111F] p-3 rounded-lg border border-[#1E355B] flex items-center justify-between">
+                  <div className="bg-[#050E20] p-3 border border-[#16335F] p3r-cut-tr flex items-center justify-between">
                     <div className="flex items-center space-x-2">
-                      <Target className="w-4 h-4 text-[#F87171]" />
-                      <span className="text-[#94A3B8] font-bold uppercase text-[11px]">Bans Enemigos:</span>
+                      <Target className="w-4 h-4 text-[#FF1744]" />
+                      <span className="text-[#7E9BB8] font-black uppercase text-[11px] font-p3r-head">Bans Enemigos:</span>
                     </div>
-                    <div className="flex items-center space-x-1.5">
+                    <div className="flex items-center space-x-2">
                       {enemyBans.length > 0 ? (
                         enemyBans.map((bId) => (
                           <div key={bId} className="relative group" title={getChampionName(bId)}>
                             <img
                               src={getChampionIconUrl(bId)}
                               alt={getChampionName(bId)}
-                              className="w-6 h-6 rounded object-cover border border-[#D92546]/60 grayscale hover:grayscale-0 transition"
+                              className="w-7 h-7 object-cover border border-[#FF1744] grayscale hover:grayscale-0 transition"
                             />
-                            <div className="absolute inset-0 bg-red-600/30 rounded flex items-center justify-center">
+                            <div className="absolute inset-0 bg-[#FF1744]/40 flex items-center justify-center">
                               <span className="text-[10px] text-white font-black">✕</span>
                             </div>
                           </div>
                         ))
                       ) : (
-                        <span className="text-[11px] text-[#64748B]">Sin bloqueos</span>
+                        <span className="text-[11px] text-[#4A627E]">Sin bloqueos</span>
                       )}
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Panel de Recomendaciones de Pick en Vivo (IA Gemini) */}
-              <div className="bg-[#0D192D] border border-[#1E355B] rounded-xl p-5 shadow-xl space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#1E355B] pb-3">
+              {/* Panel de Recomendaciones de Pick en Vivo (IA Gemini / OP.GG) */}
+              <div className="bg-[#050E20] border-2 border-[#16335F] p-5 p3r-bevel p3r-shadow-hard space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b-2 border-[#16335F] pb-3">
                   <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 rounded bg-[#0070EB]/20 border border-[#0070EB] flex items-center justify-center text-[#00F0FF]">
-                      <Sparkles className="w-4 h-4" />
+                    <div className="w-9 h-9 bg-[#0066FF] text-white flex items-center justify-center transform -skew-x-8 p3r-shadow-blue border-l-2 border-white">
+                      <Sparkles className="w-5 h-5 transform skew-x-8" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center space-x-2">
+                      <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center space-x-2 font-p3r">
                         <span>RECOMENDACIONES DE PICK // DRAFT TÁCTICO</span>
                         {all10Locked ? (
-                          <span className="text-[10px] bg-emerald-950/60 text-emerald-400 border border-emerald-500/40 px-2 py-0.5 rounded font-bold">
-                            10 PICKS FIJADOS (IA COMPLETA)
-                          </span>
+                          <P3rBadge label="10 PICKS FIJADOS (IA COMPLETA)" variant="green" />
                         ) : (
-                          <span className="text-[10px] bg-blue-950/60 text-[#00D4FF] border border-[#00D4FF]/40 px-2 py-0.5 rounded font-bold">
-                            META OP.GG EN VIVO (0 LLAMADAS IA)
-                          </span>
+                          <P3rBadge label="META OP.GG EN VIVO" variant="cyan" />
                         )}
                       </h3>
-                      <p className="text-xs text-[#94A3B8] mt-0.5">
+                      <p className="text-xs text-[#7E9BB8] mt-0.5">
                         {all10Locked
-                          ? `Análisis táctico 5v5 completo de Gemini adaptado a tu rol (${localRole})`
+                          ? `Análisis táctico 5v5 completo adaptado a tu rol (${localRole})`
                           : `Counters y meta en vivo de OP.GG para tu rol (${localRole}). Cero tokens de Gemini consumidos durante el draft.`}
                       </p>
                     </div>
                   </div>
 
                   <div className="flex items-center space-x-2 self-start sm:self-auto">
-                    <button
-                      type="button"
+                    <P3rButton
+                      variant="secondary"
+                      size="sm"
                       onClick={() => fetchDraftRecommendations(true)}
                       disabled={draftLoading}
-                      className="flex items-center space-x-1.5 text-xs font-bold uppercase tracking-wider bg-[#0A111F] hover:bg-[#1E355B] text-white px-3 py-1.5 rounded border border-[#1E355B] transition disabled:opacity-50 transform -skew-x-6"
+                      icon={<RefreshCw className={`w-3.5 h-3.5 ${draftLoading ? 'animate-spin' : ''}`} />}
                     >
-                      <div className="transform skew-x-6 flex items-center space-x-1.5">
-                        <RefreshCw className={`w-3.5 h-3.5 ${draftLoading ? 'animate-spin' : ''}`} />
-                        <span>{draftLoading ? 'Analizando...' : (all10Locked ? 'Reanalizar con IA' : 'Analizar ahora con IA')}</span>
-                      </div>
-                    </button>
+                      {draftLoading ? 'Analizando...' : (all10Locked ? 'Reanalizar con IA' : 'Analizar ahora con IA')}
+                    </P3rButton>
                   </div>
                 </div>
 
                 {/* Banner de Fallback SOLO si ocurrió un error real */}
                 {draftRecs?.source === 'fallback' && draftRecs.error && (
-                  <div className="bg-amber-950/30 border border-amber-600/40 p-3 rounded-lg text-xs text-amber-200 flex items-start space-x-2">
-                    <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div className="bg-[#2A1405] border-2 border-[#FFE277] p-3 text-xs text-[#FFE277] flex items-start space-x-2 p3r-cut-tr">
+                    <AlertCircle className="w-4 h-4 text-[#FFE277] shrink-0 mt-0.5" />
                     <div>
-                      <strong className="text-amber-300">Aviso: </strong>
+                      <strong className="text-white font-p3r-head uppercase">Aviso: </strong>
                       <span>{draftRecs.fallbackReason || 'Error consultando recomendaciones.'}</span>
                     </div>
                   </div>
@@ -493,25 +495,25 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                 {/* Feedback del Hover en LoL */}
                 {hoverResult && (
                   <div
-                    className={`p-3 rounded-lg text-xs flex items-center justify-between border ${
+                    className={`p-3 text-xs flex items-center justify-between border-2 p3r-cut-tr ${
                       hoverResult.success
-                        ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-200'
-                        : 'bg-rose-950/40 border-rose-500/50 text-rose-200'
+                        ? 'bg-[#031A12] border-[#00E676] text-[#00E676]'
+                        : 'bg-[#2A050A] border-[#FF1744] text-[#FF1744]'
                     }`}
                   >
                     <div className="flex items-center space-x-2">
                       {hoverResult.success ? (
-                        <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <Check className="w-4 h-4 text-[#00E676] shrink-0" />
                       ) : (
-                        <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                        <AlertCircle className="w-4 h-4 text-[#FF1744] shrink-0" />
                       )}
-                      <span>
+                      <span className="font-p3r-head">
                         {hoverResult.success
                           ? `✓ Campeón seleccionado con éxito en League of Legends (${getChampionName(hoverResult.championId || 0)}).`
                           : `Fallo al reflejar pick en LoL: ${hoverResult.error}`}
                       </span>
                     </div>
-                    <span className="text-[10px] text-[#94A3B8] font-mono">
+                    <span className="text-[10px] text-[#7E9BB8] font-mono">
                       {new Date(hoverResult.timestamp || Date.now()).toLocaleTimeString()}
                     </span>
                   </div>
@@ -525,18 +527,16 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                       return (
                         <div
                           key={pick.championId || idx}
-                          className="bg-[#0A111F] rounded-xl border border-[#1E355B] hover:border-[#0070EB] p-4 flex flex-col justify-between space-y-3 transition-all relative overflow-hidden group shadow-lg"
+                          className="bg-[#030814] border-2 border-[#16335F] hover:border-[#00E5FF] p-4 flex flex-col justify-between space-y-3 transition-all relative overflow-hidden group p3r-shadow-hard p3r-cut-tr"
                         >
                           {/* Badge de prioridad */}
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-black tracking-widest uppercase bg-[#0070EB]/20 border border-[#0070EB]/50 text-[#00F0FF] px-2 py-0.5 rounded transform -skew-x-6">
-                              #{idx + 1} RECOMENDACIÓN
+                            <span className="text-[10px] font-black tracking-widest uppercase bg-[#0066FF] text-white px-2 py-0.5 transform -skew-x-8 font-p3r-head p3r-shadow-blue border-l-2 border-white">
+                              <span className="transform skew-x-8 inline-block">#{idx + 1} RECOMENDACIÓN</span>
                             </span>
 
                             {pick.isNewChampion && (
-                              <span className="text-[10px] font-bold tracking-wider uppercase bg-[#F59E0B]/20 border border-[#F59E0B]/40 text-[#FBBF24] px-1.5 py-0.2 rounded">
-                                NUEVO
-                              </span>
+                              <P3rBadge label="NUEVO" variant="yellow" />
                             )}
                           </div>
 
@@ -545,18 +545,18 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                             <img
                               src={getChampionIconUrl(pick.championId)}
                               alt={pick.championName}
-                              className="w-12 h-12 rounded-lg object-cover border-2 border-[#0070EB] shadow"
+                              className="w-13 h-13 object-cover border-2 border-[#0066FF] p3r-shadow-blue"
                             />
                             <div>
-                              <h4 className="text-sm font-black text-white group-hover:text-[#00F0FF] transition">
+                              <h4 className="text-sm font-black text-white group-hover:text-[#00E5FF] transition font-p3r-head uppercase tracking-wider">
                                 {pick.championName || getChampionName(pick.championId)}
                               </h4>
-                              <div className="flex items-center space-x-2 mt-0.5">
-                                <span className="text-[10px] font-mono text-[#60A5FA] bg-[#11223F] px-1.5 py-0.2 rounded">
+                              <div className="flex items-center space-x-2 mt-0.5 font-mono">
+                                <span className="text-[10px] text-[#00E5FF] bg-[#050E20] border border-[#16335F] px-1.5 py-0.2 font-bold">
                                   {pick.role || localRole}
                                 </span>
                                 {pick.localWinrate !== undefined && (
-                                  <span className="text-[10px] font-mono text-emerald-400 font-bold">
+                                  <span className="text-[10px] text-[#00E676] font-bold">
                                     {pick.localWinrate}% WR ({pick.localMatches} part.)
                                   </span>
                                 )}
@@ -565,17 +565,17 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                           </div>
 
                           {/* Razones de selección */}
-                          <div className="space-y-1.5 text-xs text-[#CBD5E1] bg-[#0D192D] p-2.5 rounded border border-[#1E355B]/60 flex-1">
+                          <div className="space-y-1.5 text-xs text-[#CBD5E1] bg-[#050E20] p-3 border border-[#16335F] flex-1 p3r-cut-tr">
                             <div>
-                              <span className="text-[10px] uppercase font-bold text-[#94A3B8] block">Encaje Táctico:</span>
+                              <span className="text-[10px] uppercase font-bold text-[#7E9BB8] block font-p3r-head">Encaje Táctico:</span>
                               <p className="text-[11px] text-[#E2E8F0] mt-0.5 leading-snug">
                                 {pick.fitReason || 'Sólida presencia táctica en el parche.'}
                               </p>
                             </div>
 
                             {pick.threatMitigation && (
-                              <div className="pt-1 border-t border-[#1E355B]/40">
-                                <span className="text-[10px] uppercase font-bold text-[#F87171] block">Mitigación:</span>
+                              <div className="pt-1.5 border-t border-[#16335F]">
+                                <span className="text-[10px] uppercase font-bold text-[#FF1744] block font-p3r-head">Mitigación:</span>
                                 <p className="text-[11px] text-[#CBD5E1] mt-0.5 leading-snug">
                                   {pick.threatMitigation}
                                 </p>
@@ -583,8 +583,8 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                             )}
 
                             {pick.synergyReason && (
-                              <div className="pt-1 border-t border-[#1E355B]/40">
-                                <span className="text-[10px] uppercase font-bold text-[#60A5FA] block">Sinergia Aliada:</span>
+                              <div className="pt-1.5 border-t border-[#16335F]">
+                                <span className="text-[10px] uppercase font-bold text-[#00E5FF] block font-p3r-head">Sinergia Aliada:</span>
                                 <p className="text-[11px] text-[#CBD5E1] mt-0.5 leading-snug">
                                   {pick.synergyReason}
                                 </p>
@@ -593,31 +593,20 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                           </div>
 
                           {/* Botón de Acción Hover en LoL */}
-                          <button
-                            type="button"
+                          <P3rButton
+                            variant={isMyPickTurn ? 'cyan' : 'primary'}
+                            size="md"
+                            className="w-full justify-center"
                             onClick={() => handleHover(pick.championId)}
                             disabled={isHovering}
-                            className={`w-full py-2.5 px-3 rounded font-black text-xs uppercase tracking-wider transition shadow-md flex items-center justify-center space-x-2 transform -skew-x-6 active:scale-95 ${
-                              isMyPickTurn
-                                ? 'bg-gradient-to-r from-[#00D4FF] to-[#0070EB] hover:from-[#00F0FF] hover:to-[#005CE6] text-black font-black'
-                                : 'bg-[#1E355B] hover:bg-[#0070EB] text-white'
-                            }`}
+                            icon={isHovering ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Target className="w-3.5 h-3.5" />}
                           >
-                            <div className="transform skew-x-6 flex items-center space-x-1.5">
-                              {isHovering ? (
-                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                              ) : (
-                                <Target className="w-3.5 h-3.5" />
-                              )}
-                              <span>
-                                {isHovering
-                                  ? 'Enviando...'
-                                  : isMyPickTurn
-                                  ? 'SELECCIONAR EN LOL (HOVER)'
-                                  : 'PREPARAR PICK (HOVER)'}
-                              </span>
-                            </div>
-                          </button>
+                            {isHovering
+                              ? 'Enviando...'
+                              : isMyPickTurn
+                              ? 'SELECCIONAR EN LOL (HOVER)'
+                              : 'PREPARAR PICK (HOVER)'}
+                          </P3rButton>
                         </div>
                       );
                     })}
@@ -629,24 +618,24 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                   </div>
                 ) : Object.keys(opggLiveCounters).length > 0 ? (
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between text-xs border-b border-[#1E355B]/60 pb-2">
-                        <span className="text-[#00D4FF] font-bold font-mono">
-                          ★ COUNTERS EN VIVO DE OP.GG (Parche 26.20 - ${settings.opggTier || 'Esmeralda +'}):
+                      <div className="flex items-center justify-between text-xs border-b border-[#16335F] pb-2">
+                        <span className="text-[#00E5FF] font-bold font-mono tracking-wider">
+                          ★ COUNTERS EN VIVO DE OP.GG (Parche 26.20 - {settings.opggTier || 'Esmeralda +'}):
                         </span>
-                        <span className="text-[11px] text-neutral-400">Tokens IA preservados: 0 llamadas</span>
+                        <span className="text-[11px] text-[#7E9BB8] font-mono">Tokens IA preservados: 0 llamadas</span>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                         {Object.entries(opggLiveCounters).map(([oppIdStr, counters]) => {
                           const oppId = Number(oppIdStr);
                           return (
-                            <div key={oppId} className="bg-[#0A111F] p-3 rounded-lg border border-[#1E355B] space-y-2">
-                              <div className="flex items-center space-x-2 border-b border-[#1E355B]/60 pb-1.5">
+                            <div key={oppId} className="bg-[#030814] p-3 border border-[#16335F] space-y-2 p3r-cut-tr">
+                              <div className="flex items-center space-x-2 border-b border-[#16335F] pb-1.5">
                                 <img
                                   src={getChampionIconUrl(oppId)}
                                   alt={getChampionName(oppId)}
-                                  className="w-6 h-6 rounded border border-rose-500/50"
+                                  className="w-6 h-6 border border-[#FF1744]"
                                 />
-                                <div className="text-xs font-bold text-white">
+                                <div className="text-xs font-bold text-white uppercase font-p3r-head">
                                   vs {getChampionName(oppId)}
                                 </div>
                               </div>
@@ -654,26 +643,26 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                                 {counters.slice(0, 3).map((cnt) => {
                                   const isPickable = pickableIds.length === 0 || pickableIds.includes(cnt.championId);
                                   return (
-                                    <div key={cnt.championId} className="flex items-center justify-between text-[11px] bg-[#111A24] p-1.5 rounded border border-neutral-800">
+                                    <div key={cnt.championId} className="flex items-center justify-between text-[11px] bg-[#050E20] p-1.5 border border-[#16335F]">
                                       <div className="flex items-center space-x-1.5 truncate">
                                         <img
                                           src={getChampionIconUrl(cnt.championId)}
                                           alt={cnt.championName}
-                                          className="w-5 h-5 rounded"
+                                          className="w-5 h-5 border border-[#0066FF]"
                                         />
                                         <span className="text-white font-medium truncate">{cnt.championName}</span>
                                       </div>
                                       <div className="flex items-center space-x-2 shrink-0">
-                                        <span className="text-emerald-400 font-bold font-mono">
+                                        <span className="text-[#00E676] font-bold font-mono">
                                           {(cnt.winRate * 100).toFixed(1)}% WR
                                         </span>
                                         {isPickable && isMyPickTurn && (
                                           <button
                                             type="button"
                                             onClick={() => handleHover(cnt.championId)}
-                                            className="px-1.5 py-0.5 rounded bg-[#00D4FF] hover:bg-[#00F0FF] text-black font-black text-[10px]"
+                                            className="px-2 py-0.5 bg-[#00E5FF] hover:bg-white text-[#030814] font-black text-[10px] transform -skew-x-8 uppercase font-p3r-head cursor-pointer"
                                           >
-                                            Pick
+                                            <span className="transform skew-x-8 inline-block">Pick</span>
                                           </button>
                                         )}
                                       </div>
@@ -687,32 +676,32 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                       </div>
                     </div>
                   ) : (
-                    <div className="p-6 text-center text-xs text-[#94A3B8] bg-[#0A111F] rounded-lg border border-[#1E355B]">
+                    <div className="p-6 text-center text-xs text-[#7E9BB8] bg-[#030814] border border-[#16335F] p3r-cut-tr">
                       <span>Esperando que el equipo rival elija campeones para calcular counters en vivo desde OP.GG.</span>
                     </div>
                   )}
 
                 {/* Resumen Táctico de Equipos (Gemini) */}
                 {draftRecs?.allyCompAnalysis && (
-                  <div className="p-3.5 bg-[#0A111F] rounded-lg border border-[#1E355B] space-y-2 text-xs">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#60A5FA] block">
+                  <div className="p-3.5 bg-[#030814] border border-[#16335F] space-y-2 text-xs p3r-cut-tr">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-[#00E5FF] block font-p3r-head">
                       Perfil Táctico de la Composición:
                     </span>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono">
-                      <div className="bg-[#11223F] p-2 rounded border border-[#1E355B]">
-                        <span className="text-[#94A3B8] text-[9px] block">DAÑO</span>
+                      <div className="bg-[#050E20] p-2 border border-[#16335F]">
+                        <span className="text-[#7E9BB8] text-[9px] block">DAÑO</span>
                         <span className="text-white font-bold">{draftRecs.allyCompAnalysis.damageProfile || 'Equilibrado'}</span>
                       </div>
-                      <div className="bg-[#11223F] p-2 rounded border border-[#1E355B]">
-                        <span className="text-[#94A3B8] text-[9px] block">FRONTLINE</span>
+                      <div className="bg-[#050E20] p-2 border border-[#16335F]">
+                        <span className="text-[#7E9BB8] text-[9px] block">FRONTLINE</span>
                         <span className="text-white font-bold">{draftRecs.allyCompAnalysis.frontlinePresence || 'Moderada'}</span>
                       </div>
-                      <div className="bg-[#11223F] p-2 rounded border border-[#1E355B]">
-                        <span className="text-[#94A3B8] text-[9px] block">INICIACIÓN</span>
+                      <div className="bg-[#050E20] p-2 border border-[#16335F]">
+                        <span className="text-[#7E9BB8] text-[9px] block">INICIACIÓN</span>
                         <span className="text-white font-bold">{draftRecs.allyCompAnalysis.engagePresence || 'Media'}</span>
                       </div>
-                      <div className="bg-[#11223F] p-2 rounded border border-[#1E355B]">
-                        <span className="text-[#94A3B8] text-[9px] block">CONTROL (CC)</span>
+                      <div className="bg-[#050E20] p-2 border border-[#16335F]">
+                        <span className="text-[#7E9BB8] text-[9px] block">CONTROL (CC)</span>
                         <span className="text-white font-bold">{draftRecs.allyCompAnalysis.crowdControl || 'Estándar'}</span>
                       </div>
                     </div>
@@ -772,9 +761,9 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
               {/* Tableros de Equipos Estilo P3R */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Mi Equipo (Aliados) */}
-                <div className="bg-[#0D192D] border border-[#1E355B] rounded-xl p-5 shadow-xl">
-                  <h4 className="text-xs font-bold text-[#60A5FA] uppercase tracking-wider mb-3 flex items-center space-x-2">
-                    <span className="w-2 h-2 rounded-full bg-[#0070EB]"></span>
+                <div className="bg-[#050E20] border-2 border-[#16335F] p-5 p3r-bevel p3r-shadow-hard">
+                  <h4 className="text-xs font-black text-[#00E5FF] uppercase tracking-wider mb-3 flex items-center space-x-2 font-p3r">
+                    <span className="w-2.5 h-2.5 bg-[#0066FF] transform rotate-45"></span>
                     <span>MI EQUIPO (ALIADOS)</span>
                   </h4>
 
@@ -786,10 +775,10 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                       return (
                         <div
                           key={p.cellId}
-                          className={`p-3 rounded border flex items-center justify-between transition-all ${
+                          className={`p-3 border flex items-center justify-between transition-all p3r-cut-tr ${
                             isMe
-                              ? 'bg-[#0070EB]/10 border-[#0070EB]'
-                              : 'bg-[#0A111F] border-[#1E355B] hover:border-[#2A4878]'
+                              ? 'bg-[#0066FF]/15 border-[#0066FF] shadow-sm'
+                              : 'bg-[#030814] border-[#16335F] hover:border-[#0066FF]/60'
                           }`}
                         >
                           <div className="flex items-center space-x-3">
@@ -797,34 +786,34 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                               <img
                                 src={getChampionIconUrl(champId)}
                                 alt={getChampionName(champId)}
-                                className="w-8 h-8 rounded object-cover border border-[#0070EB]/60"
+                                className="w-9 h-9 object-cover border border-[#0066FF]"
                               />
                             ) : (
-                              <span className="w-8 h-8 rounded bg-[#11223F] text-[10px] font-mono font-bold text-[#94A3B8] border border-[#1E355B] flex items-center justify-center">
+                              <span className="w-9 h-9 bg-[#050E20] text-[10px] font-mono font-bold text-[#7E9BB8] border border-[#16335F] flex items-center justify-center">
                                 {pRole !== 'FILL' ? pRole.slice(0, 3) : `#${p.cellId}`}
                               </span>
                             )}
                             <div>
-                              <div className="text-xs font-bold text-white flex items-center space-x-2">
+                              <div className="text-xs font-bold text-white flex items-center space-x-2 font-p3r-head">
                                 <span>{isMe ? 'TÚ (JUGADOR LOCAL)' : `Aliado #${p.cellId}`}</span>
                                 {isMe && (
-                                  <span className="text-[10px] bg-[#0070EB] text-white font-bold px-1.5 py-0.2 rounded transform -skew-x-6">
-                                    TÚ
+                                  <span className="text-[10px] bg-[#0066FF] text-white font-black px-1.5 py-0.2 transform -skew-x-8 border-l border-white">
+                                    <span className="transform skew-x-8 inline-block">TÚ</span>
                                   </span>
                                 )}
-                                <span className="text-[10px] text-[#60A5FA] font-mono">
+                                <span className="text-[10px] text-[#00E5FF] font-mono">
                                   [{pRole}]
                                 </span>
                               </div>
-                              <span className="text-[11px] text-[#94A3B8]">
+                              <span className="text-[11px] text-[#7E9BB8]">
                                 {champId > 0 ? getChampionName(champId) : 'Eligiendo...'}
                               </span>
                             </div>
                           </div>
 
-                          <div className="flex items-center space-x-1.5 font-mono text-[10px] text-[#64748B]">
-                            <span className="bg-[#0A111F] px-1.5 py-0.5 rounded border border-[#1E355B]">D:{p.spell1Id || '-'}</span>
-                            <span className="bg-[#0A111F] px-1.5 py-0.5 rounded border border-[#1E355B]">F:{p.spell2Id || '-'}</span>
+                          <div className="flex items-center space-x-1.5 font-mono text-[10px] text-[#7E9BB8]">
+                            <span className="bg-[#050E20] px-1.5 py-0.5 border border-[#16335F]">D:{p.spell1Id || '-'}</span>
+                            <span className="bg-[#050E20] px-1.5 py-0.5 border border-[#16335F]">F:{p.spell2Id || '-'}</span>
                           </div>
                         </div>
                       );
@@ -833,17 +822,17 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                 </div>
 
                 {/* Equipo Enemigo con Asignación Rápida de Rival */}
-                <div className="bg-[#0D192D] border border-[#1E355B] rounded-xl p-5 shadow-xl">
+                <div className="bg-[#050E20] border-2 border-[#16335F] p-5 p3r-bevel p3r-shadow-hard">
                   <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-xs font-bold text-[#F87171] uppercase tracking-wider flex items-center space-x-2">
-                      <span className="w-2 h-2 rounded-full bg-[#D92546]"></span>
+                    <h4 className="text-xs font-black text-[#FF1744] uppercase tracking-wider flex items-center space-x-2 font-p3r">
+                      <span className="w-2.5 h-2.5 bg-[#FF1744] transform rotate-45"></span>
                       <span>EQUIPO ENEMIGO</span>
                     </h4>
                     {manualOpponentId !== null && (
                       <button
                         type="button"
                         onClick={() => setManualOpponentId(null)}
-                        className="text-[11px] text-[#60A5FA] hover:text-white underline"
+                        className="text-[11px] text-[#00E5FF] hover:text-white font-mono cursor-pointer"
                       >
                         ↺ Restaurar automático
                       </button>
@@ -865,12 +854,12 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                               setManualOpponentId(champId);
                             }
                           }}
-                          className={`p-3 rounded border flex items-center justify-between transition-all ${
+                          className={`p-3 border flex items-center justify-between transition-all p3r-cut-tr ${
                             hasChamp ? 'cursor-pointer' : ''
                           } ${
                             isCurrentRival
-                              ? 'bg-[#D92546]/15 border-[#D92546] shadow-sm ring-1 ring-[#D92546]'
-                              : 'bg-[#0A111F] border-[#1E355B] hover:border-[#D92546]/60'
+                              ? 'bg-[#FF1744]/15 border-2 border-[#FF1744] shadow-md'
+                              : 'bg-[#030814] border-[#16335F] hover:border-[#FF1744]/60'
                           }`}
                         >
                           <div className="flex items-center space-x-3">
@@ -878,25 +867,27 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                               <img
                                 src={getChampionIconUrl(champId)}
                                 alt={getChampionName(champId)}
-                                className="w-8 h-8 rounded object-cover border border-[#D92546]/60"
+                                className="w-9 h-9 object-cover border border-[#FF1744]"
                               />
                             ) : (
-                              <span className="w-8 h-8 rounded bg-[#11223F] text-[10px] font-mono font-bold text-[#94A3B8] border border-[#1E355B] flex items-center justify-center">
+                              <span className="w-9 h-9 bg-[#050E20] text-[10px] font-mono font-bold text-[#7E9BB8] border border-[#16335F] flex items-center justify-center">
                                 {pRole !== 'FILL' ? pRole.slice(0, 3) : `E${idx + 1}`}
                               </span>
                             )}
                             <div>
                               <div className="flex items-center space-x-2">
-                                <span className="text-xs font-bold text-white block">
+                                <span className="text-xs font-bold text-white block font-p3r-head">
                                   {hasChamp ? getChampionName(champId) : `Enemigo #${idx + 1}`}
                                 </span>
                                 {isCurrentRival && (
-                                  <span className="text-[10px] bg-[#D92546] text-white font-bold px-1.5 py-0.2 rounded transform -skew-x-6">
-                                    {manualOpponentId === champId ? 'RIVAL FIJADO' : 'RIVAL DIRECTO'}
+                                  <span className="text-[10px] bg-[#FF1744] text-white font-black px-1.5 py-0.2 transform -skew-x-8 border-l border-white">
+                                    <span className="transform skew-x-8 inline-block">
+                                      {manualOpponentId === champId ? 'RIVAL FIJADO' : 'RIVAL DIRECTO'}
+                                    </span>
                                   </span>
                                 )}
                               </div>
-                              <span className="text-[11px] text-[#94A3B8]">
+                              <span className="text-[11px] text-[#7E9BB8]">
                                 {hasChamp
                                   ? (isCurrentRival
                                       ? (manualOpponentId === champId ? 'Seleccionado por ti' : `Detectado en tu línea (${pRole})`)
@@ -909,9 +900,7 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                           {hasChamp && (
                             <div className="flex items-center space-x-2">
                               {isCurrentRival ? (
-                                <span className="text-xs text-[#F87171] font-bold bg-[#D92546]/20 px-2 py-0.5 rounded border border-[#D92546]/40">
-                                  Activo
-                                </span>
+                                <P3rBadge label="Activo" variant="red" />
                               ) : (
                                 <button
                                   type="button"
@@ -919,9 +908,9 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                                     e.stopPropagation();
                                     setManualOpponentId(champId);
                                   }}
-                                  className="text-xs font-semibold text-white bg-[#1E355B] hover:bg-[#0070EB] px-2.5 py-1 rounded transition-colors"
+                                  className="text-xs font-bold text-white bg-[#050E20] hover:bg-[#0066FF] border border-[#16335F] hover:border-[#0066FF] px-2.5 py-1 transform -skew-x-8 transition-colors cursor-pointer"
                                 >
-                                  Fijar como Rival
+                                  <span className="transform skew-x-8 inline-block font-p3r-head">Fijar Rival</span>
                                 </button>
                               )}
                             </div>
@@ -945,28 +934,30 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
               </div>
             </div>
           ) : (
-            <div className="bg-[#0D192D] border border-[#1E355B] rounded-xl p-12 text-center shadow-xl relative">
-              <div className="w-16 h-16 rounded bg-[#0A111F] border border-[#1E355B] flex items-center justify-center mx-auto mb-4 transform -skew-x-6">
-                <svg className="w-8 h-8 text-[#0070EB] transform skew-x-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <div className="bg-[#050E20] border-2 border-[#16335F] p3r-bevel p3r-shadow-hard-lg p-12 text-center relative overflow-hidden">
+              <div className="w-16 h-16 bg-[#0066FF] border-l-2 border-white flex items-center justify-center mx-auto mb-4 transform -skew-x-8 p3r-shadow-blue text-white">
+                <svg className="w-8 h-8 transform skew-x-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
 
-              <div className="inline-block px-2.5 py-0.5 mb-2 bg-[#0070EB] text-white text-[10px] font-bold tracking-wider uppercase transform -skew-x-6">
-                MODO DE ESPERA
+              <div className="inline-block px-3 py-1 mb-2 bg-[#0066FF] text-white text-[10px] font-black tracking-widest uppercase transform -skew-x-8 font-p3r-head p3r-shadow-blue border-l-2 border-white">
+                <span className="transform skew-x-8 inline-block">STANDBY // RADAR ACTIVO</span>
               </div>
 
-              <h3 className="text-lg font-bold text-white mb-2 tracking-wide uppercase">
-                Esperando Selección de Campeón
+              <h3 className="text-2xl font-black text-white mb-2 tracking-wider uppercase font-p3r">
+                ESPERANDO SELECCIÓN DE CAMPEÓN
               </h3>
-              <p className="text-xs text-[#94A3B8] max-w-md mx-auto mb-6 leading-relaxed">
-                Al entrar en fase de selección de campeón, Itero Local detectará tu posición y campeón, predecirá a tu rival e inyectará automáticamente las runas completas y la build en el juego. Si deseas cambiar de rival, podrás hacer clic en cualquier campeón enemigo.
+              <p className="text-xs text-[#7E9BB8] max-w-lg mx-auto mb-6 leading-relaxed">
+                Al entrar en fase de selección de campeón en League of Legends, Itero Local detectará automáticamente tu posición y campeón, predecirá a tu rival e inyectará las runas completas y la build en el juego.
               </p>
 
-              <div className="inline-flex items-center space-x-2 text-xs text-[#10B981] bg-[#0A111F] px-3.5 py-1.5 rounded border border-[#1E355B]">
-                <span className="w-2 h-2 rounded-full bg-[#10B981]"></span>
-                <span className="font-semibold">LCU WebSocket sincronizando</span>
+              <div className="inline-flex items-center space-x-2 text-xs bg-[#030814] px-4 py-2 border border-[#16335F] transform -skew-x-8">
+                <span className="transform skew-x-8 flex items-center space-x-2">
+                  <span className="w-2 h-2 bg-[#00E676] transform rotate-45"></span>
+                  <span className="font-bold text-[#00E676] font-mono">LCU WebSocket sincronizando en vivo</span>
+                </span>
               </div>
 
               <div className="mt-8 text-left">

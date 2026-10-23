@@ -38,6 +38,8 @@ export interface ILcuClient extends EventEmitter {
   banChampion(actionId: number, championId: number, completed: boolean): Promise<void>;
   setSummonerSpells(spell1Id: number, spell2Id: number): Promise<void>;
   getChampSelectSession(): Promise<ChampSelectSession | null>;
+  getPickableChampionIds?(): Promise<number[]>;
+  getBannableChampionIds?(): Promise<number[]>;
 }
 
 // ==========================================

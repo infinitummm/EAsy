@@ -19,6 +19,7 @@ import type { AppSettings, LcuDetectionReport } from '../../shared/types';
 import type { KeyHealthStatus } from '../../shared/contracts';
 import { RolePreferencesEditor } from '../components/RolePreferencesEditor';
 import { formatFullPatchLabel } from '../../shared/patchUtils';
+import { ChampionInfo, obtenerTodosLosCampeones } from '../../shared/champions';
 
 interface SettingsViewProps {
   settings: AppSettings;
@@ -43,6 +44,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
   const [lcuReport, setLcuReport] = useState<LcuDetectionReport | null>(null);
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
   const [patchVersion, setPatchVersion] = useState<string>('16.20.1');
+  const [championsCount, setChampionsCount] = useState<number>(() => obtenerTodosLosCampeones().length);
+  const [catalogChampions, setCatalogChampions] = useState<ChampionInfo[]>(() => obtenerTodosLosCampeones());
   const [refreshingData, setRefreshingData] = useState<boolean>(false);
   const [dataRefreshMsg, setDataRefreshMsg] = useState<string | null>(null);
   const [quotaInfo, setQuotaInfo] = useState<any>(null);
@@ -68,7 +71,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
         }
       }).catch(() => {});
     }
-    if (window.api?.getPatchVersion) {
+    if (window.api?.getChampionCatalog) {
+      window.api.getChampionCatalog().then((cat) => {
+        if (cat?.count) setChampionsCount(cat.count);
+        if (cat?.champions?.length) setCatalogChampions(cat.champions);
+        if (cat?.patch) setPatchVersion(cat.patch);
+      }).catch(() => {});
+    } else if (window.api?.getPatchVersion) {
       window.api.getPatchVersion().then((p) => {
         if (p) setPatchVersion(p);
       }).catch(() => {});
@@ -102,7 +111,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
     try {
       const res = await window.api.refreshDataDragon();
       setPatchVersion(res.patch);
-      setDataRefreshMsg(`✓ Catálogo actualizado con éxito: Parche ${res.patch} (${res.championsCount} campeones indexados, incluyendo lanzamientos recientes).`);
+      if (res.championsCount) setChampionsCount(res.championsCount);
+      if (res.champions && res.champions.length > 0) {
+        setCatalogChampions(res.champions);
+      } else if (window.api?.getChampionCatalog) {
+        const cat = await window.api.getChampionCatalog();
+        if (cat?.champions?.length) setCatalogChampions(cat.champions);
+      }
+      setDataRefreshMsg(`✓ Catálogo actualizado con éxito: Parche ${formatFullPatchLabel(res.patch)} (${res.championsCount || 173} campeones cargados, incluyendo lanzamientos recientes).`);
     } catch (err: any) {
       setDataRefreshMsg(`Error al actualizar catálogo: ${err.message || String(err)}`);
     } finally {
@@ -358,6 +374,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
       <RolePreferencesEditor
         settings={settings.autoChampSelect}
         onSave={(autoChampSelect) => onSaveSettings({ autoChampSelect })}
+        championsCatalog={catalogChampions}
       />
 
       
@@ -675,12 +692,28 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
           </button>
         </div>
 
-        <div className="p-3 bg-[#0A1428] rounded border border-[#1E282D] flex flex-wrap items-center justify-between gap-2 text-xs">
-          <div className="flex items-center space-x-3">
-            <span className="text-[#A09B8C]">Parche detectado:</span>
-            <span className="font-mono text-emerald-400 font-bold bg-[#111A24] px-2.5 py-1 rounded border border-[#1E282D]">
-              v{formatFullPatchLabel(patchVersion)}
-            </span>
+        <div className="p-3 bg-[#0A1428] rounded border border-[#1E282D] flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center space-x-2">
+              <span className="text-[#A09B8C]">Parche detectado:</span>
+              <span className="font-mono text-emerald-400 font-bold bg-[#111A24] px-2.5 py-1 rounded border border-[#1E282D]">
+                v{formatFullPatchLabel(patchVersion)}
+              </span>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <span className="text-[#A09B8C]">Data Dragon:</span>
+              <span className="font-mono text-cyan-300 bg-[#111A24] px-2.5 py-1 rounded border border-[#1E282D]">
+                {versionInfo?.ddragonVersion || patchVersion}
+              </span>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <span className="font-mono text-amber-300 font-semibold bg-amber-950/40 border border-amber-600/30 px-2.5 py-1 rounded">
+                {championsCount} campeones cargados
+              </span>
+            </div>
+
             <span className="text-gray-400 text-[11px]">• Sincronización en tiempo real</span>
           </div>
 

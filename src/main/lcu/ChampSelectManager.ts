@@ -31,6 +31,8 @@ import type {
 } from '@shared/types';
 import { DEFAULT_APP_SETTINGS } from '@shared/constants';
 import { EVENTOS_LCU_CLIENT } from './LcuClient';
+import { registrarLog } from './LcuDetector';
+import { getChampionName } from '@shared/champions';
 
 /** Nombres de los eventos emitidos por `ChampSelectManager`. */
 export const EVENTOS_CHAMP_SELECT_MANAGER = {
@@ -146,7 +148,7 @@ function deduplicar(ids: number[]): number[] {
 export function resolverPlanChampSelect(
   sesion: ChampSelectSession,
   preferencias: PreferenciasAutomatizacion,
-  opciones: { objetivoRecordado?: number | null } = {}
+  opciones: { objetivoRecordado?: number | null; bannableChampionIds?: number[] } = {}
 ): PlanChampSelect | null {
   const celdaLocal = sesion.localPlayerCellId;
   const jugadorLocal = (sesion.myTeam ?? []).find((jugador) => jugador.cellId === celdaLocal) ?? null;
@@ -200,12 +202,17 @@ export function resolverPlanChampSelect(
     propios.add(candidatoPick);
   }
 
+  const setBannables = opciones.bannableChampionIds && opciones.bannableChampionIds.length > 0
+    ? new Set(opciones.bannableChampionIds)
+    : null;
+
   const candidatosBan = deduplicar(preferenciasRol.banChampions ?? []).filter(
     (id) =>
       id > 0 &&
       !baneados.has(id) &&
       !comprometidosAliados.has(id) &&
-      !propios.has(id)
+      !propios.has(id) &&
+      (setBannables === null || setBannables.has(id))
   );
 
   const acciones: AccionChampSelect[] = [];
@@ -358,8 +365,16 @@ export class ChampSelectManager extends EventEmitter {
     }
 
     const preferencias = this.obtenerPreferencias();
+    let bannableChampionIds: number[] | undefined;
+    if (preferencias.autoBan && typeof (this.lcu as any).getBannableChampionIds === 'function') {
+      try {
+        bannableChampionIds = await (this.lcu as any).getBannableChampionIds();
+      } catch {}
+    }
+
     const plan = resolverPlanChampSelect(sesion, preferencias, {
       objetivoRecordado: this.objetivoRecordado,
+      bannableChampionIds,
     });
 
     if (!plan) {
@@ -369,9 +384,60 @@ export class ChampSelectManager extends EventEmitter {
     const ejecutadas: ResultadoAccionChampSelect[] = [];
     let omitidas = 0;
 
+    // Comprobar si hay turno de ban activo sin candidatos válidos
+    const celdaLocal = sesion.localPlayerCellId;
+    const accionBanEnCurso = buscarAccionEnCurso(sesion, celdaLocal, 'ban');
+    if (accionBanEnCurso && preferencias.autoBan && plan.candidatosBan.length === 0) {
+      const msg = '[AutoBan] Ningún campeón configurado está disponible para banear (ya baneados, pickeados o no elegibles).';
+      registrarLog(msg);
+      this.emit(EVENTOS_CHAMP_SELECT_MANAGER.ACCION_FALLIDA, {
+        accion: { tipo: 'ban', actionId: accionBanEnCurso.id, championId: 0, completada: true },
+        exito: false,
+        error: msg,
+      });
+    }
+
     for (const accion of plan.acciones) {
       if (this.yaAplicada(accion)) {
         omitidas += 1;
+        continue;
+      }
+
+      // Lógica resiliente con reintento secuencial si es BAN
+      if (accion.tipo === 'ban' && accion.completada && plan.candidatosBan.length > 0) {
+        let banExitoso = false;
+        let ultimoError = '';
+
+        for (let i = 0; i < Math.min(plan.candidatosBan.length, 4); i++) {
+          const candidatoId = plan.candidatosBan[i];
+          const nombreCamp = getChampionName(candidatoId);
+          accion.championId = candidatoId;
+
+          try {
+            registrarLog(`[ChampSelect][AutoBan] Intentando banear candidato #${i + 1}: ${nombreCamp} (ID ${candidatoId}) en acción ${accion.actionId}...`);
+            await this.ejecutar(accion);
+            this.marcarAplicada(accion);
+            banExitoso = true;
+            const resultado: ResultadoAccionChampSelect = { accion, exito: true };
+            ejecutadas.push(resultado);
+            this.emit(EVENTOS_CHAMP_SELECT_MANAGER.ACCION_EJECUTADA, resultado);
+            registrarLog(`[ChampSelect][AutoBan] ¡Ban completado y confirmado con éxito para ${nombreCamp}!`);
+            break;
+          } catch (err) {
+            ultimoError = err instanceof Error ? err.message : String(err);
+            registrarLog(`[ChampSelect][AutoBan] Falló intento de banear ${nombreCamp} (ID ${candidatoId}): ${ultimoError}. Probando siguiente candidato...`);
+          }
+        }
+
+        if (!banExitoso) {
+          const resultado: ResultadoAccionChampSelect = {
+            accion,
+            exito: false,
+            error: `No se pudo bloquear ningún ban de tu lista: ${ultimoError}`,
+          };
+          ejecutadas.push(resultado);
+          this.emit(EVENTOS_CHAMP_SELECT_MANAGER.ACCION_FALLIDA, resultado);
+        }
         continue;
       }
 

@@ -51,8 +51,9 @@ export const api = {
     ipcRenderer.invoke(IPC_CHANNELS.AI_GET_DRAFT_RECOMMENDATIONS, params),
 
   // Data Dragon Patch & Reload
+  getChampionCatalog: () => ipcRenderer.invoke(IPC_CHANNELS.DDRAGON_GET_CATALOG),
   getPatchVersion: (): Promise<string> => ipcRenderer.invoke(IPC_CHANNELS.DDRAGON_GET_PATCH),
-  refreshDataDragon: (): Promise<{ patch: string; championsCount: number }> =>
+  refreshDataDragon: (): Promise<{ patch: string; championsCount: number; champions?: any[] }> =>
     ipcRenderer.invoke(IPC_CHANNELS.DDRAGON_REFRESH_DATA),
   getPatchDiff: (patch?: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.PATCH_DIFF_GET, patch),

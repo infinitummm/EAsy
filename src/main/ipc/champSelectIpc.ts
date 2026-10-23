@@ -11,7 +11,7 @@ import { RuneManager } from '../lcu/RuneManager';
 import { ItemSetManager } from '../lcu/ItemSetManager';
 import { OpGgClient } from '../opgg/OpGgClient';
 import { PatchDiffService } from '../riot/PatchDiffService';
-import { getChampionById } from '../../shared/champions';
+import { getChampionById, obtenerTodosLosCampeones } from '../../shared/champions';
 import { registrarLog } from '../lcu/LcuDetector';
 import { RunePage, Role, ChampSelectSession, GameflowPhase, BuildRecommendation } from '../../shared/types';
 
@@ -262,12 +262,49 @@ export function setupChampSelectIpc(
         dataDragonService.invalidarCacheMemoria();
         const patch = await dataDragonService.obtenerVersionActual();
         await dataDragonService.sincronizarCatalogoCampeones();
-        const count = dataDragonService.obtenerCampeones ? (await dataDragonService.obtenerCampeones(patch)).length : 170;
-        return { patch, championsCount: count };
+        const champions = obtenerTodosLosCampeones();
+        return { patch, championsCount: champions.length, champions };
       }
-      return { patch: '16.20.1', championsCount: 170 };
-    } catch (err) {
-      return { patch: '16.20.1', championsCount: 170 };
+      const champions = obtenerTodosLosCampeones();
+      return { patch: '16.20.1', championsCount: champions.length, champions };
+    } catch {
+      const champions = obtenerTodosLosCampeones();
+      return { patch: '16.20.1', championsCount: champions.length, champions };
+    }
+  });
+
+  // 8b. Consulta de catálogo unificado de campeones (Data Dragon + LCU)
+  ipcMain.removeHandler(IPC_CHANNELS.DDRAGON_GET_CATALOG);
+  ipcMain.handle(IPC_CHANNELS.DDRAGON_GET_CATALOG, async () => {
+    try {
+      let patch = '16.20.1';
+      if (dataDragonService) {
+        patch = await dataDragonService.obtenerVersionActual();
+        if (dataDragonService.sincronizarCatalogoCampeones) {
+          await dataDragonService.sincronizarCatalogoCampeones();
+        }
+      }
+      const champions = obtenerTodosLosCampeones();
+      const parts = patch.split('.');
+      const major = parseInt(parts[0] || '16', 10);
+      const minor = parseInt(parts[1] || '20', 10);
+      const displayMajor = major <= 16 ? major + 10 : major;
+      const displayPatch = `Parche ${displayMajor}.${minor}`;
+
+      return {
+        patch,
+        displayPatch,
+        champions,
+        count: champions.length
+      };
+    } catch {
+      const champions = obtenerTodosLosCampeones();
+      return {
+        patch: '16.20.1',
+        displayPatch: 'Parche 26.20',
+        champions,
+        count: champions.length
+      };
     }
   });
 

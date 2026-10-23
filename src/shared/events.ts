@@ -53,6 +53,7 @@ export const IPC_CHANNELS = {
   AI_GET_DRAFT_RECOMMENDATIONS: 'ai:get-draft-recommendations',
   DDRAGON_GET_PATCH: 'ddragon:get-patch',
   DDRAGON_REFRESH_DATA: 'ddragon:refresh-data',
+  DDRAGON_GET_CATALOG: 'ddragon:get-catalog',
   PATCH_DIFF_GET: 'patch-diff:get',
   AI_GET_GROUNDING_QUOTA: 'ai:get-grounding-quota',
   OPGG_GET_MATCHUP: 'opgg:get-matchup',
@@ -99,7 +100,8 @@ export interface IpcInvokeHandlers {
     matches: ParsedMatchSummary[];
   }>;
   [IPC_CHANNELS.DDRAGON_GET_PATCH]: () => Promise<string>;
-  [IPC_CHANNELS.DDRAGON_REFRESH_DATA]: () => Promise<{ patch: string; championsCount: number }>;
+  [IPC_CHANNELS.DDRAGON_REFRESH_DATA]: () => Promise<{ patch: string; championsCount: number; champions?: any[] }>;
+  [IPC_CHANNELS.DDRAGON_GET_CATALOG]: () => Promise<{ patch: string; displayPatch: string; champions: any[]; count: number }>;
   [IPC_CHANNELS.AI_GET_MATCHUP_ADVICE]: (params: {
     championId: number;
     opponentId: number;

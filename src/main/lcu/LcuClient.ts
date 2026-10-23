@@ -63,6 +63,7 @@ export const ENDPOINTS_LCU = {
   CHAMP_SELECT_ACTIONS: '/lol-champ-select/v1/session/actions',
   CHAMP_SELECT_MY_SELECTION: '/lol-champ-select/v1/session/my-selection',
   PICKABLE_CHAMPION_IDS: '/lol-champ-select/v1/pickable-champion-ids',
+  BANNABLE_CHAMPION_IDS: '/lol-champ-select/v1/bannable-champion-ids',
   CHAMPION_SUMMARY: '/lol-game-data/assets/v1/champion-summary.json',
   RUNE_PAGES: '/lol-perks/v1/pages',
 } as const;
@@ -701,6 +702,24 @@ export class LcuClient extends EventEmitter implements ILcuClient {
    * (`GET /lol-champ-select/v1/pickable-champion-ids`, REQ-012).
    * Devuelve un arreglo vacío si no hay sesión activa (404).
    */
+
+  /**
+   * Obtiene la lista de campeones baneables del Champ Select actual
+   * (`GET /lol-champ-select/v1/bannable-champion-ids`).
+   * Devuelve un arreglo vacío si no hay sesión activa (404) o si el endpoint falla.
+   */
+  async getBannableChampionIds(): Promise<number[]> {
+    try {
+      const datos = await this.http.request<unknown>('GET', ENDPOINTS_LCU.BANNABLE_CHAMPION_IDS);
+      return normalizarIdsCampeones(datos);
+    } catch (error) {
+      if (error instanceof ErrorPeticionLcu && error.codigoEstado === 404) {
+        return [];
+      }
+      return [];
+    }
+  }
+
   async getPickableChampionIds(): Promise<number[]> {
     try {
       const datos = await this.http.request<unknown>('GET', ENDPOINTS_LCU.PICKABLE_CHAMPION_IDS);

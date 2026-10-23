@@ -25,7 +25,8 @@ import {
   Clock,
   Check,
   Flame,
-  AlertCircle
+  AlertCircle,
+  Lock
 } from 'lucide-react';
 
 // ==========================================
@@ -36,6 +37,7 @@ interface ChampionAutocompleteProps {
   placeholder: string;
   existingIds: number[];
   allChampions: ChampionInfo[];
+  pickableIds?: number[];
   onAddChampion: (listType: 'preferredChampions' | 'fallbackChampions' | 'banChampions', champId: number) => void;
   disabled?: boolean;
 }
@@ -45,6 +47,7 @@ export const ChampionAutocomplete = React.memo<ChampionAutocompleteProps>(({
   placeholder,
   existingIds,
   allChampions,
+  pickableIds,
   onAddChampion,
   disabled = false
 }) => {
@@ -55,7 +58,7 @@ export const ChampionAutocomplete = React.memo<ChampionAutocompleteProps>(({
   const filtered = useMemo(() => {
     if (!search.trim()) return [];
     const query = search.toLowerCase().trim();
-    return allChampions
+    const results = allChampions
       .filter(
         (c) =>
           !existingIds.includes(c.id) &&
@@ -64,6 +67,26 @@ export const ChampionAutocomplete = React.memo<ChampionAutocompleteProps>(({
             String(c.id).includes(query))
       )
       .slice(0, 8);
+
+    // Respaldo dinámico por ID numérico (ej: Yunara 804 o campeón día-0 no indexado aún)
+    const numericId = parseInt(query, 10);
+    if (
+      Number.isInteger(numericId) &&
+      numericId > 0 &&
+      !existingIds.includes(numericId) &&
+      !results.some((c) => c.id === numericId) &&
+      !allChampions.some((c) => c.id === numericId)
+    ) {
+      results.push({
+        id: numericId,
+        name: getChampionName(numericId),
+        key: `Champion_${numericId}`,
+        image: `${numericId}.png`,
+        iconUrl: getChampionIconUrl(numericId)
+      });
+    }
+
+    return results;
   }, [search, existingIds, allChampions]);
 
   useEffect(() => {
@@ -108,29 +131,48 @@ export const ChampionAutocomplete = React.memo<ChampionAutocompleteProps>(({
           data-testid="champion-autocomplete-dropdown"
           className="absolute z-30 left-0 right-0 mt-1 bg-[#0A1428] border border-[#00D4FF]/40 rounded-lg shadow-2xl max-h-48 overflow-y-auto divide-y divide-neutral-800"
         >
-          {filtered.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => {
-                onAddChampion(listType, c.id);
-                setSearch('');
-                setOpen(false);
-              }}
-              className="w-full flex items-center space-x-2.5 px-3 py-1.5 text-left hover:bg-[#111A24] transition"
-            >
-              <img
-                src={getChampionIconUrl(c.id)}
-                alt={c.name}
-                className="w-6 h-6 rounded-full border border-neutral-700 object-cover"
-              />
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-semibold text-white truncate">{c.name}</div>
-                <div className="text-[10px] text-neutral-400 font-mono">ID: {c.id}</div>
-              </div>
-              <span className="text-[10px] text-[#00D4FF] font-medium">+ Agregar</span>
-            </button>
-          ))}
+          {filtered.map((c) => {
+            const isNotOwned =
+              (listType === 'preferredChampions' || listType === 'fallbackChampions') &&
+              pickableIds !== undefined &&
+              pickableIds.length > 0 &&
+              !pickableIds.includes(c.id);
+
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => {
+                  onAddChampion(listType, c.id);
+                  setSearch('');
+                  setOpen(false);
+                }}
+                className="w-full flex items-center space-x-2.5 px-3 py-1.5 text-left hover:bg-[#111A24] transition"
+              >
+                <img
+                  src={getChampionIconUrl(c.id)}
+                  alt={c.name}
+                  className="w-6 h-6 rounded-full border border-neutral-700 object-cover"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs font-semibold text-white truncate">{c.name}</span>
+                    {isNotOwned && (
+                      <span
+                        title="Campeón no poseído en tu cuenta (puedes seleccionarlo igual)"
+                        className="text-[9px] text-amber-400 bg-amber-950/60 border border-amber-600/40 px-1 py-0.5 rounded flex items-center space-x-0.5 shrink-0"
+                      >
+                        <Lock className="w-2.5 h-2.5" />
+                        <span>No poseído</span>
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[10px] text-neutral-400 font-mono">ID: {c.id}</div>
+                </div>
+                <span className="text-[10px] text-[#00D4FF] font-medium">+ Agregar</span>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
@@ -238,6 +280,7 @@ interface RolePreferencesEditorProps {
   settings: AppSettings['autoChampSelect'];
   onSave: (updated: AppSettings['autoChampSelect']) => void;
   disabled?: boolean;
+  championsCatalog?: ChampionInfo[];
 }
 
 const ROLES: Array<{ id: Role; label: string; icon: React.ReactNode }> = [
@@ -251,14 +294,44 @@ const ROLES: Array<{ id: Role; label: string; icon: React.ReactNode }> = [
 export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React.memo(({
   settings,
   onSave,
-  disabled = false
+  disabled = false,
+  championsCatalog
 }) => {
   const [selectedRole, setSelectedRole] = useState<Role>('TOP');
   const [prefs, setPrefs] = useState<AppSettings['autoChampSelect']>(settings);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [internalChampions, setInternalChampions] = useState<ChampionInfo[]>(() => obtenerTodosLosCampeones());
+  const [pickableIds, setPickableIds] = useState<number[]>([]);
 
-  // Catálogo completo de campeones (memoizado globalmente)
-  const allChampions = useMemo(() => obtenerTodosLosCampeones(), []);
+  // Sincronizar catálogo consolidado y campeones poseídos en LCU
+  useEffect(() => {
+    let mounted = true;
+    if (window.api?.getChampionCatalog) {
+      window.api.getChampionCatalog().then((res) => {
+        if (mounted && res?.champions && Array.isArray(res.champions) && res.champions.length > 0) {
+          setInternalChampions(res.champions);
+        }
+      }).catch(() => {});
+    }
+    if (window.api?.getPickableChampions) {
+      window.api.getPickableChampions().then((ids) => {
+        if (mounted && Array.isArray(ids)) {
+          setPickableIds(ids);
+        }
+      }).catch(() => {});
+    }
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Catálogo unificado y ordenado
+  const allChampions = useMemo(() => {
+    if (championsCatalog && championsCatalog.length > 0) {
+      return championsCatalog;
+    }
+    return internalChampions;
+  }, [championsCatalog, internalChampions]);
 
   // Sincronizar solo cuando cambie settings por guardado externo
   const lastSettingsRef = useRef(settings);
@@ -449,6 +522,10 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
           const icon = getChampionIconUrl(id);
           const isFirst = index === 0;
           const isLast = index === ids.length - 1;
+          const isNotOwned =
+            (listType === 'preferredChampions' || listType === 'fallbackChampions') &&
+            pickableIds.length > 0 &&
+            !pickableIds.includes(id);
 
           return (
             <div
@@ -475,9 +552,18 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
                   }}
                 />
 
-                <div className="truncate">
+                <div className="truncate flex items-center">
                   <span className="text-white font-semibold truncate">{name}</span>
                   <span className="text-[10px] text-neutral-500 font-mono ml-1.5">({id})</span>
+                  {isNotOwned && (
+                    <span
+                      title="Campeón no poseído en tu cuenta de LoL"
+                      className="ml-2 text-[9px] text-amber-400 bg-amber-950/60 border border-amber-600/40 px-1 py-0.5 rounded inline-flex items-center space-x-0.5 shrink-0"
+                    >
+                      <Lock className="w-2.5 h-2.5" />
+                      <span>No poseído</span>
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -661,9 +747,10 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
           </div>
           <ChampionAutocomplete
             listType="preferredChampions"
-            placeholder="Buscar por nombre (ej: Caitlyn, Ashe, Jinx)..."
+            placeholder="Buscar por nombre o ID (ej: Caitlyn, Yunara, 804)..."
             existingIds={currentRolePref.preferredChampions}
             allChampions={allChampions}
+            pickableIds={pickableIds}
             onAddChampion={handleAddChampion}
             disabled={disabled}
           />
@@ -686,9 +773,10 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
           </div>
           <ChampionAutocomplete
             listType="fallbackChampions"
-            placeholder="Buscar campeones secundarios..."
+            placeholder="Buscar campeones secundarios por nombre o ID..."
             existingIds={currentRolePref.fallbackChampions}
             allChampions={allChampions}
+            pickableIds={pickableIds}
             onAddChampion={handleAddChampion}
             disabled={disabled}
           />
@@ -711,9 +799,10 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
           </div>
           <ChampionAutocomplete
             listType="banChampions"
-            placeholder="Buscar campeón a banear (ej: Yasuo, Zed, Blitzcrank)..."
+            placeholder="Buscar campeón a banear por nombre o ID (ej: Yasuo, Zed, Yunara, 804)..."
             existingIds={currentRolePref.banChampions}
             allChampions={allChampions}
+            pickableIds={pickableIds}
             onAddChampion={handleAddChampion}
             disabled={disabled}
           />

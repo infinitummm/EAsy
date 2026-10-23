@@ -375,11 +375,13 @@ export class DataDragonService {
     let version: string | null = null;
     let ddragonOk = false;
     let nuevos = 0;
+    const idsDdragon = new Set<number>();
 
     try {
       version = await this.obtenerVersionActual();
       const campeones = convertirCampeonesDataDragon(await this.obtenerCampeones(version));
       if (campeones.length > 0) {
+        for (const champ of campeones) idsDdragon.add(champ.id);
         nuevos += registrarCampeones(campeones);
         ddragonOk = true;
       }
@@ -393,7 +395,7 @@ export class DataDragonService {
       campeones: ChampionInfo[],
       origen: 'lcu' | 'communitydragon'
     ): void => {
-      const filtrados = ddragonOk ? campeones.filter((campeon) => !getChampionById(campeon.id)) : campeones;
+      const filtrados = ddragonOk ? campeones.filter((campeon) => !idsDdragon.has(campeon.id)) : campeones;
       if (filtrados.length > 0) {
         nuevos += registrarCampeones(filtrados);
       }

@@ -409,7 +409,7 @@ describe('DataDragonService (T-3.6)', () => {
 
       expect(resultado.version).toBeNull();
       expect(servicio.obtenerCatalogoCampeones().length).toBeGreaterThanOrEqual(160);
-      expect(getChampionName(999999)).toBe('Campeón (999999)');
+      expect(getChampionName(999999)).toBe('Campeón (ID: 999999)');
       expect(getChampionIconUrl(999999)).toBe(GENERIC_CHAMPION_ICON_URL);
     });
   });

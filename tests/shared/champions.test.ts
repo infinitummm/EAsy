@@ -33,8 +33,8 @@ describe('Champions Shared Module', () => {
   it('debe resolver el nombre del campeón correctamente con fallback', () => {
     expect(getChampionName(266)).toBe('Aatrox');
     expect(getChampionName(24)).toBe('Jax');
-    expect(getChampionName(999999)).toBe('Campeón (999999)');
-    expect(getChampionName(999999, 'Desconocido')).toBe('Desconocido (999999)');
+    expect(getChampionName(999999)).toBe('Campeón (ID: 999999)');
+    expect(getChampionName(999999, 'Desconocido')).toBe('Desconocido (ID: 999999)');
   });
 
   it('debe generar URLs de iconos de DataDragon válidas', () => {
@@ -45,26 +45,31 @@ describe('Champions Shared Module', () => {
     expect(urlByFilename).toContain('Ahri.png');
   });
 
-  it('REQ-013: registra dinámicamente campeones nuevos como Yunara (ID 804)', () => {
-    expect(getChampionById(804)).toBeUndefined();
+  it('incluye a Yunara (ID 804) en el catálogo de campeones', () => {
+    expect(getChampionById(804)).toBeDefined();
+    expect(getChampionById(804)?.name).toBe('Yunara');
+  });
+
+  it('REQ-013: registra dinámicamente campeones nuevos como NuevoCampeon (ID 9988)', () => {
+    expect(getChampionById(9988)).toBeUndefined();
 
     const nuevos = registrarCampeones([
       {
-        id: 804,
+        id: 9988,
         name: 'Yunara',
         key: 'Yunara',
         image: 'Yunara.png',
         iconUrl:
-          'https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/804.png',
+          'https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/9988.png',
       },
     ]);
 
     expect(nuevos).toBe(1);
-    expect(getChampionById(804)).toMatchObject({ id: 804, name: 'Yunara' });
-    expect(getChampionName(804)).toBe('Yunara');
+    expect(getChampionById(9988)).toMatchObject({ id: 9988, name: 'Yunara' });
+    expect(getChampionName(9988)).toBe('Yunara');
     // El icono dinámico tiene prioridad sobre la URL estática de Data Dragon.
-    expect(getChampionIconUrl(804)).toContain('champion-icons/804.png');
-    expect(getChampionIconUrl('Yunara.png')).toContain('champion-icons/804.png');
+    expect(getChampionIconUrl(9988)).toContain('champion-icons/9988.png');
+    expect(getChampionIconUrl('Yunara.png')).toContain('champion-icons/9988.png');
   });
 
   it('REQ-013: ignora entradas inválidas y no altera el catálogo', () => {

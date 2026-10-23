@@ -84,6 +84,12 @@ class LcuClientFalso extends EventEmitter {
     return { success: true, actionId, championId };
   }
 
+  bannableChampionIds: number[] = [];
+  async getBannableChampionIds(): Promise<number[]> {
+    this.registrar('getBannableChampionIds', []);
+    return this.bannableChampionIds;
+  }
+
   llamadasDe(metodo: string): LlamadaLcu[] {
     return this.llamadas.filter((llamada) => llamada.metodo === metodo);
   }
@@ -529,4 +535,119 @@ describe('ChampSelectManager (T-4.1)', () => {
       expect(cliente.llamadasDe('selectChampion')).toHaveLength(1);
     });
   });
+
+  describe('Auto Ban resiliente con bannable-champion-ids y reintentos', () => {
+    it('ejecuta ban normal y confirma con lockInBan', async () => {
+      const preferencias = crearPreferencias(
+        { autoBan: true, autoHover: false, autoPick: false, autoSpells: false },
+        { TOP: { banChampions: [84, 157] } }
+      );
+      const manager = new ChampSelectManager(comoClienteLcu(cliente), {
+        obtenerPreferencias: () => preferencias,
+        autoSuscribir: false,
+      });
+
+      const sesion = crearSesion({
+        actions: [[{ id: 10, actorCellId: 0, type: 'ban', isInProgress: true, completed: false, championId: 0, isAllyAction: true }]],
+      });
+
+      const res = await manager.procesarSesion(sesion);
+      expect(res?.ejecutadas).toHaveLength(1);
+      expect(res?.ejecutadas[0].accion).toMatchObject({ tipo: 'ban', championId: 84 });
+    });
+
+    it('pasa al siguiente candidato si el primero ya fue baneado', async () => {
+      const preferencias = crearPreferencias(
+        { autoBan: true, autoHover: false, autoPick: false, autoSpells: false },
+        { TOP: { banChampions: [84, 157] } }
+      );
+      const manager = new ChampSelectManager(comoClienteLcu(cliente), {
+        obtenerPreferencias: () => preferencias,
+        autoSuscribir: false,
+      });
+
+      const sesion = crearSesion({
+        bans: { myTeamBans: [84], theirTeamBans: [], numBans: 1 },
+        actions: [[{ id: 10, actorCellId: 0, type: 'ban', isInProgress: true, completed: false, championId: 0, isAllyAction: true }]],
+      });
+
+      const res = await manager.procesarSesion(sesion);
+      expect(res?.ejecutadas).toHaveLength(1);
+      expect(res?.ejecutadas[0].accion).toMatchObject({ tipo: 'ban', championId: 157 });
+    });
+
+    it('reintenta secuencialmente con el segundo candidato si el primero falla en el cliente LCU', async () => {
+      const preferencias = crearPreferencias(
+        { autoBan: true, autoHover: false, autoPick: false, autoSpells: false },
+        { TOP: { banChampions: [84, 157] } }
+      );
+      const manager = new ChampSelectManager(comoClienteLcu(cliente), {
+        obtenerPreferencias: () => preferencias,
+        autoSuscribir: false,
+      });
+
+      let intentos = 0;
+      cliente.lockInBan = async (actionId: number, champId: number) => {
+        intentos++;
+        if (champId === 84) {
+          return { success: false, actionId, championId: champId, error: '400 Bad Request: Aliado tiene hover' };
+        }
+        return { success: true, actionId, championId: champId };
+      };
+
+      const sesion = crearSesion({
+        actions: [[{ id: 10, actorCellId: 0, type: 'ban', isInProgress: true, completed: false, championId: 0, isAllyAction: true }]],
+      });
+
+      const res = await manager.procesarSesion(sesion);
+      expect(intentos).toBe(2);
+      expect(res?.ejecutadas).toHaveLength(1);
+      expect((res?.ejecutadas[0].accion as any).championId).toBe(157);
+      expect(res?.ejecutadas[0].exito).toBe(true);
+    });
+
+    it('filtra por bannableChampionIds del cliente si están presentes', async () => {
+      const preferencias = crearPreferencias(
+        { autoBan: true, autoHover: false, autoPick: false, autoSpells: false },
+        { TOP: { banChampions: [84, 157] } }
+      );
+      cliente.getBannableChampionIds = async () => [157, 238]; // 84 no está en la lista de baneables
+
+      const manager = new ChampSelectManager(comoClienteLcu(cliente), {
+        obtenerPreferencias: () => preferencias,
+        autoSuscribir: false,
+      });
+
+      const sesion = crearSesion({
+        actions: [[{ id: 10, actorCellId: 0, type: 'ban', isInProgress: true, completed: false, championId: 0, isAllyAction: true }]],
+      });
+
+      const res = await manager.procesarSesion(sesion);
+      expect(res?.ejecutadas).toHaveLength(1);
+      expect((res?.ejecutadas[0].accion as any).championId).toBe(157);
+    });
+
+    it('emite aviso descriptivo si ningún campeón configurado está disponible', async () => {
+      const preferencias = crearPreferencias(
+        { autoBan: true, autoHover: false, autoPick: false, autoSpells: false },
+        { TOP: { banChampions: [84] } }
+      );
+      const manager = new ChampSelectManager(comoClienteLcu(cliente), {
+        obtenerPreferencias: () => preferencias,
+        autoSuscribir: false,
+      });
+      const fallos: any[] = [];
+      manager.on(EVENTOS_CHAMP_SELECT_MANAGER.ACCION_FALLIDA, (err) => fallos.push(err));
+
+      const sesion = crearSesion({
+        bans: { myTeamBans: [84], theirTeamBans: [], numBans: 1 },
+        actions: [[{ id: 10, actorCellId: 0, type: 'ban', isInProgress: true, completed: false, championId: 0, isAllyAction: true }]],
+      });
+
+      await manager.procesarSesion(sesion);
+      expect(fallos).toHaveLength(1);
+      expect(fallos[0].error).toContain('Ningún campeón configurado está disponible para banear');
+    });
+  });
+
 });

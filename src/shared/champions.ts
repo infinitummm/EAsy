@@ -1029,6 +1029,36 @@ export const ALL_CHAMPIONS: ChampionInfo[] = [
     "name": "Zyra",
     "key": "Zyra",
     "image": "Zyra.png"
+  },
+  {
+    "id": 804,
+    "name": "Yunara",
+    "key": "Yunara",
+    "image": "Yunara.png"
+  },
+  {
+    "id": 799,
+    "name": "Ambessa",
+    "key": "Ambessa",
+    "image": "Ambessa.png"
+  },
+  {
+    "id": 800,
+    "name": "Mel",
+    "key": "Mel",
+    "image": "Mel.png"
+  },
+  {
+    "id": 805,
+    "name": "Locke",
+    "key": "Locke",
+    "image": "Locke.png"
+  },
+  {
+    "id": 904,
+    "name": "Zaahen",
+    "key": "Zaahen",
+    "image": "Zaahen.png"
   }
 ];
 
@@ -1132,7 +1162,7 @@ export function getChampionById(id: number): ChampionInfo | undefined {
 
 export function getChampionName(id: number, fallback = 'Campeón'): string {
   const champ = CHAMPIONS_BY_ID.get(id);
-  return champ ? champ.name : `${fallback} (${id})`;
+  return champ ? champ.name : `${fallback} (ID: ${id})`;
 }
 
 export function getChampionIconUrl(imageOrId: string | number, patch = '14.20.1'): string {

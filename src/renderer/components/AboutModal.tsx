@@ -1,11 +1,12 @@
-import React from 'react';
-import { X, ExternalLink, ShieldCheck, Database, Cpu } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, ExternalLink, ShieldCheck, Database, Cpu, RefreshCw } from 'lucide-react';
 
 interface AboutModalProps {
   isOpen: boolean;
   onClose: () => void;
   patchVersion?: string;
   clientVersion?: string;
+  appVersion?: string;
 }
 
 export const AboutModal: React.FC<AboutModalProps> = ({
@@ -13,8 +14,32 @@ export const AboutModal: React.FC<AboutModalProps> = ({
   onClose,
   patchVersion = '26.20',
   clientVersion = '26.20',
+  appVersion = 'v1.0.1',
 }) => {
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [updateMsg, setUpdateMsg] = useState<string | null>(null);
+
   if (!isOpen) return null;
+
+  const handleCheckUpdates = async () => {
+    if (!window.api?.checkForUpdates) return;
+    setCheckingUpdate(true);
+    setUpdateMsg(null);
+    try {
+      const res = await window.api.checkForUpdates();
+      if (res.isDev) {
+        setUpdateMsg('Modo desarrollo: el auto-updater se desactiva para proteger el código fuente.');
+      } else if (res.success) {
+        setUpdateMsg(res.version ? `✓ Versión v${res.version} disponible. Descargando en segundo plano...` : 'Itero Local está actualizado a la última versión.');
+      } else {
+        setUpdateMsg(res.error ? `Aviso: ${res.error}` : 'No se encontraron actualizaciones pendientes.');
+      }
+    } catch (err: any) {
+      setUpdateMsg(`Error: ${err.message || String(err)}`);
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
@@ -39,13 +64,32 @@ export const AboutModal: React.FC<AboutModalProps> = ({
         <div className="grid grid-cols-2 gap-3 text-xs">
           <div className="p-3 rounded-lg bg-[#0D192D] border border-[#1E355B]/60 space-y-1">
             <span className="text-[#94A3B8] block">Versión de Itero Local:</span>
-            <span className="font-bold text-white text-sm">v1.0.0 (Release)</span>
+            <span className="font-bold text-white text-sm">{appVersion}</span>
           </div>
 
           <div className="p-3 rounded-lg bg-[#0D192D] border border-[#1E355B]/60 space-y-1">
             <span className="text-[#94A3B8] block">Parche del Juego / LoL:</span>
             <span className="font-bold text-[#00D4FF] text-sm">{clientVersion || patchVersion}</span>
           </div>
+        </div>
+
+        {/* AutoUpdater manual */}
+        <div className="p-3 bg-[#0D192D] rounded-lg border border-[#1E355B]/60 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <span className="font-semibold text-white block">Actualizaciones de la aplicación</span>
+            <span className="text-[11px] text-[#94A3B8]">
+              {updateMsg || 'Consulta GitHub Releases en busca de nuevas versiones.'}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleCheckUpdates}
+            disabled={checkingUpdate}
+            className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#0070EB] hover:bg-[#005CE6] text-white rounded text-xs font-bold transition disabled:opacity-50 shrink-0 self-start sm:self-auto"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${checkingUpdate ? 'animate-spin' : ''}`} />
+            <span>{checkingUpdate ? 'Buscando...' : 'Buscar actualizaciones'}</span>
+          </button>
         </div>
 
         {/* Fuentes de Datos Oficiales */}

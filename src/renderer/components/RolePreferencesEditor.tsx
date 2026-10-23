@@ -4,6 +4,7 @@ import {
   obtenerTodosLosCampeones,
   getChampionName,
   getChampionIconUrl,
+  GENERIC_CHAMPION_ICON_URL,
   ChampionInfo
 } from '../../shared/champions';
 import {
@@ -153,6 +154,9 @@ export const ChampionAutocomplete = React.memo<ChampionAutocompleteProps>(({
                   src={getChampionIconUrl(c.id)}
                   alt={c.name}
                   className="w-6 h-6 rounded-full border border-neutral-700 object-cover"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = GENERIC_CHAMPION_ICON_URL;
+                  }}
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center space-x-2">
@@ -548,7 +552,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
                   alt={name}
                   className="w-6 h-6 rounded-full border border-neutral-700 object-cover"
                   onError={(e) => {
-                    (e.target as HTMLElement).style.display = 'none';
+                    (e.currentTarget as HTMLImageElement).src = GENERIC_CHAMPION_ICON_URL;
                   }}
                 />
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Swords, User, Settings, Play, Info } from 'lucide-react';
+import { Shield, Swords, User, Settings, Play, Info, RefreshCw } from 'lucide-react';
 import { OnboardingModal } from './components/OnboardingModal';
 import { AboutModal } from './components/AboutModal';
 import type { LcuConnectionState, GameflowPhase, AppSettings, ReadyCheckEvent } from '../shared/types';
@@ -30,6 +30,26 @@ export default function App() {
   }>({});
   const [isPermissionError, setIsPermissionError] = useState<boolean>(false);
   const [showAbout, setShowAbout] = useState<boolean>(false);
+  const [updateInfo, setUpdateInfo] = useState<{ version: string; downloaded: boolean } | null>(null);
+  const [appVersion, setAppVersion] = useState<string>('v1.0.1');
+
+  useEffect(() => {
+    if (window.api?.getAppVersion) {
+      window.api.getAppVersion().then((v: string) => {
+        if (v) setAppVersion(`v${v}`);
+      }).catch(() => {});
+    }
+    const unsubAvail = window.api?.onUpdateAvailable?.((info: any) => {
+      setUpdateInfo({ version: info.version, downloaded: false });
+    });
+    const unsubDown = window.api?.onUpdateDownloaded?.((info: any) => {
+      setUpdateInfo({ version: info.version, downloaded: true });
+    });
+    return () => {
+      unsubAvail?.();
+      unsubDown?.();
+    };
+  }, []);
 
   const refrescarEstadoLcu = () => {
     if (window.api && window.api.getLcuState) {
@@ -219,6 +239,27 @@ export default function App() {
           </nav>
         </div>
 
+        {/* Notificación visual de actualización disponible / descargada */}
+        {updateInfo && (
+          <div className="mb-3 p-2.5 rounded-lg bg-emerald-950/80 border border-emerald-500/50 shadow-lg text-xs space-y-1.5 animate-fade-in">
+            <div className="flex items-center space-x-2 text-emerald-300 font-bold">
+              <RefreshCw className={`w-3.5 h-3.5 ${!updateInfo.downloaded ? 'animate-spin' : ''}`} />
+              <span className="truncate">{updateInfo.downloaded ? `¡v${updateInfo.version} Lista!` : `Descargando v${updateInfo.version}...`}</span>
+            </div>
+            {updateInfo.downloaded ? (
+              <button
+                type="button"
+                onClick={() => window.api?.installUpdate?.()}
+                className="w-full py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[11px] font-bold transition shadow"
+              >
+                Reiniciar para Actualizar
+              </button>
+            ) : (
+              <p className="text-[10px] text-emerald-400/80">Descargando actualización en segundo plano...</p>
+            )}
+          </div>
+        )}
+
         {/* Botón Acerca de */}
         <button
           type="button"
@@ -229,7 +270,7 @@ export default function App() {
             <Info className="w-3.5 h-3.5 text-[#00D4FF]" />
             <span>Acerca de Itero Local</span>
           </span>
-          <span className="text-[10px] bg-[#1E355B] px-1.5 py-0.5 rounded text-white">v1.0.0</span>
+          <span className="text-[10px] bg-[#1E355B] px-1.5 py-0.5 rounded text-white">{appVersion}</span>
         </button>
         {/* Estado LCU en el footer de la barra lateral */}
         <div className="bg-[#0D192D] p-3.5 rounded border border-[#1E355B] shadow-lg">
@@ -336,6 +377,7 @@ export default function App() {
         onClose={() => setShowAbout(false)}
         patchVersion="26.20"
         clientVersion="26.20"
+        appVersion={appVersion}
       />
 
       {/* Modal Onboarding Inicial */}

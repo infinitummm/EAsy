@@ -52,8 +52,29 @@ export function iniciarAutoUpdater(getWebContents: () => Electron.WebContents | 
   });
 
   // Handler para reiniciar e instalar
+  ipcMain.removeHandler('app:install-update');
   ipcMain.handle('app:install-update', () => {
     autoUpdater.quitAndInstall();
+  });
+
+  // Handler para verificación manual de actualizaciones
+  ipcMain.removeHandler('app:check-for-updates');
+  ipcMain.handle('app:check-for-updates', async () => {
+    if (!app.isPackaged) {
+      return { success: false, isDev: true, message: 'Modo desarrollo (autoUpdater desactivado)' };
+    }
+    try {
+      const res = await autoUpdater.checkForUpdates();
+      return { success: true, version: res?.updateInfo?.version };
+    } catch (err: any) {
+      return { success: false, error: err?.message || String(err) };
+    }
+  });
+
+  // Handler para consultar versión real de la app
+  ipcMain.removeHandler('app:get-version');
+  ipcMain.handle('app:get-version', () => {
+    return app.getVersion();
   });
 
   // Ejecutar verificación con retardo para no competir con el arranque

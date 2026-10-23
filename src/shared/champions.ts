@@ -1165,7 +1165,7 @@ export function getChampionName(id: number, fallback = 'Campeón'): string {
   return champ ? champ.name : `${fallback} (ID: ${id})`;
 }
 
-export function getChampionIconUrl(imageOrId: string | number, patch = '14.20.1'): string {
+export function getChampionIconUrl(imageOrId: string | number, patch = '16.20.1'): string {
   if (typeof imageOrId === 'number') {
     const champ = CHAMPIONS_BY_ID.get(imageOrId);
     if (!champ) {

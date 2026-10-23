@@ -70,6 +70,21 @@ export const api = {
   exportDiagnostic: () =>
     ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_EXPORT_DIAGNOSTIC),
 
+  // AutoUpdater
+  checkForUpdates: () => ipcRenderer.invoke('app:check-for-updates'),
+  installUpdate: () => ipcRenderer.invoke('app:install-update'),
+  getAppVersion: (): Promise<string> => ipcRenderer.invoke('app:get-version'),
+  onUpdateAvailable: (cb: (info: { version: string; releaseDate?: string }) => void) => {
+    const sub = (_: any, data: any) => cb(data);
+    ipcRenderer.on('app:update-available', sub);
+    return () => ipcRenderer.removeListener('app:update-available', sub);
+  },
+  onUpdateDownloaded: (cb: (info: { version: string }) => void) => {
+    const sub = (_: any, data: any) => cb(data);
+    ipcRenderer.on('app:update-downloaded', sub);
+    return () => ipcRenderer.removeListener('app:update-downloaded', sub);
+  },
+
   // Suscripción a Eventos de Main
   on: (channel: string, callback: (...args: any[]) => void) => {
     const subscription = (_event: any, ...args: any[]) => callback(...args);

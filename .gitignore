@@ -5,6 +5,7 @@ node_modules/
 dist/
 dist-*/
 dist-electron/
+preview_*.png
 dist-release/
 out/
 release/

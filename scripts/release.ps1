@@ -1,11 +1,11 @@
 param (
-    [string]$Version = "1.0.0"
+    [string]$Version = "1.0.1"
 )
 
 $ErrorActionPreference = "Stop"
 
 Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "  Lanzamiento de Itero Local v$Version" -ForegroundColor Cyan
+Write-Host "  Lanzamiento de EAsy v$Version" -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 
 # 1. Comprobar Variable de Entorno
@@ -35,17 +35,17 @@ if ($LASTEXITCODE -ne 0) {
     Write-Error "Fallo en la generación del instalador NSIS."
 }
 
-Write-Host "`n✓ Instalador generado en release/Itero Local Setup $Version.exe" -ForegroundColor Green
+Write-Host "`n✓ Instalador generado en release/EAsy Setup $Version.exe" -ForegroundColor Green
 
 # 5. Publicación en GitHub Releases si GH_TOKEN está presente
 if ($env:GH_TOKEN) {
     Write-Host "`n[4/4] Creando release en GitHub..." -ForegroundColor Yellow
-    $exePath = "release/Itero Local Setup $Version.exe"
+    $exePath = "release/EAsy Setup $Version.exe"
     $ymlPath = "release/latest.yml"
     
     if (Test-Path $exePath) {
         gh release create "v$Version" "$exePath" "$ymlPath" `
-            --title "Itero Local v$Version" `
+            --title "EAsy v$Version" `
             --notes "Versión $Version de Itero Local con integración completa OP.GG MCP y LCU sin Riot API requerida." `
             --draft
         Write-Host "✓ Borrador de release v$Version creado con éxito en GitHub." -ForegroundColor Green

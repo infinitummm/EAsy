@@ -6,6 +6,41 @@
 import { Role } from './types';
 
 // ==========================================
+// Identidad Visible de la Aplicación
+// ==========================================
+export const APP_NAME = 'EAsy';
+
+// ==========================================
+// Traducción Amigable de Fases de Gameflow
+// ==========================================
+export function formatGameflowPhase(phase: string | undefined | null): string {
+  if (!phase) return 'Sin partida';
+  switch (phase) {
+    case 'None':
+      return 'Sin partida';
+    case 'Lobby':
+      return 'Lobby';
+    case 'Matchmaking':
+      return 'Buscando partida';
+    case 'ReadyCheck':
+      return 'Partida encontrada';
+    case 'ChampSelect':
+      return 'Selección de campeón';
+    case 'GameStart':
+    case 'InProgress':
+      return 'En partida';
+    case 'WaitingForStats':
+    case 'PreEndOfGame':
+    case 'EndOfGame':
+      return 'Fin de partida';
+    case 'Reconnect':
+      return 'Reconectando';
+    default:
+      return phase;
+  }
+}
+
+// ==========================================
 // Límites de Tasa de Riot API (Clave Personal / Dev)
 // ==========================================
 export const RIOT_RATE_LIMITS = {

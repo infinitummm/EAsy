@@ -760,7 +760,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
           />
           {renderReorderableChips('preferredChampions', currentRolePref.preferredChampions)}
           <p className="text-[10px] text-neutral-400">
-            Itero Local elegirá y bloqueará el primero de la lista que no esté baneado ni pickeado.
+            EAsy elegirá el primero de la lista que esté disponible.
           </p>
         </div>
 

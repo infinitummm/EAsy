@@ -189,7 +189,7 @@ describe('B6: Pruebas de Regresión con Datos Reales de OP.GG MCP', () => {
       delete: async () => ({ status: 200, data: {} }),
     } as any;
 
-    it('asigna título con rival "[IL] Pyke vs Nautilus" en modo matchup', () => {
+    it('asigna título con rival "EAsy Pyke vs Nautilus" en modo matchup', () => {
       const itemSetMgr = new ItemSetManager(mockLcuClient, () => 'C:\\Riot Games\\League of Legends');
       const itemSet = itemSetMgr.construirItemSet({
         championId: 555,
@@ -205,7 +205,7 @@ describe('B6: Pruebas de Regresión con Datos Reales de OP.GG MCP', () => {
         },
       });
 
-      expect(itemSet.title).toBe('[IL] Pyke vs Nautilus');
+      expect(itemSet.title).toBe('EAsy Pyke vs Nautilus');
       // Debe contener bloque de opciones finales si se especifican
       const blocks = itemSet.blocks as any[];
       expect(blocks.some((b) => b.type.includes('4° a 6° Objeto'))).toBe(true);
@@ -213,7 +213,7 @@ describe('B6: Pruebas de Regresión con Datos Reales de OP.GG MCP', () => {
       expect(blocks[0].items.some((i: any) => i.id === '3865')).toBe(true);
     });
 
-    it('asigna título general "[IL] Pyke (general)" cuando no hay rival', () => {
+    it('asigna título general "EAsy Pyke (general)" cuando no hay rival', () => {
       const itemSetMgr = new ItemSetManager(mockLcuClient, () => 'C:\\Riot Games\\League of Legends');
       const itemSet = itemSetMgr.construirItemSet({
         championId: 555,
@@ -227,7 +227,7 @@ describe('B6: Pruebas de Regresión con Datos Reales de OP.GG MCP', () => {
         },
       });
 
-      expect(itemSet.title).toBe('[IL] Pyke (general)');
+      expect(itemSet.title).toBe('EAsy Pyke (general)');
       const blocks = itemSet.blocks as any[];
       // Por ser Pyke / UTILITY, debe haber inyectado Atlas Mundial (3865)
       expect(blocks[0].items.some((i: any) => i.id === '3865')).toBe(true);

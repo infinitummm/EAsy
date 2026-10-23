@@ -320,7 +320,7 @@ describe('RuneManager (T-4.2)', () => {
       recomendacion.selectedPerkIds.push(9999);
 
       expect(pagina.selectedPerkIds).toEqual(PERKS);
-      expect(pagina.name).toBe('Itero Local');
+      expect(pagina.name).toBe('EAsy');
     });
   });
   describe('limpieza y reutilización de páginas de la app (REQ-022)', () => {
@@ -339,10 +339,10 @@ describe('RuneManager (T-4.2)', () => {
       expect(cliente.peticiones.some(p => p.metodo === 'DELETE' && p.ruta === '/lol-perks/v1/pages/11')).toBe(true);
     });
 
-    it('cleanAppRunePages elimina todas las páginas con prefijo [IL] o Itero', async () => {
+    it('cleanAppRunePages elimina todas las páginas con prefijo [IL], Itero y EAsy', async () => {
       cliente.paginas = [
         crearPagina({ id: 10, name: '[IL] Itero Local', isEditable: true } as any),
-        crearPagina({ id: 11, name: 'Itero Build', isEditable: true } as any),
+        crearPagina({ id: 11, name: 'EAsy Runes', isEditable: true } as any),
         crearPagina({ id: 12, name: 'Página Personal', isEditable: true } as any),
       ];
       const manager = new RuneManager(comoClienteLcu(cliente));
@@ -350,6 +350,20 @@ describe('RuneManager (T-4.2)', () => {
       const eliminadas = await manager.cleanAppRunePages();
       expect(eliminadas).toBe(2);
       expect(cliente.peticiones.filter(p => p.metodo === 'DELETE')).toHaveLength(2);
+    });
+
+    it('al importar runas queda UNA sola página "EAsy" y reemplaza la antigua "[IL] Itero Local"', async () => {
+      cliente.paginas = [
+        crearPagina({ id: 10, name: '[IL] Itero Local', isEditable: true } as any),
+        crearPagina({ id: 12, name: 'Página Personal', isEditable: true } as any),
+      ];
+      const manager = new RuneManager(comoClienteLcu(cliente));
+
+      const res = await manager.aplicarPagina(crearPagina({ name: '' }));
+      expect(res.success).toBe(true);
+      expect(res.pageId).toBe(10);
+      const inyectada = cliente.inyectadas.find(p => p.id === 10);
+      expect(inyectada?.name).toBe('EAsy');
     });
   });
 });

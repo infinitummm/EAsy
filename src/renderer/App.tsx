@@ -3,7 +3,7 @@ import { Shield, Swords, User, Settings, Play, Info, RefreshCw } from 'lucide-re
 import { OnboardingModal } from './components/OnboardingModal';
 import { AboutModal } from './components/AboutModal';
 import type { LcuConnectionState, GameflowPhase, AppSettings, ReadyCheckEvent } from '../shared/types';
-import { DEFAULT_APP_SETTINGS } from '../shared/constants';
+import { DEFAULT_APP_SETTINGS, APP_NAME, formatGameflowPhase } from '../shared/constants';
 import { DashboardView } from './views/DashboardView';
 import { SettingsView } from './views/SettingsView';
 import { ChampSelectView } from './views/ChampSelectView';
@@ -192,44 +192,28 @@ export default function App() {
       {/* Barra Lateral de Navegación Persona 3 Reload */}
       <aside className="w-68 bg-[#040A17] border-r-2 border-[#16335F] flex flex-col justify-between p-4 shadow-2xl z-20 shrink-0">
         <div>
-          {/* Logo / Header P3R Dark Hour */}
+          {/* Logo / Header EAsy */}
           <div className="relative mb-6 pb-4 border-b-2 border-[#16335F]">
-            <div className="flex items-center justify-between mb-2">
-              <span className="flex items-center space-x-1.5 text-[10px] font-mono tracking-widest text-[#00E5FF] uppercase font-bold">
-                <svg className="w-3.5 h-3.5 text-[#00E5FF] fill-current" viewBox="0 0 24 24">
-                  <path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z" />
-                </svg>
-                <span>DARK HOUR // 00:00</span>
-              </span>
-              <span className="text-[9px] font-mono bg-[#16335F]/60 text-[#7E9BB8] px-1.5 py-0.5 border border-[#16335F]">
-                SEES-03
-              </span>
-            </div>
-
-            <div className="flex items-center space-x-3 px-1">
+            <div className="flex items-center space-x-3 px-1 pt-1">
               <div className="w-10 h-10 bg-[#0066FF] flex items-center justify-center font-black text-white transform -skew-x-8 p3r-shadow-blue border-l-2 border-white">
-                <span className="transform skew-x-8 tracking-wider font-p3r text-base">IT</span>
+                <span className="transform skew-x-8 tracking-wider font-p3r text-base">EA</span>
               </div>
               <div>
-                <h1 className="font-black text-white text-lg tracking-wider flex items-center space-x-1 font-p3r leading-none">
-                  <span>ITERO</span>
-                  <span className="text-[#00E5FF]">LOCAL</span>
+                <h1 className="font-black text-white text-2xl tracking-wider flex items-center font-p3r leading-none">
+                  <span>EAsy</span>
                 </h1>
-                <p className="text-[10px] text-[#7E9BB8] font-bold tracking-widest uppercase mt-0.5 font-p3r-head">
-                  TACTICAL COMPANION
-                </p>
               </div>
             </div>
           </div>
 
-          {/* Menú de Navegación P3R con Selección Dinámica e Inversión */}
+          {/* Menú de Navegación con Selección Dinámica */}
           <nav className="space-y-2">
             {[
-              { id: 'dashboard', label: 'DASHBOARD', code: '01', icon: Shield },
-              { id: 'champSelect', label: 'CHAMP SELECT', code: '02', icon: Play },
-              { id: 'matchups', label: 'MATCHUPS & BUILDS', code: '03', icon: Swords },
-              { id: 'profile', label: 'MI PERFIL', code: '04', icon: User },
-              { id: 'settings', label: 'AJUSTES & KEYS', code: '05', icon: Settings },
+              { id: 'dashboard', label: 'INICIO', code: '01', icon: Shield },
+              { id: 'champSelect', label: 'SELECCIÓN', code: '02', icon: Play },
+              { id: 'matchups', label: 'ENFRENTAMIENTOS', code: '03', icon: Swords },
+              { id: 'profile', label: 'PERFIL', code: '04', icon: User },
+              { id: 'settings', label: 'AJUSTES', code: '05', icon: Settings },
             ].map((tab) => {
               const isActive = activeTab === tab.id;
               const Icon = tab.icon;
@@ -297,7 +281,7 @@ export default function App() {
           >
             <span className="transform skew-x-8 flex items-center space-x-2">
               <Info className="w-3.5 h-3.5 text-[#00E5FF]" />
-              <span className="font-p3r-head tracking-wider">Acerca de Itero</span>
+              <span className="font-p3r-head tracking-wider">Acerca de {APP_NAME}</span>
             </span>
             <span className="transform skew-x-8 text-[10px] bg-[#16335F] px-1.5 py-0.5 text-white font-mono">
               {appVersion}
@@ -308,7 +292,7 @@ export default function App() {
           <div className="bg-[#050E20] p-3.5 border-2 border-[#16335F] p3r-bevel p3r-shadow-hard">
             <div className="flex items-center justify-between text-xs mb-1.5">
               <span className="text-[#7E9BB8] text-[10px] uppercase tracking-wider font-black font-p3r-head">
-                CLIENTE LOL:
+                CLIENTE:
               </span>
               <span
                 className={`font-black flex items-center text-[10px] font-mono tracking-wider ${
@@ -328,12 +312,12 @@ export default function App() {
                       : 'bg-[#FF1744]'
                   }`}
                 />
-                {lcuState === 'connected' ? 'ONLINE' : lcuState === 'connecting' ? 'SYNC...' : 'OFFLINE'}
+                {lcuState === 'connected' ? 'Conectado' : lcuState === 'connecting' ? 'Conectando' : 'Desconectado'}
               </span>
             </div>
             <div className="text-[11px] text-[#7E9BB8] flex items-center justify-between border-t border-[#16335F] pt-1.5 mt-1">
-              <span className="font-p3r-head text-[10px] uppercase font-bold">GAMEFLOW:</span>
-              <span className="text-[#00E5FF] font-bold font-mono text-xs">{gameflow}</span>
+              <span className="font-p3r-head text-[10px] uppercase font-bold">FASE:</span>
+              <span className="text-[#00E5FF] font-bold font-mono text-xs">{formatGameflowPhase(gameflow)}</span>
             </div>
           </div>
         </div>
@@ -345,16 +329,16 @@ export default function App() {
           <div className="mb-6 p-4 bg-[#211503] border-2 border-[#FFE277] flex items-start space-x-3.5 text-[#FFE277] text-xs p3r-bevel p3r-shadow-hard">
             <span className="text-xl shrink-0">⚠️</span>
             <div className="flex-1">
-              <h4 className="font-bold text-white uppercase tracking-wider font-p3r-head">Aviso de Privilegios de Windows</h4>
+              <h4 className="font-bold text-white uppercase tracking-wider font-p3r-head">Aviso de permisos de Windows</h4>
               <p className="mt-1 text-xs text-[#CBD5E1] leading-relaxed">
-                Se detectó League of Legends en ejecución, pero Windows bloqueó la lectura del proceso por diferencia de privilegios. Ejecuta Itero Local con el mismo nivel de permisos que League of Legends (ambos como Administrador o ambos como usuario estándar), o configura la ruta de instalación en la pestaña <strong>Ajustes & Keys</strong>.
+                Se detectó League of Legends en ejecución, pero Windows bloqueó la lectura del proceso por permisos. Ejecuta {APP_NAME} con el mismo nivel de permisos que League of Legends o configura la ruta en <strong>Ajustes</strong>.
               </p>
             </div>
             <button
               onClick={() => setActiveTab('settings')}
               className="px-4 py-2 bg-[#FFE277] hover:bg-[#FFD54F] text-[#030814] text-xs font-black uppercase tracking-wider transform -skew-x-8 transition shrink-0 cursor-pointer p3r-shadow-hard font-p3r-head"
             >
-              <span className="transform skew-x-8 inline-block">Configurar Ruta</span>
+              <span className="transform skew-x-8 inline-block">Configurar ruta</span>
             </button>
           </div>
         )}
@@ -402,6 +386,13 @@ export default function App() {
           <SettingsView
             settings={settings}
             onSaveSettings={handleSaveSettings}
+            mainLcuState={mainLcuState}
+            lcuState={lcuState}
+            lcuPort={lcuPort}
+            lastIpcTimestamp={lastIpcTimestamp}
+            lastIpcEvent={lastIpcEvent}
+            lastConnectionError={lastConnectionError}
+            onRefreshLcu={refrescarEstadoLcu}
           />
         )}
       </main>

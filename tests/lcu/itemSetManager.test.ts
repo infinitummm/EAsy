@@ -147,4 +147,31 @@ describe('ItemSetManager - Generación y Exportación de Builds a LoL', () => {
     expect(disco.itemSets.length).toBe(1);
     expect(disco.itemSets[0].title).toBe('Mi Conjunto Personal');
   });
+
+  it('al aplicar build se elimina el item set previo [IL] y se conserva el nuevo con prefijo EAsy', async () => {
+    const globalPath = path.join(tempDir, 'Config', 'ItemSets.json');
+    fs.writeFileSync(globalPath, JSON.stringify({
+      itemSets: [
+        { title: '[IL] Caitlyn vs Jinx' },
+        { title: 'Mi Build Personal' }
+      ]
+    }), 'utf-8');
+
+    const manager = new ItemSetManager(mockLcuClient, () => tempDir);
+    await manager.aplicarBuild({
+      championId: 51,
+      opponentId: 222,
+      build: {
+        startingItems: [1055, 2003],
+        coreItems: [3031, 3094, 3036],
+        situationalItems: [],
+        rationale: 'Build Caitlyn'
+      }
+    });
+
+    const disco = JSON.parse(fs.readFileSync(globalPath, 'utf-8'));
+    expect(disco.itemSets.some((s: any) => s.title.startsWith('[IL]'))).toBe(false);
+    expect(disco.itemSets.some((s: any) => s.title.startsWith('EAsy'))).toBe(true);
+    expect(disco.itemSets.some((s: any) => s.title === 'Mi Build Personal')).toBe(true);
+  });
 });

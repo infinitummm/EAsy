@@ -462,8 +462,8 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                       </h3>
                       <p className="text-xs text-[#7E9BB8] mt-0.5">
                         {all10Locked
-                          ? `Análisis táctico 5v5 completo adaptado a tu rol (${localRole})`
-                          : `Counters y meta en vivo de OP.GG para tu rol (${localRole}). Cero tokens de Gemini consumidos durante el draft.`}
+                          ? `Análisis para tu rol (${localRole})`
+                          : `Counters y estadísticas de OP.GG para tu rol (${localRole})`}
                       </p>
                     </div>
                   </div>
@@ -795,7 +795,7 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                             )}
                             <div>
                               <div className="text-xs font-bold text-white flex items-center space-x-2 font-p3r-head">
-                                <span>{isMe ? 'TÚ (JUGADOR LOCAL)' : `Aliado #${p.cellId}`}</span>
+                                <span>{isMe ? 'TÚ' : `Aliado #${p.cellId}`}</span>
                                 {isMe && (
                                   <span className="text-[10px] bg-[#0066FF] text-white font-black px-1.5 py-0.2 transform -skew-x-8 border-l border-white">
                                     <span className="transform skew-x-8 inline-block">TÚ</span>
@@ -943,20 +943,20 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
               </div>
 
               <div className="inline-block px-3 py-1 mb-2 bg-[#0066FF] text-white text-[10px] font-black tracking-widest uppercase transform -skew-x-8 font-p3r-head p3r-shadow-blue border-l-2 border-white">
-                <span className="transform skew-x-8 inline-block">STANDBY // RADAR ACTIVO</span>
+                <span className="transform skew-x-8 inline-block">EN ESPERA</span>
               </div>
 
               <h3 className="text-2xl font-black text-white mb-2 tracking-wider uppercase font-p3r">
                 ESPERANDO SELECCIÓN DE CAMPEÓN
               </h3>
               <p className="text-xs text-[#7E9BB8] max-w-lg mx-auto mb-6 leading-relaxed">
-                Al entrar en fase de selección de campeón en League of Legends, Itero Local detectará automáticamente tu posición y campeón, predecirá a tu rival e inyectará las runas completas y la build en el juego.
+                Al entrar en selección de campeón en League of Legends, la app detectará tu campeón y posición para recomendarte runas y objetos.
               </p>
 
               <div className="inline-flex items-center space-x-2 text-xs bg-[#030814] px-4 py-2 border border-[#16335F] transform -skew-x-8">
                 <span className="transform skew-x-8 flex items-center space-x-2">
                   <span className="w-2 h-2 bg-[#00E676] transform rotate-45"></span>
-                  <span className="font-bold text-[#00E676] font-mono">LCU WebSocket sincronizando en vivo</span>
+                  <span className="font-bold text-[#00E676] font-mono">Esperando partida</span>
                 </span>
               </div>
 

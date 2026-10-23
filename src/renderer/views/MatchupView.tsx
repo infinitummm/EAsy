@@ -116,7 +116,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
 
     try {
       const runePage: RunePage = {
-        name: '[IL] Itero Local',
+        name: 'EAsy',
         primaryStyleId: rec.runesRecommendation.primaryStyleId,
         subStyleId: rec.runesRecommendation.subStyleId,
         selectedPerkIds: rec.runesRecommendation.selectedPerkIds,
@@ -232,7 +232,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
           <div>
             <div className="flex items-center space-x-2 mb-2">
               <span className="px-2.5 py-0.5 bg-[#0066FF] text-white text-[10px] font-black tracking-widest uppercase transform -skew-x-8 font-p3r-head p3r-shadow-blue border-l-2 border-white">
-                <span className="transform skew-x-8 inline-block">SEES // TACTICAL ANALYSIS</span>
+                <span className="transform skew-x-8 inline-block">ENFRENTAMIENTO</span>
               </span>
               <P3rBadge label="PARCHE 26.20" variant="cyan" />
             </div>
@@ -580,7 +580,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
                 ) : recommendation.confidenceLevel === 'general' ? (
                   <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-[#F5A623]/20 border border-[#F5A623] text-[#F5A623] font-bold text-[11px] tracking-wide">
                     <span className="w-2 h-2 rounded-full bg-[#F5A623]"></span>
-                    <span>GENERAL (Data Dragon + Partidas Locales)</span>
+                    <span>General</span>
                   </span>
                 ) : (
                   <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-[#64748B]/20 border border-[#64748B] text-[#94A3B8] font-bold text-[11px] tracking-wide">
@@ -880,7 +880,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
                 {(recommendation.debugInfo?.rawResearchResponse || recommendation.researchNotes) && (
                   <div className="bg-[#060D17] p-3 rounded border border-[#1E355B]">
                     <span className="text-[#60A5FA] font-bold block mb-1">
-                      PASO 1: INVESTIGACIÓN DEL META ({recommendation.groundingUsed ? 'Google Search Grounding en vivo' : 'Metadatos Locales de Parche'}):
+                      Investigación del meta ({recommendation.groundingUsed ? 'Google Search' : 'Metadatos de Parche'}):
                     </span>
                     <pre className="max-h-40 overflow-y-auto p-2 bg-[#0A111F] rounded text-[11px] text-[#A5B4FC] whitespace-pre-wrap">
                       {recommendation.debugInfo?.rawResearchResponse || recommendation.researchNotes}
@@ -945,13 +945,13 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
           </svg>
           <p className="text-white text-sm font-semibold mb-1">
             {championId > 0
-              ? `Presiona "ANALIZAR MATCHUP" para obtener runas y build para ${getChampionName(championId)}`
+              ? `Presiona "ANALIZAR" para obtener runas y build para ${getChampionName(championId)}`
               : 'Esperando selección de campeón'}
           </p>
           <p className="text-[#94A3B8] text-xs max-w-md mx-auto">
             {championId > 0
-              ? 'Puedes analizar el enfrentamiento manualmente o permitir que Itero lo sincronice automáticamente.'
-              : 'Elige tu campeón en League of Legends o búscalo en el selector superior para calcular tu build y runas automáticamente.'}
+              ? 'Puedes analizar el enfrentamiento seleccionando los campeones.'
+              : 'Elige tu campeón para calcular tu build y runas automáticamente.'}
           </p>
         </div>
       )}

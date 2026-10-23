@@ -1,6 +1,6 @@
-# Itero Local - League of Legends Desktop Assistant
+# EAsy - League of Legends Desktop Assistant
 
-Asistente de escritorio local, monousuario y en tiempo real para League of Legends en Windows, inspirado en Itero.
+Asistente de escritorio local, monousuario y en tiempo real para League of Legends en Windows.
 
 ## Stack Tecnológico
 - **Shell de Escritorio:** Electron 44+ (Node.js 24+)
@@ -26,7 +26,7 @@ npm run dist:portable
 - **¿Dónde queda el ejecutable?**
   El archivo `.exe` se genera dentro del directorio `release/` en la raíz del proyecto:
   ```text
-  release/Itero Local 1.0.0.exe
+  release/EAsy Setup 1.0.1.exe
   ```
   *(Nota: También puedes generar tanto el instalador NSIS como el portable ejecutando `npm run dist`).*
 
@@ -42,7 +42,7 @@ npm test
 La aplicación es **100% local**: no tiene servidores intermedios y almacena todas tus credenciales y datos en una base de datos local SQLite cifrada con **AES-256-GCM**.
 
 ### 1. ¿Qué API Keys necesitas?
-Para aprovechar todas las funcionalidades inteligentes de Itero Local necesitas dos claves gratuitas:
+Para aprovechar todas las funcionalidades inteligentes de EAsy necesitas dos claves gratuitas:
 
 1. **Riot Games Developer API Key (Gratis):**
    - **Para qué sirve:** Descargar tu historial de partidas (Match-V5), estadísticas de ranked (League-V4), maestrías de campeones y verificar el estado de los servidores.

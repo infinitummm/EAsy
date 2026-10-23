@@ -20,7 +20,7 @@ import { ProfileSyncService } from './riot/ProfileSyncService';
 import { DataDragonService } from './riot/DataDragonService';
 import { DataDragonTranslator } from './riot/DataDragonTranslator';
 import { PatchDiffService } from './riot/PatchDiffService';
-import { DEFAULT_APP_SETTINGS } from '../shared/constants';
+import { DEFAULT_APP_SETTINGS, APP_NAME } from '../shared/constants';
 import { IPC_CHANNELS } from '../shared/events';
 import { iniciarAutoUpdater } from './updater';
 
@@ -59,7 +59,7 @@ function createWindow() {
       contextIsolation: true,
       sandbox: false
     },
-    title: 'Itero Local - League of Legends Assistant'
+    title: APP_NAME
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -97,6 +97,13 @@ function createWindow() {
 
 // Inicialización de servicios y ciclo de vida de la aplicación
 app.whenReady().then(async () => {
+  // Fijar explícitamente userData a 'proyecto-itero' para garantizar compatibilidad y no perder datos
+  try {
+    const fixedUserData = path.join(app.getPath('appData'), 'proyecto-itero');
+    app.setPath('userData', fixedUserData);
+  } catch (err) {
+    console.warn('[Main] Advertencia fijando ruta de userData:', err);
+  }
   const userDataDir = app.getPath('userData');
 
   // 1. Inicializar seguridad y clave simétrica local (AES-256-GCM)

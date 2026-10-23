@@ -6,16 +6,18 @@ import {
   Check,
   AlertCircle,
   RefreshCw,
-  ShieldCheck, Download,
+  ShieldCheck,
+  Download,
   Activity,
   Save,
   FolderOpen,
   Terminal,
-  HardDrive,
   AlertTriangle,
-  Trash2
+  Trash2,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
-import type { AppSettings, LcuDetectionReport } from '../../shared/types';
+import type { AppSettings, LcuDetectionReport, LcuConnectionState } from '../../shared/types';
 import type { KeyHealthStatus } from '../../shared/contracts';
 import { RolePreferencesEditor } from '../components/RolePreferencesEditor';
 import { formatFullPatchLabel } from '../../shared/patchUtils';
@@ -26,26 +28,42 @@ import { P3rBadge } from '../components/p3r/P3rBadge';
 interface SettingsViewProps {
   settings: AppSettings;
   onSaveSettings: (newSettings: Partial<AppSettings>) => Promise<void>;
+  mainLcuState?: LcuConnectionState;
+  lcuState?: LcuConnectionState;
+  lcuPort?: number | null;
+  lastIpcTimestamp?: string;
+  lastIpcEvent?: string;
+  lastConnectionError?: string | null;
+  onRefreshLcu?: () => void;
 }
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSettings }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({
+  settings,
+  onSaveSettings,
+  mainLcuState = 'disconnected',
+  lcuState = 'disconnected',
+  lcuPort = null,
+  lastIpcTimestamp = '',
+  lastIpcEvent = '',
+  lastConnectionError = null,
+  onRefreshLcu
+}) => {
   const [riotKey, setRiotKey] = useState<string>(settings.apiKeys.riotApiKeyEncrypted || '');
   const [geminiKey, setGeminiKey] = useState<string>(settings.apiKeys.geminiApiKeyEncrypted || '');
   const [showAdvancedRiotKey, setShowAdvancedRiotKey] = useState<boolean>(Boolean(settings.apiKeys.riotApiKeyEncrypted));
+  const [showGeminiSection, setShowGeminiSection] = useState<boolean>(Boolean(settings.apiKeys.geminiApiKeyEncrypted));
+  const [showAdvancedDiag, setShowAdvancedDiag] = useState<boolean>(false);
   const [exportingDiag, setExportingDiag] = useState<boolean>(false);
   const [diagMessage, setDiagMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [leaguePath, setLeaguePath] = useState<string>(settings.leagueInstallationPath || '');
   const [showRiotKey, setShowRiotKey] = useState<boolean>(false);
   const [showGeminiKey, setShowGeminiKey] = useState<boolean>(false);
-  const [autoAcceptEnabled, setAutoAcceptEnabled] = useState<boolean>(settings.autoAccept.enabled);
-  const [autoAcceptDelay, setAutoAcceptDelay] = useState<number>(settings.autoAccept.delaySeconds);
-  const [humanVariance, setHumanVariance] = useState<boolean>(settings.autoAccept.humanVariance);
   const [keyHealth, setKeyHealth] = useState<KeyHealthStatus | null>(null);
   const [validating, setValidating] = useState<boolean>(false);
   const [testingLcu, setTestingLcu] = useState<boolean>(false);
   const [lcuReport, setLcuReport] = useState<LcuDetectionReport | null>(null);
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
-  const [patchVersion, setPatchVersion] = useState<string>('16.20.1');
+  const [patchVersion, setPatchVersion] = useState<string>('26.20');
   const [championsCount, setChampionsCount] = useState<number>(() => obtenerTodosLosCampeones().length);
   const [catalogChampions, setCatalogChampions] = useState<ChampionInfo[]>(() => obtenerTodosLosCampeones());
   const [refreshingData, setRefreshingData] = useState<boolean>(false);
@@ -91,14 +109,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
     }
   }, []);
 
-
   const handleCleanAssets = async () => {
     if (!window.api?.cleanAppAssets) return;
     setCleaningAssets(true);
     setCleanResultMsg(null);
     try {
       const res = await window.api.cleanAppAssets();
-      setCleanResultMsg(`✓ Limpieza completada: ${res.deletedItemSets} conjunto(s) de objetos y ${res.deletedRunePages} página(s) de runas [IL] eliminadas del cliente.`);
+      setCleanResultMsg(`Limpieza completada: ${res.deletedItemSets} conjunto(s) de objetos y ${res.deletedRunePages} página(s) de runas eliminadas.`);
     } catch (err: any) {
       setCleanResultMsg(`Error en la limpieza: ${err.message || String(err)}`);
     } finally {
@@ -120,7 +137,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
         const cat = await window.api.getChampionCatalog();
         if (cat?.champions?.length) setCatalogChampions(cat.champions);
       }
-      setDataRefreshMsg(`✓ Catálogo actualizado con éxito: Parche ${formatFullPatchLabel(res.patch)} (${res.championsCount || 173} campeones cargados, incluyendo lanzamientos recientes).`);
+      setDataRefreshMsg(`Catálogo actualizado: Parche ${formatFullPatchLabel(res.patch)} (${res.championsCount || 173} campeones).`);
     } catch (err: any) {
       setDataRefreshMsg(`Error al actualizar catálogo: ${err.message || String(err)}`);
     } finally {
@@ -147,12 +164,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
       const rep = await window.api.testLcuDetection(leaguePath.trim() || undefined);
       setLcuReport(rep);
     } catch (err) {
-      console.error('Error al probar detección LCU:', err);
+      console.error('Error al probar conexión:', err);
     } finally {
       setTestingLcu(false);
     }
   };
-
 
   const handleExportDiagnostic = async () => {
     setExportingDiag(true);
@@ -163,12 +179,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
         if (res.success && res.filePath) {
           setDiagMessage({
             type: 'success',
-            text: `¡Diagnóstico exportado y sanitizado con éxito! Guardado en: ${res.filePath}`
+            text: `Diagnóstico exportado en: ${res.filePath}`
           });
         } else {
           setDiagMessage({
             type: 'error',
-            text: res.error || 'Error al generar el archivo de diagnóstico.'
+            text: res.error || 'Error al exportar diagnóstico.'
           });
         }
       }
@@ -202,31 +218,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
       allowAiChoiceTop3,
       leagueInstallationPath: leaguePath.trim(),
       apiKeys: {
-        riotApiKeyEncrypted: riotKey,
-        geminiApiKeyEncrypted: geminiKey,
-      },
-      autoAccept: {
-        enabled: autoAcceptEnabled,
-        delaySeconds: autoAcceptDelay,
-        humanVariance,
+        ...settings.apiKeys,
+        riotApiKeyEncrypted: riotKey.trim(),
+        geminiApiKeyEncrypted: geminiKey.trim(),
       },
     });
 
     setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 3000);
+    setTimeout(() => setSavedSuccess(false), 2500);
   };
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 select-none pb-8">
+      {/* Cabecera */}
       <header className="flex justify-between items-center border-b-2 border-[#16335F] pb-4">
         <div>
-          <div className="inline-block px-2.5 py-0.5 mb-1.5 bg-[#0066FF] text-white text-[10px] font-black tracking-widest uppercase transform -skew-x-8 font-p3r-head p3r-shadow-blue border-l-2 border-white">
-            <span className="transform skew-x-8 inline-block">SEES // SYSTEM PREFERENCES</span>
-          </div>
           <h2 className="text-3xl font-black text-white tracking-wider flex items-center space-x-2 font-p3r uppercase">
-            <span>AJUSTES & CLAVES DE API</span>
+            <span>AJUSTES</span>
           </h2>
-          <p className="text-xs text-[#7E9BB8] font-mono mt-0.5">Gestión de credenciales seguras (DPAPI / AES-256) y parámetros locales</p>
+          <p className="text-xs text-[#7E9BB8] mt-0.5">Preferencias y configuración de la aplicación.</p>
         </div>
 
         <P3rButton
@@ -235,20 +245,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
           onClick={handleSaveAll}
           icon={savedSuccess ? <Check className="w-4 h-4 text-[#030814]" /> : <Save className="w-4 h-4 text-[#030814]" />}
         >
-          {savedSuccess ? '¡GUARDADO!' : 'GUARDAR AJUSTES'}
+          {savedSuccess ? 'Guardado' : 'Guardar'}
         </P3rButton>
       </header>
 
-      {/* Sección Avanzada: Riot API Key (Opcional) */}
+      {/* Clave de Riot (Opcional) */}
       <div className="bg-[#050E20] p-6 border-2 border-[#16335F] p3r-bevel p3r-shadow-hard space-y-3">
         <div className="flex justify-between items-center cursor-pointer" onClick={() => setShowAdvancedRiotKey(!showAdvancedRiotKey)}>
           <div>
             <h3 className="text-sm font-black text-white flex items-center space-x-2 uppercase font-p3r tracking-wider">
               <span className="w-2.5 h-2.5 bg-[#0066FF] transform rotate-45"></span>
-              <span>Avanzado: Riot Games Development API Key (Opcional)</span>
+              <span>Clave de Riot (Opcional)</span>
             </h3>
             <p className="text-xs text-[#7E9BB8] mt-0.5">
-              Tus datos de invocador, rango e historial ya se obtienen automáticamente del cliente LoL sin Riot API. Solo configúrala si deseas buscar invocadores remotos.
+              Necesaria solo si deseas buscar invocadores remotos. Tu cuenta local ya funciona sin clave.
             </p>
           </div>
           <button
@@ -268,7 +278,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
                 rel="noreferrer"
                 className="text-xs text-[#00E5FF] hover:underline flex items-center space-x-1 font-mono"
               >
-                <span>Obtener o Renovar Clave en Riot Portal (24h) ↗</span>
+                <span>Portal de Riot Games ↗</span>
               </a>
             </div>
 
@@ -303,7 +313,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
           </div>
         )}
 
-        {/* Estado de Salud de la Riot Key */}
         {showAdvancedRiotKey && keyHealth && (
           <div
             className={`p-3 text-xs flex items-center space-x-2 border-2 p3r-cut-tr ${
@@ -321,73 +330,85 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
             )}
             <span className="font-p3r-head">
               {keyHealth.valid
-                ? 'Clave de Riot activa y respondiendo correctamente.'
+                ? 'Clave de Riot activa.'
                 : keyHealth.isExpired
-                ? '¡Clave de desarrollo expirada (Error 403 Forbidden)! Por favor renuévala en el portal de Riot Developer.'
-                : `Error de validación (Código HTTP ${keyHealth.statusCode || 'desconocido'}).`}
+                ? 'Clave expirada. Renuévala en el portal de Riot.'
+                : `Error de validación (${keyHealth.statusCode || 'desconocido'}).`}
             </span>
           </div>
         )}
       </div>
 
-      {/* Sección 2: Google Gemini API Key */}
-      <div className="bg-[#050E20] p-6 border-2 border-[#16335F] p3r-bevel p3r-shadow-hard space-y-4">
-        <div className="flex justify-between items-start">
+      {/* Clave de Google Gemini (Opcional) */}
+      <div className="bg-[#050E20] p-6 border-2 border-[#16335F] p3r-bevel p3r-shadow-hard space-y-3">
+        <div className="flex justify-between items-center cursor-pointer" onClick={() => setShowGeminiSection(!showGeminiSection)}>
           <div>
-            <h3 className="text-base font-black text-white flex items-center space-x-2 uppercase font-p3r tracking-wider">
+            <h3 className="text-sm font-black text-white flex items-center space-x-2 uppercase font-p3r tracking-wider">
               <span className="w-2.5 h-2.5 bg-[#00E5FF] transform rotate-45"></span>
-              <span>Google Gemini API Key (Motor de IA Táctico)</span>
+              <span>Clave de Gemini (Opcional)</span>
             </h3>
-            <p className="text-xs text-[#7E9BB8] mt-1">
-              <strong>(Opcional)</strong> La app funciona al 100% sin IA usando los datos deterministas de OP.GG. Si añades tu clave gratuita de Google AI Studio, se activan explicaciones tácticas adaptadas a la composición.
+            <p className="text-xs text-[#7E9BB8] mt-0.5">
+              Opcional. Activa explicaciones adaptadas a la composición.
             </p>
           </div>
-          <a
-            href="https://aistudio.google.com/app/apikey"
-            target="_blank"
-            rel="noreferrer"
-            className="text-xs text-[#00E5FF] hover:underline font-mono"
-          >
-            <span>Obtener Clave Gratuita ↗</span>
-          </a>
-        </div>
-
-        <div className="relative">
-          <input
-            type={showGeminiKey ? 'text' : 'password'}
-            value={geminiKey}
-            onChange={(e) => setGeminiKey(e.target.value)}
-            placeholder="AIzaSy..."
-            className="w-full bg-[#030814] border border-[#16335F] focus:border-[#00E5FF] px-4 py-2.5 text-sm text-white focus:outline-none font-mono"
-          />
           <button
             type="button"
-            onClick={() => setShowGeminiKey(!showGeminiKey)}
-            className="absolute right-3 top-3 text-[#7E9BB8] hover:text-white"
+            className="text-xs font-black px-3 py-1 bg-[#030814] text-[#00E5FF] border border-[#16335F] transform -skew-x-8 uppercase font-p3r-head cursor-pointer"
           >
-            {showGeminiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            <span className="transform skew-x-8 inline-block">{showGeminiSection ? 'Ocultar ▲' : 'Configurar ▼'}</span>
           </button>
         </div>
+
+        {showGeminiSection && (
+          <div className="pt-3 border-t-2 border-[#16335F] space-y-3">
+            <div className="flex justify-end">
+              <a
+                href="https://aistudio.google.com/app/apikey"
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-[#00E5FF] hover:underline font-mono"
+              >
+                <span>Google AI Studio ↗</span>
+              </a>
+            </div>
+
+            <div className="relative">
+              <input
+                type={showGeminiKey ? 'text' : 'password'}
+                value={geminiKey}
+                onChange={(e) => setGeminiKey(e.target.value)}
+                placeholder="AIzaSy..."
+                className="w-full bg-[#030814] border border-[#16335F] focus:border-[#00E5FF] px-4 py-2.5 text-sm text-white focus:outline-none font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => setShowGeminiKey(!showGeminiKey)}
+                className="absolute right-3 top-3 text-[#7E9BB8] hover:text-white"
+              >
+                {showGeminiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Sección 2.5: Automatización de Champ Select y Preferencias por Rol */}
+      {/* Automatización de Selección y Preferencias de Rol */}
       <RolePreferencesEditor
         settings={settings.autoChampSelect}
         onSave={(autoChampSelect) => onSaveSettings({ autoChampSelect })}
         championsCatalog={catalogChampions}
       />
 
-      
-      {/* Sección 2.8: Configuración de Datos OP.GG y Limpieza de Activos */}
+      {/* Preferencias de Estadísticas OP.GG */}
       <div className="bg-[#050E20] p-6 border-2 border-[#16335F] p3r-bevel p3r-shadow-hard space-y-4">
         <div className="flex justify-between items-start">
           <div>
             <h3 className="text-base font-black text-white flex items-center space-x-2 uppercase font-p3r tracking-wider">
               <span className="w-2.5 h-2.5 bg-[#00E5FF] transform rotate-45"></span>
-              <span>Estadísticas de Meta Competitivo (OP.GG MCP)</span>
+              <span>Datos de OP.GG</span>
             </h3>
             <p className="text-xs text-[#7E9BB8] mt-1">
-              Filtro de nivel de juego para tasas de victoria, builds, runas y enfrentamientos (Streamable HTTP oficial de OP.GG).
+              Filtro de nivel para builds, runas y enfrentamientos.
             </p>
           </div>
           {versionInfo && (
@@ -395,22 +416,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
           )}
         </div>
 
-        {versionInfo?.ddragonOutdated && (
-          <div className="p-3 bg-[#2A1705] border-2 border-[#FFE277] text-xs text-[#FFE277] flex items-start space-x-2 p3r-cut-tr">
-            <AlertTriangle className="w-4 h-4 text-[#FFE277] shrink-0 mt-0.5" />
-            <div>
-              <strong className="text-white font-p3r-head uppercase">Aviso de Parche Nuevo:</strong>
-              <p className="mt-0.5 leading-relaxed">
-                Datos del parche anterior hasta que Riot publique el nuevo catálogo en Data Dragon.
-              </p>
-            </div>
-          </div>
-        )}
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="text-[10px] font-black text-[#7E9BB8] uppercase block mb-1 font-p3r-head">
-              Rango / Elo de Referencia para Builds:
+              Rango de referencia:
             </label>
             <select
               value={opggTier}
@@ -421,256 +430,56 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
               }}
               className="w-full bg-[#030814] border border-[#16335F] focus:border-[#00E5FF] px-3 py-2 text-xs text-white focus:outline-none font-mono"
             >
-              <option value="emerald_plus">Esmeralda + (Recomendado - Mi Elo)</option>
+              <option value="emerald_plus">Esmeralda +</option>
               <option value="diamond_plus">Diamante +</option>
               <option value="master_plus">Máster +</option>
               <option value="grandmaster">Gran Máster</option>
               <option value="challenger">Challenger</option>
-              <option value="all">Todos los Rangos (Agregado)</option>
+              <option value="all">Todos los rangos</option>
             </select>
-            <p className="text-[10px] text-[#7E9BB8] mt-1 font-mono">
-              Clave de caché: <code className="text-[#00E5FF]">opgg:&#123;champ&#125;:&#123;pos&#125;:&#123;rival&#125;:{opggTier}:26.20</code>
-            </p>
           </div>
 
-          <div className="flex flex-col justify-between p-3.5 bg-[#030814] border border-[#16335F] p3r-cut-tr">
-            <div>
-              <div className="text-xs font-black text-white uppercase font-p3r-head">Limpieza de Importaciones en LoL</div>
-              <p className="text-[11px] text-[#7E9BB8] mt-0.5">
-                Elimina páginas de runas y conjuntos de objetos creados por la app ([IL] Itero Local).
-              </p>
-            </div>
-            <div className="mt-2.5">
-              <P3rButton
-                variant="danger"
-                size="sm"
-                onClick={handleCleanAssets}
-                disabled={cleaningAssets}
-                icon={cleaningAssets ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-              >
-                Borrar importaciones de la app
-              </P3rButton>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t-2 border-[#16335F]">
           <div>
             <label className="text-[10px] font-black text-[#7E9BB8] uppercase block mb-1 font-p3r-head">
-              Umbral Mínimo de Partidas para Matchup (B2):
+              Mínimo de partidas:
             </label>
-            <div className="flex items-center space-x-2 font-mono">
-              <input
-                type="number"
-                min="50"
-                max="1000"
-                step="50"
-                value={minMatchupSampleThreshold}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value, 10) || 200;
-                  setMinMatchupSampleThreshold(val);
-                  onSaveSettings({ minMatchupSampleThreshold: val });
-                }}
-                className="w-32 bg-[#030814] border border-[#16335F] focus:border-[#00E5FF] px-3 py-2 text-xs text-white focus:outline-none"
-              />
-              <span className="text-xs text-[#7E9BB8]">partidas registradas</span>
-            </div>
-            <p className="text-[10px] text-[#7E9BB8] mt-1">
-              Si un matchup tiene menos de este umbral, la app muestra un aviso y recurre a la build general de Esmeralda+.
-            </p>
-          </div>
-
-          <div className="p-3.5 bg-[#030814] border border-[#16335F] p3r-cut-tr">
-            <label className="flex items-start space-x-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={allowAiChoiceTop3}
-                onChange={(e) => {
-                  const val = e.target.checked;
-                  setAllowAiChoiceTop3(val);
-                  onSaveSettings({ allowAiChoiceTop3: val });
-                }}
-                className="mt-0.5 w-4 h-4 accent-[#0066FF] cursor-pointer"
-              />
-              <div>
-                <span className="text-xs font-black text-white uppercase block font-p3r-head">
-                  Permitir que la IA elija entre las 3 mejores opciones (B3)
-                </span>
-                <span className="text-[10px] text-[#7E9BB8] block mt-0.5 leading-relaxed">
-                  Desactivado por defecto. Si se activa, Gemini puede escoger justificadamente entre las 3 opciones de mejor rendimiento de OP.GG.
-                </span>
-              </div>
-            </label>
-          </div>
-        </div>
-
-        {cleanResultMsg && (
-          <div className="p-3 text-xs bg-[#031A12] border-2 border-[#00E676] text-[#00E676] font-bold p3r-cut-tr">
-            {cleanResultMsg}
-          </div>
-        )}
-      </div>
-
-      {/* Sección 3: Conexión con League of Legends (LCU API) */}
-      <div className="bg-[#050E20] p-6 border-2 border-[#16335F] p3r-bevel p3r-shadow-hard space-y-4">
-        <div className="flex justify-between items-start">
-          <div>
-            <h3 className="text-base font-black text-white flex items-center space-x-2 uppercase font-p3r tracking-wider">
-              <span className="w-2.5 h-2.5 bg-[#FFE277] transform rotate-45"></span>
-              <span>Ruta de Instalación de League of Legends (LCU)</span>
-            </h3>
-            <p className="text-xs text-[#7E9BB8] mt-1">
-              La app detecta el cliente automáticamente mediante 4 métodos secuenciales. Si tu juego está en una carpeta no estándar, puedes seleccionarla aquí.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          <div className="relative flex-1">
             <input
-              type="text"
-              value={leaguePath}
-              onChange={(e) => setLeaguePath(e.target.value)}
-              placeholder="Ej: C:\Riot Games\League of Legends"
-              className="w-full bg-[#030814] border border-[#16335F] focus:border-[#00E5FF] px-4 py-2.5 text-xs text-white focus:outline-none font-mono"
+              type="number"
+              min={10}
+              max={1000}
+              step={10}
+              value={minMatchupSampleThreshold}
+              onChange={(e) => setMinMatchupSampleThreshold(Number(e.target.value))}
+              className="w-full bg-[#030814] border border-[#16335F] focus:border-[#00E5FF] px-3 py-2 text-xs text-white focus:outline-none font-mono"
             />
           </div>
-
-          <P3rButton
-            variant="secondary"
-            size="md"
-            onClick={handleSelectFolder}
-            icon={<FolderOpen className="w-4 h-4 text-[#00E5FF]" />}
-          >
-            Examinar...
-          </P3rButton>
-
-          <P3rButton
-            variant="cyan"
-            size="md"
-            onClick={handleTestLcuConnection}
-            disabled={testingLcu}
-            icon={testingLcu ? <RefreshCw className="w-4 h-4 animate-spin text-[#030814]" /> : <Terminal className="w-4 h-4 text-[#030814]" />}
-          >
-            Probar Conexión
-          </P3rButton>
         </div>
 
-        {/* Alerta de Permisos si se detectó */}
-        {lcuReport?.isPermissionError && (
-          <div className="p-3.5 text-xs bg-[#2A1705] border-2 border-[#FFE277] text-[#FFE277] flex items-start space-x-2.5 p3r-cut-tr">
-            <AlertTriangle className="w-5 h-5 text-[#FFE277] shrink-0 mt-0.5" />
-            <div>
-              <strong className="text-white font-p3r-head uppercase">Aviso de Privilegios de Windows:</strong>
-              <p className="mt-0.5 leading-relaxed">
-                Se detectó el proceso de League of Legends pero Windows denegó la lectura de su línea de comandos. Ejecuta Itero Local con el mismo nivel de privilegios que League of Legends (ambos como Administrador o ambos como usuario estándar).
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Diagnóstico detallado por método y pasos de conexión */}
-        {lcuReport && (
-          <div className="space-y-3 mt-3 pt-3 border-t-2 border-[#16335F]">
-            <div className="flex justify-between items-center text-xs font-semibold">
-              <span className="text-white font-p3r-head uppercase">Resultado de la Prueba de Conexión LCU:</span>
-              <P3rBadge
-                label={lcuReport.success ? 'Conexión Completada' : 'Fallo en la Conexión'}
-                variant={lcuReport.success ? 'green' : 'red'}
-              />
-            </div>
-
-            {/* Pasos de conexión completos */}
-            {lcuReport.testSteps && lcuReport.testSteps.length > 0 && (
-              <div className="space-y-2">
-                <div className="text-[10px] font-black text-[#FFE277] uppercase tracking-wider font-p3r-head">
-                  Etapas de Conexión Verificadas:
-                </div>
-                {lcuReport.testSteps.map((ts, idx) => (
-                  <div
-                    key={idx}
-                    className={`p-3 text-xs border-2 p3r-cut-tr ${
-                      ts.status === 'success'
-                        ? 'bg-[#031A12] border-[#00E676] text-[#00E676]'
-                        : ts.status === 'skipped'
-                        ? 'bg-[#030814] border-[#16335F] text-[#7E9BB8] opacity-60'
-                        : 'bg-[#2A050A] border-[#FF1744] text-[#FF1744]'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between font-bold">
-                      <span className="flex items-center space-x-2">
-                        <span>{ts.status === 'success' ? '✓' : ts.status === 'skipped' ? '○' : '✕'}</span>
-                        <span className="text-white font-p3r-head uppercase">{ts.name}</span>
-                      </span>
-                      <span className="text-[10px] uppercase font-mono px-2 py-0.5 border border-current">
-                        {ts.status === 'success' ? 'ÉXITO' : ts.status === 'skipped' ? 'OMITIDO' : 'FALLO'}
-                      </span>
-                    </div>
-                    <div className="mt-1 text-xs text-[#CBD5E1]">
-                      {ts.summary}
-                    </div>
-                    <div className="mt-0.5 text-[11px] font-mono text-[#7E9BB8]">
-                      {ts.details}
-                    </div>
-                    {ts.error && (
-                      <div className="mt-1 text-[11px] font-mono text-[#FF1744] bg-black/40 p-1.5 border border-[#FF1744]/40">
-                        Error: {ts.error}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Desglose de métodos de detección A, B, C, D */}
-            <div className="space-y-1.5 mt-3 pt-2 border-t border-[#16335F]">
-              <div className="text-[10px] font-black text-[#7E9BB8] uppercase tracking-wider font-p3r-head">
-                Métodos de Detección Evaluados:
-              </div>
-              {lcuReport.steps.map((step, idx) => (
-                <div
-                  key={idx}
-                  className={`p-2 text-xs border ${
-                    step.success
-                      ? 'bg-[#031A12] border-[#00E676] text-[#00E676]'
-                      : 'bg-[#030814] border-[#16335F] text-[#7E9BB8]'
-                  }`}
-                >
-                  <div className="flex items-center justify-between font-semibold">
-                    <span className="flex items-center space-x-2">
-                      <span>{step.success ? '✓' : '✕'}</span>
-                      <span className={step.success ? 'text-white' : 'text-[#7E9BB8]'}>{step.name}</span>
-                    </span>
-                    <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 bg-[#050E20] border border-[#16335F]">
-                      {step.step}
-                    </span>
-                  </div>
-                  <div className="mt-0.5 text-[11px] text-[#7E9BB8] font-mono">
-                    {step.details}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {lcuReport.logFilePath && (
-              <p className="text-[10px] text-[#4A627E] mt-1 truncate font-mono">
-                Archivo de log registrado en: <span className="text-[#00E5FF]">{lcuReport.logFilePath}</span>
-              </p>
-            )}
-          </div>
-        )}
+        <div className="pt-2">
+          <label className="flex items-center space-x-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={allowAiChoiceTop3}
+              onChange={(e) => setAllowAiChoiceTop3(e.target.checked)}
+              className="w-4 h-4 accent-[#00E5FF]"
+            />
+            <span className="text-xs text-[#CBD5E1]">
+              Permitir a la IA elegir entre las 3 mejores opciones de OP.GG.
+            </span>
+          </label>
+        </div>
       </div>
 
-      {/* Sección 4: Catálogo y Datos del Juego (Data Dragon & LCU) */}
+      {/* Datos del Juego y Catálogo */}
       <div className="bg-[#050E20] p-6 border-2 border-[#16335F] p3r-bevel p3r-shadow-hard space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h3 className="text-base font-black text-white flex items-center space-x-2 uppercase font-p3r tracking-wider">
               <span className="w-2.5 h-2.5 bg-[#0066FF] transform rotate-45"></span>
-              <span>Datos del Juego & Parche Actual // Catálogo</span>
+              <span>Datos del juego</span>
             </h3>
             <p className="text-xs text-[#7E9BB8] mt-1">
-              Catálogo sincronizado dinámicamente con Data Dragon oficial y LCU local. Resuelve automáticamente campeones nuevos (como Yunara).
+              Catálogo sincronizado con Data Dragon y el cliente de LoL.
             </p>
           </div>
 
@@ -706,8 +515,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
                 {championsCount} campeones cargados
               </span>
             </div>
-
-            <span className="text-[#4A627E] text-[11px]">• Sincronización en tiempo real</span>
           </div>
 
           {dataRefreshMsg && (
@@ -718,63 +525,258 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
         </div>
       </div>
 
-      {/* Sección 5: Monitor de Cuotas y Límites de Tasa */}
-      <div className="bg-[#050E20] p-6 border-2 border-[#16335F] p3r-bevel p3r-shadow-hard space-y-4">
-        <h3 className="text-base font-black text-white flex items-center space-x-2 uppercase font-p3r tracking-wider">
-          <span className="w-2.5 h-2.5 bg-[#00E5FF] transform rotate-45"></span>
-          <span>Monitor de Límites de Tasa y Cuotas de IA (Frente 2)</span>
-        </h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
-          <div className="bg-[#030814] p-4 border border-[#16335F] p3r-cut-tr">
-            <div className="font-bold text-white mb-2 font-p3r-head uppercase">Riot Games API (Dev Tier)</div>
-            <div className="text-[#7E9BB8] space-y-1.5">
-              <div>Límite corto: <strong className="text-white">20 peticiones / 1 segundo</strong></div>
-              <div>Límite largo: <strong className="text-white">100 peticiones / 2 minutos</strong></div>
-              <div className="text-[#00E676] font-bold mt-2 pt-2 border-t border-[#16335F]">
-                ✓ Rate Limiter Token Bucket Activo
-              </div>
-            </div>
+      {/* SECCIÓN PLEGADA: Avanzado / Diagnóstico */}
+      <div className="bg-[#050E20] border-2 border-[#16335F] p3r-bevel p3r-shadow-hard overflow-hidden">
+        <div
+          className="p-6 flex items-center justify-between cursor-pointer hover:bg-[#071329] transition"
+          onClick={() => setShowAdvancedDiag(!showAdvancedDiag)}
+        >
+          <div>
+            <h3 className="text-base font-black text-white flex items-center space-x-2 uppercase font-p3r tracking-wider">
+              <span className="w-2.5 h-2.5 bg-[#FFE277] transform rotate-45"></span>
+              <span>Avanzado / Diagnóstico</span>
+            </h3>
+            <p className="text-xs text-[#7E9BB8] mt-1">
+              Herramientas de diagnóstico técnico, enlace LCU, rutas y exportación de logs.
+            </p>
           </div>
 
-          <div className="bg-[#030814] p-4 border border-[#16335F] p3r-cut-tr">
-            <div className="font-bold text-white mb-2 font-p3r-head uppercase">Google Gemini API (Free Tier)</div>
-            <div className="text-[#7E9BB8] space-y-1.5">
-              <div>Límite estándar: <strong className="text-white">15 RPM / 1,500 RPD</strong></div>
-              <div>
-                Peticiones hoy:{' '}
-                <strong className="text-white">
-                  {quotaInfo?.standardRequestsToday ?? 0} / 1,500
-                </strong>
-              </div>
-              <div>
-                Google Search Grounding:{' '}
-                <span className="text-[#FFE277] font-bold">
-                  {quotaInfo?.groundingAvailable ? 'Disponible' : '0 cuota libre (HTTP 429)'}
-                </span>
-              </div>
-              <div className="text-[#00E676] font-bold mt-2 pt-2 border-t border-[#16335F]">
-                ✓ Motor Táctico: Gemini 3.5 Flash
-              </div>
-            </div>
-          </div>
+          <button
+            type="button"
+            className="flex items-center space-x-1 text-xs font-black px-3 py-1.5 bg-[#030814] text-[#00E5FF] border border-[#16335F] transform -skew-x-8 uppercase font-p3r-head"
+          >
+            <span className="transform skew-x-8 flex items-center space-x-1">
+              <span>{showAdvancedDiag ? 'Plegar' : 'Desplegar'}</span>
+              {showAdvancedDiag ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </span>
+          </button>
         </div>
 
-        {quotaInfo?.quotaNote && (
-          <div className="p-3 bg-[#030814] border border-[#16335F] text-[11px] text-[#7E9BB8] leading-relaxed p3r-cut-tr">
-            <strong className="text-white font-p3r-head uppercase">Diagnóstico de Cuota Google AI Studio: </strong>
-            {quotaInfo.quotaNote}
+        {showAdvancedDiag && (
+          <div className="p-6 pt-0 border-t-2 border-[#16335F] space-y-6">
+            {/* 1. Diagnóstico de enlace LCU Engine */}
+            <div className="pt-4 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#16335F] pb-3">
+                <div className="flex items-center space-x-3">
+                  <span className={`w-3 h-3 transform rotate-45 ${mainLcuState === 'connected' ? 'bg-[#00E676]' : 'bg-[#0066FF]'}`}></span>
+                  <div>
+                    <h4 className="text-sm font-black text-white uppercase tracking-wider font-p3r">
+                      Diagnóstico en vivo // LCU Engine
+                    </h4>
+                    <p className="text-[11px] text-[#7E9BB8]">Canal IPC directo entre Main y Renderer</p>
+                  </div>
+                </div>
+
+                {onRefreshLcu && (
+                  <P3rButton
+                    variant="secondary"
+                    size="sm"
+                    onClick={onRefreshLcu}
+                    icon={<RefreshCw className="w-3.5 h-3.5 text-[#00E5FF]" />}
+                  >
+                    Sincronizar ahora
+                  </P3rButton>
+                )}
+              </div>
+
+              {/* Métricas técnicas */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono">
+                <div className="bg-[#030814] p-3 border border-[#16335F] p3r-cut-tr">
+                  <div className="text-[#7E9BB8] text-[10px] uppercase font-bold font-p3r-head">Estado en Main</div>
+                  <div className={`mt-1 font-bold text-sm ${mainLcuState === 'connected' ? 'text-[#00E676]' : 'text-[#FF1744]'}`}>
+                    {mainLcuState.toUpperCase()}
+                  </div>
+                </div>
+
+                <div className="bg-[#030814] p-3 border border-[#16335F] p3r-cut-tr">
+                  <div className="text-[#7E9BB8] text-[10px] uppercase font-bold font-p3r-head">Estado en Renderer</div>
+                  <div className={`mt-1 font-bold text-sm ${lcuState === 'connected' ? 'text-[#00E676]' : 'text-[#FF1744]'}`}>
+                    {lcuState.toUpperCase()}
+                  </div>
+                </div>
+
+                <div className="bg-[#030814] p-3 border border-[#16335F] p3r-cut-tr">
+                  <div className="text-[#7E9BB8] text-[10px] uppercase font-bold font-p3r-head">Puerto LCU</div>
+                  <div className="mt-1 font-bold text-white text-sm">
+                    {lcuPort || 'No detectado'}
+                  </div>
+                </div>
+
+                <div className="bg-[#030814] p-3 border border-[#16335F] p3r-cut-tr">
+                  <div className="text-[#7E9BB8] text-[10px] uppercase font-bold font-p3r-head">Último Evento</div>
+                  <div className="mt-1 text-[#00E5FF] truncate text-xs" title={`${lastIpcEvent} (${lastIpcTimestamp})`}>
+                    {lastIpcTimestamp || 'N/A'} • {lastIpcEvent || 'Ninguno'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Registro de enlace */}
+              <div className="bg-[#030814] p-3 border border-[#16335F] text-xs flex items-center space-x-2">
+                <Terminal className="w-4 h-4 text-[#7E9BB8] shrink-0" />
+                <span className="text-[#7E9BB8] font-bold uppercase text-[11px] font-p3r-head">Registro de enlace:</span>
+                <span className={`font-mono ${lastConnectionError ? 'text-[#FF1744] font-bold' : 'text-[#00E676]'}`}>
+                  {lastConnectionError || 'Conexión activa con el cliente de LoL'}
+                </span>
+              </div>
+            </div>
+
+            {/* 2. Ruta de instalación y Prueba de Conexión */}
+            <div className="space-y-3 pt-3 border-t border-[#16335F]">
+              <div className="text-xs font-bold text-white uppercase font-p3r-head">
+                Ruta de Instalación de League of Legends
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={leaguePath}
+                    onChange={(e) => setLeaguePath(e.target.value)}
+                    placeholder="Ej: C:\Riot Games\League of Legends"
+                    className="w-full bg-[#030814] border border-[#16335F] focus:border-[#00E5FF] px-4 py-2.5 text-xs text-white focus:outline-none font-mono"
+                  />
+                </div>
+
+                <P3rButton
+                  variant="secondary"
+                  size="md"
+                  onClick={handleSelectFolder}
+                  icon={<FolderOpen className="w-4 h-4 text-[#00E5FF]" />}
+                >
+                  Examinar...
+                </P3rButton>
+
+                <P3rButton
+                  variant="cyan"
+                  size="md"
+                  onClick={handleTestLcuConnection}
+                  disabled={testingLcu}
+                  icon={testingLcu ? <RefreshCw className="w-4 h-4 animate-spin text-[#030814]" /> : <Terminal className="w-4 h-4 text-[#030814]" />}
+                >
+                  Probar conexión
+                </P3rButton>
+              </div>
+
+              {/* Reporte detallado si se probó */}
+              {lcuReport && (
+                <div className="space-y-3 mt-3 pt-3 border-t border-[#16335F]">
+                  <div className="flex justify-between items-center text-xs font-semibold">
+                    <span className="text-white font-p3r-head uppercase">Resultado:</span>
+                    <P3rBadge
+                      label={lcuReport.success ? 'Conexión exitosa' : 'Fallo de conexión'}
+                      variant={lcuReport.success ? 'green' : 'red'}
+                    />
+                  </div>
+
+                  {lcuReport.testSteps && lcuReport.testSteps.length > 0 && (
+                    <div className="space-y-1.5">
+                      {lcuReport.testSteps.map((ts, idx) => (
+                        <div
+                          key={idx}
+                          className={`p-2.5 text-xs border p3r-cut-tr ${
+                            ts.status === 'success'
+                              ? 'bg-[#031A12] border-[#00E676] text-[#00E676]'
+                              : 'bg-[#2A050A] border-[#FF1744] text-[#FF1744]'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between font-bold">
+                            <span>{ts.name}</span>
+                            <span className="text-[10px] uppercase font-mono">{ts.status}</span>
+                          </div>
+                          <div className="text-[11px] text-[#CBD5E1] mt-0.5">{ts.summary}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* 3. Exportación de Diagnóstico y Limpieza */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-[#16335F]">
+              <div className="bg-[#030814] p-4 border border-[#16335F] p3r-cut-tr space-y-2">
+                <div className="text-xs font-black text-white uppercase font-p3r-head">Exportar Diagnóstico</div>
+                <p className="text-[11px] text-[#7E9BB8]">
+                  Genera un archivo JSON sanitizado con logs y estado para soporte.
+                </p>
+                <div className="pt-1">
+                  <P3rButton
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleExportDiagnostic}
+                    disabled={exportingDiag}
+                    icon={<Download className="w-3.5 h-3.5 text-[#00E5FF]" />}
+                  >
+                    {exportingDiag ? 'Exportando...' : 'Exportar diagnóstico'}
+                  </P3rButton>
+                </div>
+                {diagMessage && (
+                  <div className={`mt-2 text-[11px] p-2 border ${diagMessage.type === 'success' ? 'text-[#00E676] border-[#00E676]/40 bg-[#031A12]' : 'text-[#FF1744] border-[#FF1744]/40 bg-[#2A050A]'}`}>
+                    {diagMessage.text}
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-[#030814] p-4 border border-[#16335F] p3r-cut-tr space-y-2">
+                <div className="text-xs font-black text-white uppercase font-p3r-head">Limpieza de Importaciones</div>
+                <p className="text-[11px] text-[#7E9BB8]">
+                  Elimina páginas de runas y conjuntos de objetos creados por la app (EAsy, [IL]).
+                </p>
+                <div className="pt-1">
+                  <P3rButton
+                    variant="danger"
+                    size="sm"
+                    onClick={handleCleanAssets}
+                    disabled={cleaningAssets}
+                    icon={cleaningAssets ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  >
+                    {cleaningAssets ? 'Limpiando...' : 'Limpiar datos en cliente'}
+                  </P3rButton>
+                </div>
+                {cleanResultMsg && (
+                  <div className="mt-2 text-[11px] p-2 border border-[#00E676]/40 bg-[#031A12] text-[#00E676]">
+                    {cleanResultMsg}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>
 
-      {/* Footer de versión y estado */}
+      {/* Monitor de Límites de Uso */}
+      <div className="bg-[#050E20] p-6 border-2 border-[#16335F] p3r-bevel p3r-shadow-hard space-y-4">
+        <h3 className="text-base font-black text-white flex items-center space-x-2 uppercase font-p3r tracking-wider">
+          <span className="w-2.5 h-2.5 bg-[#00E5FF] transform rotate-45"></span>
+          <span>Límites de uso</span>
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
+          <div className="bg-[#030814] p-4 border border-[#16335F] p3r-cut-tr">
+            <div className="font-bold text-white mb-2 font-p3r-head uppercase">Riot Games API</div>
+            <div className="text-[#7E9BB8] space-y-1">
+              <div>Límite: 20 peticiones / seg • 100 / 2 min</div>
+              <div className="text-[#00E676] font-bold mt-2">Control de tasa activo</div>
+            </div>
+          </div>
+
+          <div className="bg-[#030814] p-4 border border-[#16335F] p3r-cut-tr">
+            <div className="font-bold text-white mb-2 font-p3r-head uppercase">Google Gemini API</div>
+            <div className="text-[#7E9BB8] space-y-1">
+              <div>Peticiones hoy: {quotaInfo?.standardRequestsToday ?? 0} / 1500</div>
+              <div className="text-[#00E676] font-bold mt-2">Gemini 2.5 Flash</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer de versión */}
       <div className="pt-4 border-t-2 border-[#16335F] flex items-center justify-between text-[11px] text-[#7E9BB8] font-mono">
         <div>
-          <span>ITERO LOCAL // SEES</span> • <span>Parche Activo: <strong className="text-white">v{formatFullPatchLabel(patchVersion)}</strong></span>
+          <span>EAsy</span> • <span>Parche: <strong className="text-white">v{formatFullPatchLabel(patchVersion)}</strong></span>
         </div>
         <div>
-          <span>DDragon & LCU Dynamic Sync</span> • <span>Arquitectura 100% Local</span>
+          <span>OP.GG & LCU</span>
         </div>
       </div>
     </div>

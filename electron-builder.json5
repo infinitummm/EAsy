@@ -1,6 +1,7 @@
 {
   "appId": "com.itero.local",
-  "productName": "Itero Local",
+  "productName": "EAsy",
+  "artifactName": "${productName} Setup ${version}.${ext}",
   "directories": {
     "output": "release"
   },
@@ -34,8 +35,8 @@
     "allowToChangeInstallationDirectory": true,
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
-    "shortcutName": "Itero Local",
-    "uninstallDisplayName": "Itero Local (Desinstalar)",
+    "shortcutName": "EAsy",
+    "uninstallDisplayName": "EAsy (Desinstalar)",
     "deleteAppDataOnUninstall": false
   }
 }

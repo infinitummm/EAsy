@@ -70,9 +70,9 @@ export class ItemSetManager {
       if (params.opponentId && params.opponentId > 0) {
         const opp = getChampionById(params.opponentId);
         const oppName = opp ? opp.name : `Rival ${params.opponentId}`;
-        titulo = `[IL] ${champName} vs ${oppName}`;
+        titulo = `EAsy ${champName} vs ${oppName}`;
       } else {
-        titulo = `[IL] ${champName} (general)`;
+        titulo = `EAsy ${champName} (general)`;
       }
     }
 
@@ -260,10 +260,10 @@ export class ItemSetManager {
             globalData.itemSets = [];
           }
 
-          // Filtrar conjuntos previos creados por la app ([IL] o Itero)
+          // Filtrar conjuntos previos creados por la app (EAsy, [IL] o Itero)
           globalData.itemSets = globalData.itemSets.filter(
             (s: any) =>
-              !(s.title && (s.title.startsWith('[IL]') || s.title.startsWith('Itero')))
+              !(s.title && (s.title.startsWith('EAsy') || s.title.startsWith('[IL]') || s.title.startsWith('Itero')))
           );
           globalData.itemSets.unshift(itemSetData);
           globalData.timestamp = Date.now();
@@ -309,10 +309,10 @@ export class ItemSetManager {
               registrarLog(`[ItemSetManager Advertencia] Fallo al leer conjuntos previos: ${fetchErr}`);
             }
 
-            // Filtrar conjuntos previos de la app ([IL] o Itero)
+            // Filtrar conjuntos previos de la app (EAsy, [IL] o Itero)
             const filteredSets = existingSets.filter(
               (s: any) =>
-                !(s.title && (s.title.startsWith('[IL]') || s.title.startsWith('Itero')))
+                !(s.title && (s.title.startsWith('EAsy') || s.title.startsWith('[IL]') || s.title.startsWith('Itero')))
             );
             filteredSets.unshift(itemSetData);
 
@@ -389,7 +389,7 @@ export class ItemSetManager {
           if (currentRes && Array.isArray(currentRes.itemSets)) {
             const initialCount = currentRes.itemSets.length;
             const cleanedSets = currentRes.itemSets.filter(
-              (s: any) => !(s.title && (s.title.startsWith('[IL]') || s.title.startsWith('Itero')))
+              (s: any) => !(s.title && (s.title.startsWith('EAsy') || s.title.startsWith('[IL]') || s.title.startsWith('Itero')))
             );
             const diff = initialCount - cleanedSets.length;
             if (diff > 0) {
@@ -423,7 +423,7 @@ export class ItemSetManager {
           if (Array.isArray(data.itemSets)) {
             const before = data.itemSets.length;
             data.itemSets = data.itemSets.filter(
-              (s: any) => !(s.title && (s.title.startsWith('[IL]') || s.title.startsWith('Itero')))
+              (s: any) => !(s.title && (s.title.startsWith('EAsy') || s.title.startsWith('[IL]') || s.title.startsWith('Itero')))
             );
             if (data.itemSets.length !== before) {
               fs.writeFileSync(globalItemSetsPath, JSON.stringify(data, null, 2), 'utf-8');

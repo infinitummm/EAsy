@@ -23,7 +23,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [showAdvancedRiotApi, setShowAdvancedRiotApi] = useState(false);
 
   // Formulario de sincronización
-  const [gameName, setGameName] = useState(settings.activeAccount?.gameName || 'IteroPlayer');
+  const [gameName, setGameName] = useState(settings.activeAccount?.gameName || 'Invocador');
   const [tagLine, setTagLine] = useState(settings.activeAccount?.tagLine || 'LAN');
   const [platform, setPlatform] = useState<PlatformRouting>(settings.activeAccount?.platform || 'la1');
   const [regional, setRegional] = useState<RegionalRouting>(settings.activeAccount?.regional || 'americas');
@@ -41,7 +41,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         if (res.success && res.account) {
           setSyncMessage({
             type: 'success',
-            text: `¡Cuenta ${res.account.gameName}#${res.account.tagLine} sincronizada directamente desde tu cliente LoL!`
+            text: `Cuenta ${res.account.gameName}#${res.account.tagLine} sincronizada.`
           });
           onSaveSettings({
             activeAccount: {
@@ -82,7 +82,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         // Fallback para preview
         setAccount({
           puuid: 'preview-puuid',
-          gameName: settings.activeAccount?.gameName || 'IteroPlayer',
+          gameName: settings.activeAccount?.gameName || 'Invocador',
           tagLine: settings.activeAccount?.tagLine || 'LAN',
           platform: 'la1',
           regional: 'americas',
@@ -249,7 +249,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       <div className="bg-[#050E20] border-2 border-[#16335F] p-6 p3r-bevel p3r-shadow-hard relative">
         <div className="flex items-center space-x-2 mb-4">
           <span className="px-2.5 py-0.5 bg-[#0066FF] text-white text-[10px] font-black tracking-widest uppercase transform -skew-x-8 font-p3r-head p3r-shadow-blue border-l-2 border-white">
-            <span className="transform skew-x-8 inline-block">SEES // OPERATIVE DOSSIER</span>
+            <span className="transform skew-x-8 inline-block">PERFIL</span>
           </span>
           <P3rBadge label="ESTADO EN VIVO" variant="cyan" />
         </div>
@@ -537,7 +537,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           </div>
         ) : (
           <p className="text-xs text-[#7E9BB8] text-center py-8 font-mono bg-[#030814] border border-[#16335F] p3r-cut-tr">
-            No hay partidas almacenadas aún en la base de datos local SQLite. Pulsa sincronizar para descargar tu historial.
+            No hay partidas registradas aún. Pulsa sincronizar para cargar tu historial.
           </p>
         )}
       </div>

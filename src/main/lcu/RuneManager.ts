@@ -56,7 +56,7 @@ export class RuneManager {
 
   constructor(lcu: ILcuClient, opciones: OpcionesRuneManager = {}) {
     this.lcu = lcu;
-    this.nombrePaginaPorDefecto = opciones.nombrePaginaPorDefecto ?? '[IL] Itero Local';
+    this.nombrePaginaPorDefecto = opciones.nombrePaginaPorDefecto ?? 'EAsy';
     this.sobrescribirActiva = opciones.sobrescribirActiva ?? true;
   }
 
@@ -126,13 +126,19 @@ export class RuneManager {
           (p) => p.current === true && (p as any).isEditable !== false && p.id !== undefined
         );
         if (activa?.id !== undefined) {
-          return await this.inyectar({ ...candidata, id: activa.id }, false);
+          // Limpiar páginas residuales previas de la app ([IL] o Itero)
+          for (const p of paginas) {
+            if (p.id !== undefined && p.id !== activa.id && (p.name?.startsWith('[IL]') || p.name?.startsWith('Itero'))) {
+              this.eliminarPagina(p.id).catch(() => {});
+            }
+          }
+          return await this.inyectar({ ...candidata, id: activa.id, name: this.nombrePaginaPorDefecto }, false);
         }
       }
 
-      // 3. Si ya existe una página de la app ([IL] o Itero), reutilizarla y limpiar duplicados
+      // 3. Si ya existe una página de la app (EAsy, [IL] o Itero), reutilizarla y limpiar duplicados
       const paginasApp = paginas.filter(
-        (p) => (p as any).isEditable !== false && p.id !== undefined && p.name && (p.name.startsWith('[IL]') || p.name.startsWith('Itero'))
+        (p) => (p as any).isEditable !== false && p.id !== undefined && p.name && (p.name.startsWith('EAsy') || p.name.startsWith('[IL]') || p.name.startsWith('Itero'))
       );
       if (paginasApp.length > 0) {
         const principal = paginasApp[0];
@@ -189,7 +195,7 @@ export class RuneManager {
    */
   static crearPaginaDesdeRecomendacion(
     runas: GeminiMatchupRecommendation['runesRecommendation'],
-    nombre: string = 'Itero Local'
+    nombre: string = 'EAsy'
   ): RunePage {
     return {
       name: nombre,
@@ -265,7 +271,7 @@ export class RuneManager {
     try {
       const paginas = await this.obtenerPaginas();
       const paginasApp = paginas.filter(
-        (p) => (p as any).isEditable !== false && p.id !== undefined && p.name && (p.name.startsWith('[IL]') || p.name.startsWith('Itero'))
+        (p) => (p as any).isEditable !== false && p.id !== undefined && p.name && (p.name.startsWith('EAsy') || p.name.startsWith('[IL]') || p.name.startsWith('Itero'))
       );
       for (const p of paginasApp) {
         if (p.id !== undefined) {

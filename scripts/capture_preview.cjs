@@ -2,18 +2,32 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
-// Mock IPC handlers so the UI renders fully with active data and no onboarding modal
 ipcMain.handle('app:get-version', async () => '1.0.1');
 ipcMain.handle('settings:get', async () => ({
   onboardingCompleted: true,
   autoAccept: { enabled: true, delaySeconds: 2 },
-  summonerName: 'Makoto Yuki',
-  riotIdTag: 'SEES',
-  preferredRole: 'TOP',
-  secondaryRole: 'MID',
-  opggRegion: 'lan',
+  apiKeys: { riotApiKeyEncrypted: '', geminiApiKeyEncrypted: '' },
+  autoChampSelect: {
+    autoHover: true,
+    autoPick: false,
+    autoBan: false,
+    autoSpells: true,
+    pickDelaySeconds: 1,
+    rolePreferences: {
+      TOP: { preferredChampions: [], fallbackChampions: [], banChampions: [], spells: [4, 12] },
+      JUNGLE: { preferredChampions: [], fallbackChampions: [], banChampions: [], spells: [4, 11] },
+      MIDDLE: { preferredChampions: [], fallbackChampions: [], banChampions: [], spells: [4, 14] },
+      BOTTOM: { preferredChampions: [], fallbackChampions: [], banChampions: [], spells: [4, 7] },
+      UTILITY: { preferredChampions: [], fallbackChampions: [], banChampions: [], spells: [4, 3] },
+      FILL: { preferredChampions: [], fallbackChampions: [], banChampions: [], spells: [4, 14] },
+    },
+  },
+  leagueInstallationPath: 'C:\\Riot Games\\League of Legends',
   opggTier: 'emerald_plus',
-  locale: 'es_MX',
+  minMatchupSampleThreshold: 200,
+  allowAiChoiceTop3: false,
+  activeAccount: { gameName: 'Invocador', tagLine: 'LAN', summonerLevel: 184, tier: 'EMERALD', rank: 'II' },
+  preferredLocale: 'es_MX',
 }));
 ipcMain.handle('lcu:get-state', async () => ({
   state: 'connected',
@@ -26,8 +40,24 @@ ipcMain.handle('lcu:get-auto-accept-status', async () => ({
   habilitado: true,
   retrasoSegundos: 2,
   pollingActivo: true,
-  lastAction: 'Sistema listo en espera de partida',
-  lastActionTimestamp: Date.now() - 34000,
+  lastAction: 'En espera de partida',
+  lastActionTimestamp: Date.now() - 15000,
+}));
+ipcMain.handle('riot:get-client-version', async () => ({
+  ddragonVersion: '16.20.1',
+  clientVersion: '26.20',
+  matches: true,
+  displayPatch: 'Parche 26.20',
+}));
+ipcMain.handle('riot:get-catalog', async () => ({
+  count: 173,
+  patch: '26.20',
+  champions: [],
+}));
+ipcMain.handle('ai:get-grounding-quota', async () => ({
+  standardRequestsToday: 12,
+  groundingAvailable: true,
+  quotaNote: null,
 }));
 
 app.whenReady().then(async () => {
@@ -46,14 +76,29 @@ app.whenReady().then(async () => {
 
   const indexPath = path.join(__dirname, '../dist/renderer/index.html');
   await win.loadFile(indexPath);
-
-  // Wait 1.5 seconds for fonts, styles and React state
   await new Promise((resolve) => setTimeout(resolve, 1500));
 
-  const image = await win.webContents.capturePage();
-  const outPath = path.join(__dirname, '../preview_p3r_dashboard.png');
-  fs.writeFileSync(outPath, image.toPNG());
-  console.log('Preview saved to:', outPath);
+  // 1. Dashboard
+  let img = await win.webContents.capturePage();
+  fs.writeFileSync(path.join(__dirname, '../preview_easy_dashboard.png'), img.toPNG());
 
+  // 2. Click Settings Tab
+  await win.webContents.executeJavaScript(`
+    const btn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('AJUSTES'));
+    if (btn) btn.click();
+  `);
+  await new Promise((resolve) => setTimeout(resolve, 800));
+
+  // Desplegar sección Avanzado
+  await win.webContents.executeJavaScript(`
+    const adv = Array.from(document.querySelectorAll('div')).find(d => d.textContent.includes('Avanzado / Diagnóstico'));
+    if (adv) adv.click();
+  `);
+  await new Promise((resolve) => setTimeout(resolve, 600));
+
+  img = await win.webContents.capturePage();
+  fs.writeFileSync(path.join(__dirname, '../preview_easy_settings.png'), img.toPNG());
+
+  console.log('Previews captured successfully.');
   app.quit();
 });

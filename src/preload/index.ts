@@ -118,9 +118,11 @@ export const api = {
 };
 
 contextBridge.exposeInMainWorld('api', api);
+contextBridge.exposeInMainWorld('electronAPI', api);
 
 declare global {
   interface Window {
     api: typeof api;
+    electronAPI: typeof api;
   }
 }

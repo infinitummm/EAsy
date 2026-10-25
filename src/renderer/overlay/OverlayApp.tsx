@@ -9,11 +9,7 @@ import type {
 } from '@shared/types';
 import { getChampionById } from '@shared/champions';
 
-declare global {
-  interface Window {
-    electronAPI: any;
-  }
-}
+const getApi = () => (typeof window !== 'undefined' ? (window.api || window.electronAPI) : undefined);
 
 /**
  * Escudo de Tier con colores e insignias específicas para cada categoría.
@@ -116,26 +112,30 @@ export function OverlayApp() {
 
   // Escuchar estado en vivo desde el proceso principal
   useEffect(() => {
-    if (window.electronAPI?.overlayGetState) {
-      window.electronAPI.overlayGetState().then((s: OverlayState) => {
+    const api = getApi();
+    if (api?.overlayGetState) {
+      api.overlayGetState().then((s: OverlayState) => {
         if (s) setState(s);
       });
     }
 
-    if (window.electronAPI?.onOverlayStateChanged) {
-      const unsub = window.electronAPI.onOverlayStateChanged((newState: OverlayState) => {
+    if (api?.onOverlayStateChanged) {
+      const unsub = api.onOverlayStateChanged((newState: OverlayState) => {
         setState(newState);
       });
-      return () => unsub();
+      return () => {
+        unsub();
+      };
     }
   }, []);
 
-  // Cargar datos del campeón si no están presentes
+  // Cargar datos del campeón si no están presentes y hay un ID válido (> 0)
   useEffect(() => {
-    if (state.championId && (!state.data || state.data.championId !== state.championId)) {
+    if (state.championId && state.championId > 0 && (!state.data || state.data.championId !== state.championId)) {
       setLoading(true);
-      if (window.electronAPI?.getChampionAugments) {
-        window.electronAPI
+      const api = getApi();
+      if (api?.getChampionAugments) {
+        api
           .getChampionAugments({
             championId: state.championId,
             mode: state.gameMode || 'aram_mayhem',
@@ -194,14 +194,16 @@ export function OverlayApp() {
       className="w-full h-full p-2 select-none font-sans text-gray-100 flex flex-col justify-start"
       onMouseEnter={() => {
         // Enviar a Electron para habilitar clics sobre la ventana
-        if (window.electronAPI?.setIgnoreMouseEvents) {
-          window.electronAPI.setIgnoreMouseEvents(false);
+        const api = getApi();
+        if (api?.setIgnoreMouseEvents) {
+          api.setIgnoreMouseEvents(false);
         }
       }}
       onMouseLeave={() => {
         // Permitir que los clics atraviesen si se está fuera
-        if (window.electronAPI?.setIgnoreMouseEvents) {
-          window.electronAPI.setIgnoreMouseEvents(true, { forward: true });
+        const api = getApi();
+        if (api?.setIgnoreMouseEvents) {
+          api.setIgnoreMouseEvents(true, { forward: true });
         }
       }}
     >
@@ -257,7 +259,8 @@ export function OverlayApp() {
             </button>
             <button
               onClick={() => {
-                if (window.electronAPI?.overlayHide) window.electronAPI.overlayHide();
+                const api = getApi();
+                if (api?.overlayHide) api.overlayHide();
               }}
               className="w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-red-400 hover:bg-red-950/40 transition-colors font-bold"
               title="Ocultar (Ctrl+Shift+O para volver a mostrar)"
@@ -307,6 +310,11 @@ export function OverlayApp() {
               {loading ? (
                 <div className="py-12 text-center text-cyan-400 font-mono text-xs animate-pulse">
                   Cargando mejoras óptimas...
+                </div>
+              ) : !state.championId || state.championId <= 0 ? (
+                <div className="py-10 text-center text-cyan-300/80 font-mono text-xs flex flex-col items-center gap-1.5">
+                  <span className="text-base animate-pulse">⏳</span>
+                  <span>Esperando selección de campeón...</span>
                 </div>
               ) : augmentsFiltrados.length === 0 ? (
                 <div className="py-10 text-center text-gray-400 text-xs">

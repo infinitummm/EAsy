@@ -25,7 +25,12 @@ import { IPC_CHANNELS } from '../shared/events';
 import { iniciarAutoUpdater } from './updater';
 import { OverlayManager } from './overlay/OverlayManager';
 import { registrarOverlayIpc } from './ipc/overlayIpc';
+import { BorderlessDetector } from './modes/BorderlessDetector';
+import { ModeAugmentService } from './modes/ModeAugmentService';
+import { LiveClientDataClient, detectarModoEnLcu } from './lcu/LiveClientDataClient';
+import type { IModeService } from '../shared/contracts';
 import type { TipoModo } from '../shared/types';
+import { ALL_CHAMPIONS, getChampionById } from '../shared/champions';
 
 
 let mainWindow: BrowserWindow | null = null;
@@ -50,6 +55,26 @@ let matchupCacheRepo: MatchupCacheRepo | null = null;
 let opggClient: OpGgClient | null = null;
 let podaCacheInterval: NodeJS.Timeout | null = null;
 let overlayManager: OverlayManager | null = null;
+let borderlessDetector: BorderlessDetector | null = null;
+let modeAugmentService: ModeAugmentService | null = null;
+let liveClientDataClient: LiveClientDataClient | null = null;
+let inGamePollingInterval: NodeJS.Timeout | null = null;
+
+function resolverCampeonPorNombre(nombreCrudo?: string): { id: number; name: string } | null {
+  if (!nombreCrudo) return null;
+  const limpio = nombreCrudo.replace(/^game_character_displayname_/i, '').trim().toLowerCase();
+  const sinEspacios = limpio.replace(/[^a-z0-9]/g, '');
+  const champ = ALL_CHAMPIONS.find((c) => {
+    const cName = c.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const cKey = c.key.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const cImg = c.image.toLowerCase().replace(/\.png$/, '').replace(/[^a-z0-9]/g, '');
+    return cName === sinEspacios || cKey === sinEspacios || cImg === sinEspacios;
+  });
+  if (champ) {
+    return { id: champ.id, name: champ.name };
+  }
+  return null;
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -258,21 +283,107 @@ app.whenReady().then(async () => {
   const preloadPath = path.join(__dirname, '../preload/index.js');
   overlayManager = new OverlayManager(preloadPath);
   overlayManager.initialize();
-  registrarOverlayIpc(overlayManager);
+
+  borderlessDetector = new BorderlessDetector({
+    rutaInstalacionPorDefecto: dbService?.getSettings().leagueInstallationPath,
+  });
+  modeAugmentService = dbService ? new ModeAugmentService(dbService) : null;
+  liveClientDataClient = new LiveClientDataClient();
+
+  const modeService: IModeService = {
+    async getChampionAugments(championId: number, mode: TipoModo, patch?: string) {
+      if (!modeAugmentService) {
+        throw new Error('Servicio de mejoras de modo no disponible (base de datos inactiva)');
+      }
+      return modeAugmentService.getChampionAugments(championId, mode, patch);
+    },
+    async checkBorderless(installationPath?: string) {
+      const ruta = installationPath || dbService?.getSettings().leagueInstallationPath;
+      return borderlessDetector!.checkBorderless(ruta);
+    },
+  };
+
+  registrarOverlayIpc(overlayManager, modeService);
+
+  // Verificar estado sin bordes al arrancar
+  borderlessDetector.checkBorderless().then((res) => {
+    overlayManager?.setBorderless(res.isBorderless);
+  }).catch(() => {});
+
+  // Manejador para actualizar el campeón en selección
+  const actualizarCampeonSeleccionado = (sesion: any, modo: TipoModo) => {
+    try {
+      const localCell = sesion?.localPlayerCellId;
+      const local = (sesion?.myTeam ?? []).find((p: any) => p.cellId === localCell);
+      const champId = local?.championId || local?.championPickIntent || 0;
+      if (champId > 0) {
+        const champ = getChampionById(champId);
+        overlayManager?.setCampeonYModo(champId, champ?.name || `Campeón ${champId}`, modo);
+      } else {
+        overlayManager?.setCampeonYModo(0, '', modo);
+      }
+    } catch {}
+  };
+
+  // Reaccionar a cambios de sesión de selección de campeón
+  lcuClient.on(EVENTOS_LCU_CLIENT.CHAMP_SELECT_SESSION, async (sesion) => {
+    const estado = overlayManager?.getState();
+    if (estado?.visible && estado?.gameMode && (estado.gameMode === 'aram_mayhem' || estado.gameMode === 'arena' || estado.gameMode === 'aram')) {
+      actualizarCampeonSeleccionado(sesion, estado.gameMode);
+    }
+  });
 
   // Reaccionar a cambios de Gameflow para mostrar/ocultar el overlay automáticamente
   lcuClient.on(EVENTOS_LCU_CLIENT.GAMEFLOW_CAMBIADO, async (fase) => {
-    if (fase === 'ChampSelect' || fase === 'InProgress') {
+    if (fase === 'ChampSelect') {
       try {
-        const session = await lcuClient.request<any>('GET', '/lol-gameflow/v1/session');
-        const queueId = session?.gameData?.queue?.id;
-        if (queueId === 2400 || queueId === 1700 || queueId === 450) {
-          const mode: TipoModo = queueId === 1700 ? 'arena' : queueId === 2400 ? 'aram_mayhem' : 'aram';
-          overlayManager?.setCampeonYModo(0, '', mode);
+        const modo = await detectarModoEnLcu(lcuClient);
+        if (modo === 'aram_mayhem' || modo === 'arena' || modo === 'aram') {
+          borderlessDetector?.checkBorderless().then((res) => {
+            overlayManager?.setBorderless(res.isBorderless);
+          }).catch(() => {});
+
+          try {
+            const csSession = await lcuClient.request<any>('GET', '/lol-champ-select/v1/session');
+            actualizarCampeonSeleccionado(csSession, modo);
+          } catch {
+            overlayManager?.setCampeonYModo(0, '', modo);
+          }
+
           overlayManager?.show();
         }
       } catch {}
+    } else if (fase === 'InProgress') {
+      try {
+        const modo = await detectarModoEnLcu(lcuClient);
+        if (modo === 'aram_mayhem' || modo === 'arena' || modo === 'aram') {
+          borderlessDetector?.checkBorderless().then((res) => {
+            overlayManager?.setBorderless(res.isBorderless);
+          }).catch(() => {});
+
+          overlayManager?.show();
+
+          // Iniciar sondeo in-game con LiveClientDataClient
+          if (inGamePollingInterval) clearInterval(inGamePollingInterval);
+          inGamePollingInterval = setInterval(async () => {
+            try {
+              const instantanea = await liveClientDataClient?.obtenerInstantanea(lcuClient);
+              if (instantanea?.activo && instantanea.jugador) {
+                const champ = resolverCampeonPorNombre(instantanea.jugador.championName);
+                if (champ) {
+                  const m = instantanea.modo ?? modo ?? 'aram_mayhem';
+                  overlayManager?.setCampeonYModo(champ.id, champ.name, m);
+                }
+              }
+            } catch {}
+          }, 2500);
+        }
+      } catch {}
     } else if (fase === 'None' || fase === 'Lobby' || fase === 'EndOfGame') {
+      if (inGamePollingInterval) {
+        clearInterval(inGamePollingInterval);
+        inGamePollingInterval = null;
+      }
       overlayManager?.hide();
     }
   });
@@ -294,6 +405,10 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
+  if (inGamePollingInterval) {
+    clearInterval(inGamePollingInterval);
+    inGamePollingInterval = null;
+  }
   if (podaCacheInterval) {
     clearInterval(podaCacheInterval);
     podaCacheInterval = null;

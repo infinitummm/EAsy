@@ -36,11 +36,16 @@ export class OverlayManager {
     const primaryDisplay = screen.getPrimaryDisplay();
     const { width } = primaryDisplay.workAreaSize;
 
+    const windowWidth = 820;
+    const windowHeight = 440;
+    const posX = Math.max(0, Math.round((width - windowWidth) / 2));
+    const posY = 35;
+
     this.window = new BrowserWindow({
-      width: 410,
-      height: 700,
-      x: Math.max(0, width - 430),
-      y: 60,
+      width: windowWidth,
+      height: windowHeight,
+      x: posX,
+      y: posY,
       frame: false,
       transparent: true,
       hasShadow: false,
@@ -158,6 +163,26 @@ export class OverlayManager {
     } else {
       this.show();
       return true;
+    }
+  }
+
+  /**
+   * Activa automáticamente el overlay en el momento de escoger aumentos.
+   * Abre el overlay si estaba oculto, asegura mantenimiento de capa superior
+   * y emite el evento 'overlay:auto-trigger' con la duración temporal de auto-cierre.
+   */
+  public triggerAugmentSelection(duracionSegundos = 25): void {
+    if (!this.state.visible) {
+      this.show();
+    }
+    if (this.window && !this.window.isDestroyed()) {
+      this.window.webContents.send('overlay:auto-trigger', {
+        championId: this.state.championId,
+        championName: this.state.championName,
+        gameMode: this.state.gameMode,
+        autoDismissSeconds: duracionSegundos,
+      });
+      registrarLog(`[OverlayManager] Activación automática de aumentos disparada (${duracionSegundos}s).`);
     }
   }
 

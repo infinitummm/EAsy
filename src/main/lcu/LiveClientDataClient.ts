@@ -24,6 +24,7 @@
 import https from 'node:https';
 import type { ILcuClient, ILiveClientDataClient } from '@shared/contracts';
 import type { TipoModo } from '@shared/types';
+import { getChampionById } from '@shared/champions';
 import { registrarLog } from './LcuDetector';
 
 /** URL por defecto de la API local del juego. */
@@ -65,6 +66,9 @@ export interface OpcionesLiveClientDataClient {
 export interface InstantaneaLiveClientData {
   activo: boolean;
   jugador: { summonerName: string; championName: string } | null;
+  level?: number;
+  isDead?: boolean;
+  gameTime?: number;
   datos: any | null;
   modo: TipoModo | null;
   capturadoEn: number;
@@ -322,11 +326,30 @@ export class LiveClientDataClient implements ILiveClientDataClient {
 
     const jugador = construirJugadorActivo(activePlayer, allGameData);
 
+    const activo = esObjeto(activePlayer) ? activePlayer : null;
+    const datos = esObjeto(allGameData) ? allGameData : null;
+    let jugadorEnLista: Record<string, unknown> | null = null;
+    if (datos && Array.isArray(datos.allPlayers) && jugador?.summonerName) {
+      const match = datos.allPlayers.find(
+        (p) => esObjeto(p) && p.summonerName === jugador.summonerName
+      );
+      if (esObjeto(match)) jugadorEnLista = match;
+    }
+
+    const levelVal = Number(activo?.level ?? jugadorEnLista?.level);
+    const isDeadVal = jugadorEnLista && typeof jugadorEnLista.isDead === 'boolean' ? jugadorEnLista.isDead : undefined;
+
     return {
       activo: jugador !== null || esObjeto(activePlayer) || esObjeto(allGameData),
       jugador,
+      level: Number.isFinite(levelVal) && levelVal > 0 ? levelVal : undefined,
+      isDead: isDeadVal,
       datos: esObjeto(allGameData) ? allGameData : null,
       modo,
+      gameTime:
+        esObjeto(allGameData) && esObjeto(allGameData.gameStats)
+          ? Number(allGameData.gameStats.gameTime)
+          : undefined,
       capturadoEn: Date.now(),
     };
   }
@@ -418,4 +441,64 @@ export class LiveClientDataClient implements ILiveClientDataClient {
       return null;
     }
   }
+}
+
+/**
+ * Resuelve el campeón del jugador local directamente desde la LCU.
+ * Funciona de forma inmediata tanto en ChampSelect, InProgress y PreEndOfGame,
+ * sin depender de que la Live Client Data API haya iniciado todavía.
+ */
+export async function resolverCampeonLocalLcu(
+  lcu: ClienteLcuGameflow,
+  registrar: (mensaje: string) => void = registrarLog
+): Promise<{ championId: number; championName: string } | null> {
+  let localPuuid: string | null = null;
+  let localSummonerId: number | null = null;
+  try {
+    const summoner = await lcu.request<any>('GET', '/lol-summoner/v1/current-summoner');
+    if (summoner?.puuid) localPuuid = summoner.puuid;
+    if (summoner?.summonerId) localSummonerId = Number(summoner.summonerId);
+  } catch {}
+
+  try {
+    const gfSession = await lcu.request<any>('GET', '/lol-gameflow/v1/session');
+
+    // 1. Buscar en playerChampionSelections por PUUID
+    if (localPuuid && Array.isArray(gfSession?.gameData?.playerChampionSelections)) {
+      const match = gfSession.gameData.playerChampionSelections.find(
+        (p: any) => p?.puuid && p.puuid === localPuuid
+      );
+      const cId = Number(match?.championId);
+      if (Number.isFinite(cId) && cId > 0) {
+        const champ = getChampionById(cId);
+        return { championId: cId, championName: champ?.name || `Campeón ${cId}` };
+      }
+    }
+
+    // 2. Buscar en teamOne o teamTwo (común en Arena y colas personalizadas)
+    const teams = [...(gfSession?.gameData?.teamOne ?? []), ...(gfSession?.gameData?.teamTwo ?? [])];
+    const matchTeam = teams.find(
+      (p: any) => (localPuuid && p?.puuid === localPuuid) || (localSummonerId && p?.summonerId === localSummonerId)
+    );
+    const cIdTeam = Number(matchTeam?.championId);
+    if (Number.isFinite(cIdTeam) && cIdTeam > 0) {
+      const champ = getChampionById(cIdTeam);
+      return { championId: cIdTeam, championName: champ?.name || `Campeón ${cIdTeam}` };
+    }
+  } catch {}
+
+  // 3. Respaldo: sesión de Champ Select
+  try {
+    const csSession = await lcu.request<any>('GET', '/lol-champ-select/v1/session');
+    const localCell = csSession?.localPlayerCellId;
+    const allCells = [...(csSession?.myTeam ?? []), ...(csSession?.theirTeam ?? [])];
+    const local = allCells.find((p: any) => p?.cellId === localCell);
+    const cId = Number(local?.championId || local?.championPickIntent);
+    if (Number.isFinite(cId) && cId > 0) {
+      const champ = getChampionById(cId);
+      return { championId: cId, championName: champ?.name || `Campeón ${cId}` };
+    }
+  } catch {}
+
+  return null;
 }

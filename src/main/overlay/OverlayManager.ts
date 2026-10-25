@@ -28,6 +28,7 @@ export class OverlayManager {
   };
   private ignoreMouse = true;
   private screenDetector: ScreenAugmentDetector = new ScreenAugmentDetector();
+  private autoDismissTimer: NodeJS.Timeout | null = null;
 
   constructor(private readonly preloadPath: string) {}
 
@@ -123,9 +124,13 @@ export class OverlayManager {
   }
 
   /**
-   * Oculta la ventana del overlay.
+   * Oculta la ventana del overlay y cancela temporizadores pendientes.
    */
   public hide(): void {
+    if (this.autoDismissTimer) {
+      clearTimeout(this.autoDismissTimer);
+      this.autoDismissTimer = null;
+    }
     if (this.window && this.state.visible) {
       this.window.hide();
       this.state.visible = false;
@@ -149,13 +154,24 @@ export class OverlayManager {
 
   /**
    * Activa automáticamente el overlay en el momento de escoger aumentos.
-   * Abre el overlay si estaba oculto sin robar foco, emite la duración de auto-cierre
-   * y lanza el análisis OCR en pantalla para identificar las 3 cartas.
+   * Abre el overlay si estaba oculto sin robar foco, programa el auto-cierre
+   * garantizado en el proceso principal y lanza el análisis OCR en pantalla.
    */
   public triggerAugmentSelection(duracionSegundos = 25): void {
     if (!this.state.visible) {
       this.show();
     }
+
+    if (this.autoDismissTimer) {
+      clearTimeout(this.autoDismissTimer);
+      this.autoDismissTimer = null;
+    }
+
+    // Temporizador de auto-cierre blindado en el proceso principal (no depende del renderer)
+    this.autoDismissTimer = setTimeout(() => {
+      this.hide();
+    }, duracionSegundos * 1000);
+
     if (this.window && !this.window.isDestroyed()) {
       this.window.webContents.send('overlay:auto-trigger', {
         championId: this.state.championId,
@@ -172,6 +188,7 @@ export class OverlayManager {
 
   /**
    * Captura la pantalla y envía los aumentos exactos detectados a la interfaz.
+   * Si la detección no arroja resultado o falla, notifica al renderer para desactivar el spinner.
    */
   public async reanalyze(): Promise<boolean> {
     if (!this.state.data || !this.window || this.window.isDestroyed()) {
@@ -188,6 +205,15 @@ export class OverlayManager {
       }
     } catch (err: any) {
       registrarLog(`[OverlayManager] Error durante re-análisis OCR: ${err.message}`);
+    }
+
+    // Notificar al renderer para cancelar el estado 'Escaneando...'
+    if (this.window && !this.window.isDestroyed()) {
+      this.window.webContents.send('overlay:screen-augments', {
+        cards: [null, null, null],
+        bestCardIndex: null,
+        detectedAt: Date.now(),
+      });
     }
     return false;
   }
@@ -251,6 +277,10 @@ export class OverlayManager {
   }
 
   public destroy(): void {
+    if (this.autoDismissTimer) {
+      clearTimeout(this.autoDismissTimer);
+      this.autoDismissTimer = null;
+    }
     globalShortcut.unregister('CommandOrControl+Shift+O');
     globalShortcut.unregister('CommandOrControl+Shift+I');
     this.screenDetector.destroy().catch(() => {});

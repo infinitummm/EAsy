@@ -5,7 +5,9 @@
  * de aumentos del campeón para mostrar el tier exacto abajo de cada carta (estilo Blitz).
  */
 
-import { desktopCapturer, screen } from 'electron';
+import { app, desktopCapturer, screen } from 'electron';
+import path from 'node:path';
+import fs from 'node:fs';
 import { createWorker } from 'tesseract.js';
 import type { AugmentInfo, DatosModoCampeon, TipoModo } from '../../shared/types';
 import { registrarLog } from '../lcu/LcuDetector';
@@ -97,10 +99,48 @@ export class ScreenAugmentDetector {
   private async getWorker(): Promise<any> {
     if (this.worker) return this.worker;
     if (!this.workerPromise) {
-      this.workerPromise = createWorker(['eng', 'spa']).then((w) => {
-        this.worker = w;
-        return w;
-      });
+      this.workerPromise = (async () => {
+        try {
+          const isPackaged = typeof app !== 'undefined' && Boolean(app?.isPackaged);
+          const root = isPackaged && process.resourcesPath
+            ? path.join(process.resourcesPath, 'app.asar.unpacked')
+            : process.cwd();
+
+          const workerPath = path.join(
+            root,
+            'node_modules',
+            'tesseract.js',
+            'src',
+            'worker-script',
+            'node',
+            'index.js'
+          );
+          const corePath = path.join(root, 'node_modules', 'tesseract.js-core');
+          const langPath = root;
+
+          if (!fs.existsSync(workerPath)) {
+            registrarLog(`[ScreenAugmentDetector] Worker OCR no hallado en ${workerPath}. Usando fallback a mejores aumentos.`);
+            return null;
+          }
+
+          const w = await createWorker(['eng', 'spa'], 1, {
+            workerPath,
+            corePath,
+            langPath,
+            cacheMethod: 'none',
+            gzip: false,
+            errorHandler: (err: any) => {
+              registrarLog(`[ScreenAugmentDetector] Notificación worker OCR: ${err?.message || err}`);
+            },
+          });
+          this.worker = w;
+          registrarLog('[ScreenAugmentDetector] Worker Tesseract OCR inicializado con éxito.');
+          return w;
+        } catch (err: any) {
+          registrarLog(`[ScreenAugmentDetector] Advertencia al iniciar worker OCR: ${err?.message || err}`);
+          return null;
+        }
+      })();
     }
     return this.workerPromise;
   }
@@ -116,6 +156,12 @@ export class ScreenAugmentDetector {
     }
 
     try {
+      const worker = await this.getWorker();
+      if (!worker) {
+        // Fallback elegante sin error: el overlay mostrará los mejores aumentos por tier
+        return null;
+      }
+
       const primaryDisplay = screen.getPrimaryDisplay();
       const { width, height } = primaryDisplay.bounds;
 
@@ -130,7 +176,6 @@ export class ScreenAugmentDetector {
       }
 
       const screenImg = sources[0].thumbnail;
-      const worker = await this.getWorker();
 
       // En resolución estándar de LoL:
       // Las 3 cartas están ubicadas en el tercio central verticalmente (y: 26% a 72%)

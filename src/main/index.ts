@@ -8,6 +8,14 @@ import { OpGgClient } from './opgg/OpGgClient';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 (globalThis as any).__dirname = __dirname;
 (globalThis as any).__filename = fileURLToPath(import.meta.url);
+
+// Manejo global de excepciones para evitar cualquier diálogo modal bloqueante en Windows
+process.on('uncaughtException', (err: any) => {
+  console.error('[Main] Excepción no fatal capturada:', err?.message || err);
+});
+process.on('unhandledRejection', (reason: any) => {
+  console.error('[Main] Rechazo de promesa no fatal capturado:', reason?.message || reason);
+});
 import { registrarLcuIpc } from './ipc/lcuIpc';
 import { registrarSettingsIpc } from './ipc/settingsIpc';
 import { setupChampSelectIpc } from './ipc/champSelectIpc';
@@ -384,9 +392,6 @@ app.whenReady().then(async () => {
       overlayManager?.hide();
     } else if (fase === 'InProgress') {
       if (modo === 'aram_mayhem' || modo === 'arena') {
-        // En partida activa de Arena o ARAM Caos, activar automáticamente el selector temporal de aumentos
-        overlayManager?.triggerAugmentSelection(30);
-
         if (!inGamePollingInterval) {
           inGamePollingInterval = setInterval(async () => {
             try {

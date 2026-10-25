@@ -212,6 +212,8 @@ export function OverlayApp() {
       setCountdown((prev) => {
         if (prev <= 1) {
           setCollapsed(true);
+          const api = getApi();
+          api?.overlayHide?.();
           return 0;
         }
         return prev - 1;
@@ -432,7 +434,11 @@ export function OverlayApp() {
         </button>
         <span>•</span>
         <button
-          onClick={() => setCollapsed(true)}
+          onClick={() => {
+            setCollapsed(true);
+            const api = getApi();
+            api?.overlayHide?.();
+          }}
           className="text-red-400 hover:text-red-200 font-bold px-1 cursor-pointer"
           title="Cerrar overlay (Ctrl+Shift+O)"
         >

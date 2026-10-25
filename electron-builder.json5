@@ -9,11 +9,21 @@
   "files": [
     "dist/**/*",
     "package.json",
+    "eng.traineddata",
+    "spa.traineddata",
+    "node_modules/tesseract.js/**/*",
+    "node_modules/tesseract.js-core/**/*",
     "!**/itero.db*",
     "!**/itero.key*",
     "!**/itero.salt*",
     "!**/*.log",
     "!**/tests/**"
+  ],
+  "asarUnpack": [
+    "eng.traineddata",
+    "spa.traineddata",
+    "**/node_modules/tesseract.js/**",
+    "**/node_modules/tesseract.js-core/**"
   ],
   "publish": {
     "provider": "github",

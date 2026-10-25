@@ -502,7 +502,27 @@ export interface AutoAcceptStatusInfo {
 // ==========================================
 // Modos de Juego Especiales (ARAM Caos, Arena) y Augments
 // ==========================================
-export type TipoModo = 'ranked' | 'aram' | 'aram_mayhem' | 'arena';
+export type TipoModo = 'normal' | 'ranked' | 'aram' | 'aram_mayhem' | 'arena';
+
+/**
+ * Devuelve el nombre en español legible del modo de juego para la interfaz.
+ */
+export function obtenerNombreModo(modo: TipoModo | null | undefined): string {
+  switch (modo) {
+    case 'normal':
+      return 'Partida normal';
+    case 'aram_mayhem':
+      return 'ARAM Caos';
+    case 'aram':
+      return 'ARAM normal';
+    case 'arena':
+      return 'Arena';
+    case 'ranked':
+      return 'Clasificatoria';
+    default:
+      return 'Sin partida activa';
+  }
+}
 
 export type TierBadge = 'S+' | 'S' | 'A' | 'B' | 'C' | 'D';
 

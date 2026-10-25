@@ -86,6 +86,15 @@ export const api = {
     ipcRenderer.invoke(IPC_CHANNELS.MODES_GET_CHAMPION_AUGMENTS, params),
   checkBorderless: (installationPath?: string): Promise<{ isBorderless: boolean; windowMode: number; configPath: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.MODES_CHECK_BORDERLESS, installationPath),
+  applyBorderless: (installationPath?: string): Promise<{ success: boolean; configPath: string; previousMode: number }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.MODES_APPLY_BORDERLESS, installationPath),
+  getGameMode: (): Promise<TipoModo | null> =>
+    ipcRenderer.invoke(IPC_CHANNELS.LCU_GET_GAME_MODE),
+  onGameModeChanged: (cb: (mode: TipoModo | null) => void) => {
+    const sub = (_: any, data: any) => cb(data);
+    ipcRenderer.on(IPC_CHANNELS.LCU_GAME_MODE_CHANGED, sub);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.LCU_GAME_MODE_CHANGED, sub);
+  },
   setIgnoreMouseEvents: (ignore: boolean, options?: { forward: boolean }) =>
     ipcRenderer.send('overlay:set-ignore-mouse-events', ignore, options?.forward ?? true),
   onOverlayStateChanged: (cb: (state: OverlayState) => void) => {

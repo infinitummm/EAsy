@@ -29,7 +29,7 @@ import { BorderlessDetector } from './modes/BorderlessDetector';
 import { ModeAugmentService } from './modes/ModeAugmentService';
 import { LiveClientDataClient, detectarModoEnLcu } from './lcu/LiveClientDataClient';
 import type { IModeService } from '../shared/contracts';
-import type { TipoModo } from '../shared/types';
+import type { TipoModo, GameflowPhase } from '../shared/types';
 import { ALL_CHAMPIONS, getChampionById } from '../shared/champions';
 
 
@@ -106,7 +106,7 @@ function createWindow() {
   }
 
   // Enviar estado LCU en cuanto el Renderer termina de cargar
-  const enviarEstadoActual = () => {
+  const enviarEstadoActual = async () => {
     if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
       const estado = lcuClient.getConnectionState();
       const fase = lcuClient.getGameflowPhase();
@@ -114,6 +114,10 @@ function createWindow() {
       mainWindow.webContents.send(IPC_CHANNELS.LCU_STATE_CHANGED, estado);
       mainWindow.webContents.send(IPC_CHANNELS.LCU_GAMEFLOW_CHANGED, fase);
       mainWindow.webContents.send(IPC_CHANNELS.LCU_PERMISSION_ERROR, errorPermisos);
+      try {
+        const modo = await detectarModoEnLcu(lcuClient);
+        mainWindow.webContents.send(IPC_CHANNELS.LCU_GAME_MODE_CHANGED, modo);
+      } catch {}
     }
   };
 
@@ -302,6 +306,10 @@ app.whenReady().then(async () => {
         const ruta = installationPath || dbService?.getSettings().leagueInstallationPath;
         return borderlessDetector!.checkBorderless(ruta);
       },
+      async applyBorderless(installationPath?: string) {
+        const ruta = installationPath || dbService?.getSettings().leagueInstallationPath;
+        return borderlessDetector!.applyBorderless(ruta);
+      },
     };
 
     registrarOverlayIpc(overlayManager, modeService);
@@ -329,46 +337,37 @@ app.whenReady().then(async () => {
     } catch {}
   };
 
-  // Reaccionar a cambios de sesión de selección de campeón
-  lcuClient.on(EVENTOS_LCU_CLIENT.CHAMP_SELECT_SESSION, async (sesion) => {
-    const estado = overlayManager?.getState();
-    if (estado?.visible && estado?.gameMode && (estado.gameMode === 'aram_mayhem' || estado.gameMode === 'arena' || estado.gameMode === 'aram')) {
-      actualizarCampeonSeleccionado(sesion, estado.gameMode);
+  // Función centralizada para evaluar el modo y el estado del juego y sincronizar el overlay
+  const evaluarEstadoPartidaYOverlay = async (faseParam?: GameflowPhase) => {
+    const fase = faseParam ?? lcuClient.getGameflowPhase();
+    let modo: TipoModo | null = null;
+    try {
+      modo = await detectarModoEnLcu(lcuClient);
+    } catch {}
+
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+      mainWindow.webContents.send(IPC_CHANNELS.LCU_GAME_MODE_CHANGED, modo);
     }
-  });
 
-  // Reaccionar a cambios de Gameflow para mostrar/ocultar el overlay automáticamente
-  lcuClient.on(EVENTOS_LCU_CLIENT.GAMEFLOW_CAMBIADO, async (fase) => {
+    borderlessDetector?.checkBorderless().then((res) => {
+      overlayManager?.setBorderless(res.isBorderless);
+    }).catch(() => {});
+
     if (fase === 'ChampSelect') {
-      try {
-        const modo = await detectarModoEnLcu(lcuClient);
-        if (modo === 'aram_mayhem' || modo === 'arena' || modo === 'aram') {
-          borderlessDetector?.checkBorderless().then((res) => {
-            overlayManager?.setBorderless(res.isBorderless);
-          }).catch(() => {});
-
-          try {
-            const csSession = await lcuClient.request<any>('GET', '/lol-champ-select/v1/session');
-            actualizarCampeonSeleccionado(csSession, modo);
-          } catch {
-            overlayManager?.setCampeonYModo(0, '', modo);
-          }
-
-          overlayManager?.show();
+      if (modo === 'aram_mayhem' || modo === 'arena' || modo === 'aram') {
+        try {
+          const csSession = await lcuClient.request<any>('GET', '/lol-champ-select/v1/session');
+          actualizarCampeonSeleccionado(csSession, modo);
+        } catch {
+          overlayManager?.setCampeonYModo(0, '', modo);
         }
-      } catch {}
+        overlayManager?.show();
+      }
     } else if (fase === 'InProgress') {
-      try {
-        const modo = await detectarModoEnLcu(lcuClient);
-        if (modo === 'aram_mayhem' || modo === 'arena' || modo === 'aram') {
-          borderlessDetector?.checkBorderless().then((res) => {
-            overlayManager?.setBorderless(res.isBorderless);
-          }).catch(() => {});
+      if (modo === 'aram_mayhem' || modo === 'arena' || modo === 'aram') {
+        overlayManager?.show();
 
-          overlayManager?.show();
-
-          // Iniciar sondeo in-game con LiveClientDataClient
-          if (inGamePollingInterval) clearInterval(inGamePollingInterval);
+        if (!inGamePollingInterval) {
           inGamePollingInterval = setInterval(async () => {
             try {
               const instantanea = await liveClientDataClient?.obtenerInstantanea(lcuClient);
@@ -380,15 +379,35 @@ app.whenReady().then(async () => {
                 }
               }
             } catch {}
-          }, 2500);
+          }, 2000);
         }
-      } catch {}
-    } else if (fase === 'None' || fase === 'Lobby' || fase === 'EndOfGame') {
+      }
+    } else if (fase === 'None' || fase === 'Lobby' || fase === 'PreEndOfGame' || fase === 'WaitingForStats') {
       if (inGamePollingInterval) {
         clearInterval(inGamePollingInterval);
         inGamePollingInterval = null;
       }
       overlayManager?.hide();
+    }
+  };
+
+  // Reaccionar a cambios de sesión de selección de campeón
+  lcuClient.on(EVENTOS_LCU_CLIENT.CHAMP_SELECT_SESSION, async (sesion) => {
+    const estado = overlayManager?.getState();
+    if (estado?.visible && estado?.gameMode && (estado.gameMode === 'aram_mayhem' || estado.gameMode === 'arena' || estado.gameMode === 'aram')) {
+      actualizarCampeonSeleccionado(sesion, estado.gameMode);
+    }
+  });
+
+  // Reaccionar a cambios de Gameflow
+  lcuClient.on(EVENTOS_LCU_CLIENT.GAMEFLOW_CAMBIADO, async (fase) => {
+    await evaluarEstadoPartidaYOverlay(fase);
+  });
+
+  // Reaccionar a conexión LCU para evaluar inmediatamente el estado
+  lcuClient.on(EVENTOS_LCU_CLIENT.ESTADO_CAMBIADO, async (estado) => {
+    if (estado === 'connected') {
+      await evaluarEstadoPartidaYOverlay();
     }
   });
 

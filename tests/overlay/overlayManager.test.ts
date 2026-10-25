@@ -23,6 +23,7 @@ vi.mock('electron', () => {
     hide = vi.fn(() => { this.isVisible = false; });
     close = vi.fn(() => { this.isDestroyed = vi.fn(() => true); });
     setAlwaysOnTop = vi.fn();
+    moveTop = vi.fn();
     setVisibleOnAllWorkspaces = vi.fn();
     setIgnoreMouseEvents = vi.fn();
     loadURL = vi.fn();
@@ -153,3 +154,4 @@ describe('OverlayManager - Control de Ventana Superpuesta', () => {
     expect(estado.data?.augments[0].tier).toBe('S+');
   });
 });
+

@@ -159,4 +159,5 @@ export interface ILiveClientDataClient {
 export interface IModeService {
   getChampionAugments(championId: number, mode: TipoModo, patch?: string): Promise<DatosModoCampeon>;
   checkBorderless(installationPath?: string): Promise<{ isBorderless: boolean; windowMode: number; configPath: string }>;
+  applyBorderless(installationPath?: string): Promise<{ success: boolean; configPath: string; previousMode: number }>;
 }

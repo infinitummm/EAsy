@@ -7,7 +7,7 @@ import type {
   TierBadge,
   TipoModo,
 } from '@shared/types';
-import { getChampionById } from '@shared/champions';
+import { ALL_CHAMPIONS, getChampionById } from '@shared/champions';
 
 const getApi = () => (typeof window !== 'undefined' ? (window.api || window.electronAPI) : undefined);
 
@@ -99,16 +99,20 @@ export function OverlayApp() {
   const [state, setState] = useState<OverlayState>({
     visible: true,
     isBorderless: true,
-    gameMode: 'aram_mayhem',
-    championId: 266, // Aatrox por defecto para vista previa
+    gameMode: 'arena',
+    championId: 266, // Aatrox por defecto para vista inicial
     championName: 'Aatrox',
     data: null,
     activeAugments: [],
   });
 
+  const [manualChampionId, setManualChampionId] = useState<number | null>(null);
+  const [showChampSearch, setShowChampSearch] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedRarity, setSelectedRarity] = useState<'all' | RarityAugment>('all');
   const [minimized, setMinimized] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [borderlessApplying, setBorderlessApplying] = useState(false);
 
   // Escuchar estado en vivo desde el proceso principal
   useEffect(() => {
@@ -129,16 +133,23 @@ export function OverlayApp() {
     }
   }, []);
 
-  // Cargar datos del campeón si no están presentes y hay un ID válido (> 0)
+  const activeChampionId = manualChampionId ?? (state.championId && state.championId > 0 ? state.championId : 266);
+
+  // Cargar datos de mejoras del campeón
   useEffect(() => {
-    if (state.championId && state.championId > 0 && (!state.data || state.data.championId !== state.championId)) {
+    if (activeChampionId > 0) {
       setLoading(true);
       const api = getApi();
+      const modoConsulta: TipoModo =
+        state.gameMode === 'arena' || state.gameMode === 'aram_mayhem'
+          ? state.gameMode
+          : 'arena';
+
       if (api?.getChampionAugments) {
         api
           .getChampionAugments({
-            championId: state.championId,
-            mode: state.gameMode || 'aram_mayhem',
+            championId: activeChampionId,
+            mode: modoConsulta,
           })
           .then((data: DatosModoCampeon) => {
             if (data) {
@@ -149,13 +160,20 @@ export function OverlayApp() {
           .finally(() => setLoading(false));
       }
     }
-  }, [state.championId, state.gameMode]);
+  }, [activeChampionId, state.gameMode]);
 
   const champion = useMemo(() => {
-    return state.championId ? getChampionById(state.championId) : null;
-  }, [state.championId]);
+    return activeChampionId ? getChampionById(activeChampionId) : null;
+  }, [activeChampionId]);
 
-  // Lista de augments filtrados
+  // Lista de campeones filtrados por la búsqueda manual
+  const championsFiltrados = useMemo(() => {
+    if (!searchQuery.trim()) return ALL_CHAMPIONS.slice(0, 10);
+    const q = searchQuery.toLowerCase().trim();
+    return ALL_CHAMPIONS.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 10);
+  }, [searchQuery]);
+
+  // Lista de augments filtrados por rareza
   const augmentsFiltrados = useMemo(() => {
     const lista = state.data?.augments || [];
     if (selectedRarity === 'all') return lista;
@@ -186,21 +204,35 @@ export function OverlayApp() {
     if (state.gameMode === 'arena') return 'ARENA';
     if (state.gameMode === 'aram_mayhem') return 'ARAM CAOS';
     if (state.gameMode === 'aram') return 'ARAM';
-    return 'COMPETITIVO';
+    if (state.gameMode === 'normal') return 'NORMAL';
+    if (state.gameMode === 'ranked') return 'RANKED';
+    return 'EN PARTIDA';
   }, [state.gameMode]);
+
+  const handleApplyBorderless = async () => {
+    const api = getApi();
+    if (!api?.applyBorderless) return;
+    setBorderlessApplying(true);
+    try {
+      const res = await api.applyBorderless();
+      if (res && res.success) {
+        setState((prev) => ({ ...prev, isBorderless: true }));
+      }
+    } finally {
+      setBorderlessApplying(false);
+    }
+  };
 
   return (
     <div
       className="w-full h-full p-2 select-none font-sans text-gray-100 flex flex-col justify-start"
       onMouseEnter={() => {
-        // Enviar a Electron para habilitar clics sobre la ventana
         const api = getApi();
         if (api?.setIgnoreMouseEvents) {
           api.setIgnoreMouseEvents(false);
         }
       }}
       onMouseLeave={() => {
-        // Permitir que los clics atraviesen si se está fuera
         const api = getApi();
         if (api?.setIgnoreMouseEvents) {
           api.setIgnoreMouseEvents(true, { forward: true });
@@ -240,10 +272,29 @@ export function OverlayApp() {
                 <span className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-500/40">
                   {modeLabel}
                 </span>
+
+                {manualChampionId !== null && (
+                  <button
+                    onClick={() => setManualChampionId(null)}
+                    className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-500/40 hover:bg-amber-900 transition-colors"
+                    title="Restablecer detección automática"
+                  >
+                    Auto
+                  </button>
+                )}
+
+                <button
+                  onClick={() => setShowChampSearch(!showChampSearch)}
+                  className="text-xs text-gray-400 hover:text-cyan-300 p-0.5 rounded hover:bg-cyan-950/40 transition-colors"
+                  title="Cambiar campeón manualmente"
+                >
+                  🔍
+                </button>
               </div>
+
               <p className="text-[11px] text-gray-400 font-mono tracking-tight flex items-center gap-1.5 mt-0.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-                Parche {state.data?.patch || '16.21'} • Tier List de Mejoras
+                Parche {state.data?.patch || '26.20'} • Tier List de Mejoras
               </p>
             </div>
           </div>
@@ -270,11 +321,72 @@ export function OverlayApp() {
           </div>
         </div>
 
+        {/* Buscador Rápido de Campeón Desplegable */}
+        {showChampSearch && (
+          <div className="p-2.5 bg-[#040914] border-b border-cyan-900/60 flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Escribe el nombre del campeón..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1 bg-[#02050b] border border-cyan-700/60 rounded px-2.5 py-1 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-cyan-400"
+                autoFocus
+              />
+              <button
+                onClick={() => {
+                  setShowChampSearch(false);
+                  setSearchQuery('');
+                }}
+                className="text-xs text-gray-400 hover:text-white px-2 py-1"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <div className="max-h-32 overflow-y-auto flex flex-wrap gap-1 custom-scrollbar pt-1">
+              {championsFiltrados.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => {
+                    setManualChampionId(c.id);
+                    setShowChampSearch(false);
+                    setSearchQuery('');
+                  }}
+                  className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${
+                    activeChampionId === c.id
+                      ? 'bg-cyan-600 text-white border-cyan-400 font-bold'
+                      : 'bg-[#091526] text-gray-300 border-cyan-900/40 hover:bg-cyan-950 hover:text-cyan-200'
+                  }`}
+                >
+                  {c.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Alerta de Modo Pantalla Completa si no es Sin Bordes */}
         {!state.isBorderless && (
-          <div className="px-3 py-1.5 bg-amber-950/80 border-b border-amber-600/50 flex items-center gap-2 text-[11px] text-amber-200">
-            <span className="text-amber-400 font-bold">⚠</span>
-            <span>LoL está en pantalla completa. Ponlo en "Sin bordes" para evitar que se oculte.</span>
+          <div className="px-3 py-1.5 bg-amber-950/90 border-b border-amber-600/60 flex items-center justify-between gap-2 text-[11px] text-amber-200">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-amber-400 font-bold shrink-0">⚠</span>
+              <span className="truncate">LoL en pantalla completa: el overlay puede ocultarse.</span>
+            </div>
+            <button
+              onClick={handleApplyBorderless}
+              disabled={borderlessApplying}
+              className="px-2 py-0.5 bg-amber-500 hover:bg-amber-400 text-gray-950 font-black text-[10px] rounded uppercase tracking-wider shrink-0 cursor-pointer shadow disabled:opacity-50"
+            >
+              {borderlessApplying ? '...' : 'Sin bordes'}
+            </button>
+          </div>
+        )}
+
+        {/* Notificación informativa para modos sin aumentos activos (Normal / ARAM regular) */}
+        {(state.gameMode === 'normal' || state.gameMode === 'aram') && (
+          <div className="px-3 py-1 bg-[#06182c] border-b border-cyan-900/40 text-[10px] text-cyan-300/90 flex items-center gap-1 font-mono">
+            <span>ℹ️ Partida {modeLabel.toLowerCase()}: catálogo de mejoras de Arena listo para consulta.</span>
           </div>
         )}
 
@@ -311,7 +423,7 @@ export function OverlayApp() {
                 <div className="py-12 text-center text-cyan-400 font-mono text-xs animate-pulse">
                   Cargando mejoras óptimas...
                 </div>
-              ) : !state.championId || state.championId <= 0 ? (
+              ) : !activeChampionId || activeChampionId <= 0 ? (
                 <div className="py-10 text-center text-cyan-300/80 font-mono text-xs flex flex-col items-center gap-1.5">
                   <span className="text-base animate-pulse">⏳</span>
                   <span>Esperando selección de campeón...</span>
@@ -404,7 +516,7 @@ export function OverlayApp() {
             {/* Pie de Página con Atajo */}
             <div className="p-2 bg-[#03070f] border-t border-cyan-950/60 flex items-center justify-between text-[10px] text-gray-400 font-mono">
               <span>Atajo: [Ctrl + Shift + O]</span>
-              <span className="text-cyan-400">EAsy In-Game</span>
+              <span className="text-cyan-400 font-bold">EAsy In-Game</span>
             </div>
           </div>
         )}

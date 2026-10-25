@@ -114,7 +114,7 @@ describe('detección de modo por cola de la LCU', () => {
       detectarModoPorSesion({
         gameData: { queue: { id: 9999 }, gameMode: 'CLASSIC' },
       })
-    ).toBe('ranked');
+    ).toBe('normal');
     expect(detectarModoPorSesion(null)).toBeNull();
     expect(detectarModoPorSesion({ gameData: null })).toBeNull();
   });
@@ -340,3 +340,4 @@ describe('LiveClientDataClient contra HTTPS autofirmado', () => {
     expect(esHostLocal('192.168.1.10')).toBe(false);
   });
 });
+

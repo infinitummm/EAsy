@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Shield, Swords, User, Settings, Play, Info, RefreshCw } from 'lucide-react';
 import { OnboardingModal } from './components/OnboardingModal';
 import { AboutModal } from './components/AboutModal';
-import type { LcuConnectionState, GameflowPhase, AppSettings, ReadyCheckEvent } from '../shared/types';
+import type { LcuConnectionState, GameflowPhase, AppSettings, ReadyCheckEvent, TipoModo } from '../shared/types';
+import { obtenerNombreModo } from '../shared/types';
 import { DEFAULT_APP_SETTINGS, APP_NAME, formatGameflowPhase } from '../shared/constants';
 import { DashboardView } from './views/DashboardView';
 import { SettingsView } from './views/SettingsView';
@@ -19,6 +20,7 @@ export default function App() {
   const [lastIpcTimestamp, setLastIpcTimestamp] = useState<string>('Esperando...');
   const [lastIpcEvent, setLastIpcEvent] = useState<string>('Ninguno');
   const [gameflow, setGameflow] = useState<GameflowPhase>('None');
+  const [gameMode, setGameMode] = useState<TipoModo | null>(null);
   const [readyCheck, setReadyCheck] = useState<ReadyCheckEvent | null>(null);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
   const [autoAcceptEnabled, setAutoAcceptEnabled] = useState<boolean>(true);
@@ -70,6 +72,12 @@ export default function App() {
       }).catch((err) => {
         setLastConnectionError(`Error en invoke getLcuState: ${err.message}`);
       });
+    }
+
+    if (window.api && window.api.getGameMode) {
+      window.api.getGameMode().then((mode: TipoModo | null) => {
+        setGameMode(mode);
+      }).catch(() => {});
     }
 
     if (window.api && window.api.getAutoAcceptStatus) {
@@ -151,6 +159,12 @@ export default function App() {
         }
       });
 
+      const unsubGameMode = window.api.onGameModeChanged?.((mode: TipoModo | null) => {
+        setGameMode(mode);
+        setLastIpcTimestamp(new Date().toLocaleTimeString());
+        setLastIpcEvent(`lcu:game-mode-changed -> ${mode}`);
+      });
+
       return () => {
         clearInterval(syncInterval);
         unsubLcu();
@@ -158,6 +172,7 @@ export default function App() {
         unsubReadyCheck();
         unsubPerm();
         unsubAutoAccept();
+        unsubGameMode?.();
       };
     }
   }, []);
@@ -319,6 +334,10 @@ export default function App() {
               <span className="font-p3r-head text-[10px] uppercase font-bold">FASE:</span>
               <span className="text-[#00E5FF] font-bold font-mono text-xs">{formatGameflowPhase(gameflow)}</span>
             </div>
+            <div className="text-[11px] text-[#7E9BB8] flex items-center justify-between border-t border-[#16335F] pt-1.5 mt-1">
+              <span className="font-p3r-head text-[10px] uppercase font-bold">MODO:</span>
+              <span className="text-[#FFE277] font-bold font-mono text-xs truncate max-w-[130px]">{obtenerNombreModo(gameMode)}</span>
+            </div>
           </div>
         </div>
       </aside>
@@ -348,6 +367,7 @@ export default function App() {
             lcuState={lcuState}
             mainLcuState={mainLcuState}
             gameflow={gameflow}
+            gameMode={gameMode}
             readyCheck={readyCheck}
             autoAcceptEnabled={autoAcceptEnabled}
             autoAcceptDelay={autoAcceptDelay}

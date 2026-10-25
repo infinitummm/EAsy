@@ -15,7 +15,7 @@
  * `WindowMode`, se devuelve `-1` (desconocido) sin romper el arranque.
  */
 
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { IModeService } from '@shared/contracts';
 import { registrarLog } from '../lcu/LcuDetector';
@@ -25,6 +25,9 @@ export const RUTA_INSTALACION_LOL_POR_DEFECTO = 'C:\\Riot Games\\League of Legen
 
 /** Resultado del contrato `IModeService.checkBorderless`. */
 export type ResultadoBorderless = Awaited<ReturnType<IModeService['checkBorderless']>>;
+
+/** Resultado del contrato `IModeService.applyBorderless`. */
+export type ResultadoApplyBorderless = Awaited<ReturnType<IModeService['applyBorderless']>>;
 
 /** Error al localizar o leer la configuración del juego. */
 export class ErrorConfiguracionLol extends Error {
@@ -43,6 +46,8 @@ export interface OpcionesBorderlessDetector {
   rutaInstalacionPorDefecto?: string;
   /** Lector inyectable para pruebas; por defecto `fs.promises.readFile`. */
   leerArchivo?: (ruta: string) => Promise<string>;
+  /** Escritor inyectable para pruebas; por defecto `fs.promises.writeFile`. */
+  escribirArchivo?: (ruta: string, contenido: string) => Promise<void>;
   /** Registro de avisos; por defecto el log de la LCU. */
   registrar?: (mensaje: string) => void;
 }
@@ -103,13 +108,58 @@ export function extraerWindowMode(contenido: string): number | null {
 }
 
 /**
- * Detector del modo de pantalla. Implementa la mitad de `IModeService`
- * correspondiente a `checkBorderless`; T-8.5 podrá inyectarlo en el facade de
- * modos sin acoplarse al sistema de archivos.
+ * Modifica el valor de `WindowMode` dentro de la sección `[General]` de un archivo INI.
+ * Si la clave ya existe, la reemplaza; si existe la sección pero no la clave, la inserta;
+ * y si no existe la sección `[General]`, la crea.
  */
-export class BorderlessDetector implements Pick<IModeService, 'checkBorderless'> {
+export function modificarWindowMode(contenido: string, nuevoModo = 1): string {
+  const texto = String(contenido ?? '').replace(/^\uFEFF/, '');
+  const lineas = texto.split(/\r?\n/);
+  let indiceGeneral = -1;
+  let indiceWindowMode = -1;
+  let enGeneral = false;
+
+  for (let i = 0; i < lineas.length; i++) {
+    const linea = lineas[i].trim();
+    if (linea.startsWith('[') && linea.endsWith(']')) {
+      const sec = linea.slice(1, -1).trim().toLowerCase();
+      enGeneral = sec === 'general';
+      if (enGeneral && indiceGeneral === -1) {
+        indiceGeneral = i;
+      }
+      continue;
+    }
+
+    if (enGeneral) {
+      const match = linea.match(/^([^=;#]+?)\s*=\s*(.*)$/);
+      if (match && match[1].trim().toLowerCase() === 'windowmode') {
+        indiceWindowMode = i;
+        break;
+      }
+    }
+  }
+
+  if (indiceWindowMode !== -1) {
+    lineas[indiceWindowMode] = `WindowMode=${nuevoModo}`;
+    return lineas.join('\r\n');
+  }
+
+  if (indiceGeneral !== -1) {
+    lineas.splice(indiceGeneral + 1, 0, `WindowMode=${nuevoModo}`);
+    return lineas.join('\r\n');
+  }
+
+  return `[General]\r\nWindowMode=${nuevoModo}\r\n\r\n` + texto;
+}
+
+/**
+ * Detector del modo de pantalla. Implementa `IModeService`
+ * correspondiente a `checkBorderless` y `applyBorderless`.
+ */
+export class BorderlessDetector implements Pick<IModeService, 'checkBorderless' | 'applyBorderless'> {
   private readonly rutaInstalacionPorDefecto: string;
   private readonly leerArchivo: (ruta: string) => Promise<string>;
+  private readonly escribirArchivo: (ruta: string, contenido: string) => Promise<void>;
   private readonly registrar: (mensaje: string) => void;
 
   constructor(opciones: OpcionesBorderlessDetector = {}) {
@@ -118,6 +168,7 @@ export class BorderlessDetector implements Pick<IModeService, 'checkBorderless'>
       process.env.LEAGUE_INSTALL_PATH ??
       RUTA_INSTALACION_LOL_POR_DEFECTO;
     this.leerArchivo = opciones.leerArchivo ?? ((ruta) => readFile(ruta, 'utf8'));
+    this.escribirArchivo = opciones.escribirArchivo ?? ((ruta, cont) => writeFile(ruta, cont, 'utf8'));
     this.registrar = opciones.registrar ?? registrarLog;
   }
 
@@ -154,6 +205,37 @@ export class BorderlessDetector implements Pick<IModeService, 'checkBorderless'>
       isBorderless: windowMode === 1,
       windowMode,
       configPath,
+    };
+  }
+
+  /**
+   * Modifica `game.cfg` para fijar `WindowMode=1` (Sin bordes) de forma segura y automática.
+   */
+  async applyBorderless(installationPath?: string): Promise<ResultadoApplyBorderless> {
+    const configPath = resolverRutaGameCfg(
+      installationPath?.trim() || this.rutaInstalacionPorDefecto
+    );
+
+    let contenido: string;
+    try {
+      contenido = await this.leerArchivo(configPath);
+    } catch (error) {
+      throw new ErrorConfiguracionLol(
+        configPath,
+        `No se pudo leer la configuración del juego en "${configPath}".`,
+        { cause: error }
+      );
+    }
+
+    const previousMode = extraerWindowMode(contenido) ?? -1;
+    const nuevoContenido = modificarWindowMode(contenido, 1);
+    await this.escribirArchivo(configPath, nuevoContenido);
+    this.registrar(`[BorderlessDetector] WindowMode actualizado a 1 (Sin bordes) en "${configPath}".`);
+
+    return {
+      success: true,
+      configPath,
+      previousMode,
     };
   }
 }

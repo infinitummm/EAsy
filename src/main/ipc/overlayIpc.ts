@@ -83,7 +83,24 @@ export function registrarOverlayIpc(
     }
   );
 
-  // 7. Configuración de clics pasantes (Ignore Mouse Events)
+  // 7. Aplicar modo sin bordes (WindowMode=1) en game.cfg
+  ipcMain.handle(
+    IPC_CHANNELS.MODES_APPLY_BORDERLESS,
+    async (_event, installationPath?: string) => {
+      if (modeService?.applyBorderless) {
+        const res = await modeService.applyBorderless(installationPath);
+        overlayManager.setBorderless(true);
+        return res;
+      }
+      return {
+        success: false,
+        configPath: '',
+        previousMode: -1,
+      };
+    }
+  );
+
+  // 8. Configuración de clics pasantes (Ignore Mouse Events)
   ipcMain.on('overlay:set-ignore-mouse-events', (_event, ignore: boolean, forward = true) => {
     overlayManager.setIgnoreMouseEvents(ignore, forward);
   });

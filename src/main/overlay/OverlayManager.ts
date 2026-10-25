@@ -46,7 +46,7 @@ export class OverlayManager {
       hasShadow: false,
       resizable: true,
       skipTaskbar: true,
-      focusable: false,
+      focusable: true,
       show: false,
       backgroundColor: '#00000000',
       webPreferences: {
@@ -57,7 +57,7 @@ export class OverlayManager {
       },
     });
 
-    this.window.setAlwaysOnTop(true, 'screen-saver');
+    this.window.setAlwaysOnTop(true, 'screen-saver', 1);
     this.window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
     // Cargar URL según entorno
@@ -96,6 +96,8 @@ export class OverlayManager {
     }
   }
 
+  private topInterval: NodeJS.Timeout | null = null;
+
   /**
    * Muestra la ventana del overlay sin robar el foco de Windows (`showInactive`).
    */
@@ -103,7 +105,12 @@ export class OverlayManager {
     if (!this.window) this.initialize();
     if (this.window) {
       this.window.showInactive();
+      this.window.setAlwaysOnTop(true, 'screen-saver', 1);
+      if (typeof this.window.moveTop === 'function') {
+        this.window.moveTop();
+      }
       this.state.visible = true;
+      this.iniciarMantenimientoTop();
       this.emitirEstado();
       registrarLog('[OverlayManager] Overlay mostrado (inactivo sin robar foco).');
     }
@@ -114,10 +121,30 @@ export class OverlayManager {
    */
   public hide(): void {
     if (this.window && this.state.visible) {
+      this.detenerMantenimientoTop();
       this.window.hide();
       this.state.visible = false;
       this.emitirEstado();
       registrarLog('[OverlayManager] Overlay ocultado.');
+    }
+  }
+
+  private iniciarMantenimientoTop(): void {
+    if (this.topInterval) clearInterval(this.topInterval);
+    this.topInterval = setInterval(() => {
+      if (this.window && !this.window.isDestroyed() && this.state.visible) {
+        this.window.setAlwaysOnTop(true, 'screen-saver', 1);
+        if (typeof this.window.moveTop === 'function') {
+          this.window.moveTop();
+        }
+      }
+    }, 1500);
+  }
+
+  private detenerMantenimientoTop(): void {
+    if (this.topInterval) {
+      clearInterval(this.topInterval);
+      this.topInterval = null;
     }
   }
 
@@ -189,6 +216,7 @@ export class OverlayManager {
   }
 
   public destroy(): void {
+    this.detenerMantenimientoTop();
     globalShortcut.unregister('CommandOrControl+Shift+O');
     globalShortcut.unregister('CommandOrControl+Shift+I');
     if (this.window && !this.window.isDestroyed()) {

@@ -101,9 +101,12 @@ export function esHostLocal(hostname: string): boolean {
 }
 
 /**
- * Traduce el ID de cola de la LCU al modo de dominio. Solo se mapean las colas
- * verificadas en `docs/VERIFICACION_MODOS.md`; el resto devuelve `null` para
- * no etiquetar modos con datos incorrectos.
+ * Traduce el ID de cola de la LCU al modo de dominio:
+ *  - 2400 -> 'aram_mayhem' (ARAM Caos)
+ *  - 1700, 1710, 1750 -> 'arena' (Arena 2v2v2v2 / 3x6)
+ *  - 450 -> 'aram' (ARAM normal)
+ *  - 420, 440 -> 'ranked' (Clasificatoria Solo/Duo y Flexible)
+ *  - 400, 430, 490, 830, 840, 850 -> 'normal' (Partida normal en la Grieta)
  */
 export function detectarModoPorCola(idCola: number | string | null | undefined): TipoModo | null {
   const id = Number(idCola);
@@ -113,52 +116,118 @@ export function detectarModoPorCola(idCola: number | string | null | undefined):
     case 2400:
       return 'aram_mayhem';
     case 1700:
+    case 1710:
+    case 1750:
       return 'arena';
     case 450:
       return 'aram';
     case 420:
     case 440:
       return 'ranked';
+    case 400: // Normal Reclutamiento (Draft Pick)
+    case 430: // Normal Selección Oculta (Blind Pick)
+    case 490: // Normal Partida Rápida (Quickplay)
+    case 830:
+    case 840:
+    case 850: // Co-op vs IA
+      return 'normal';
     default:
       return null;
   }
 }
 
 /**
- * Detecta el modo a partir de una sesión de Gameflow ya consultada. Se prioriza
- * el ID de cola y, si no está mapeado, se usa `gameMode` como respaldo.
+ * Detecta el modo a partir de la sesión de Gameflow de la LCU.
+ * Prioriza el ID de cola y, si no está en la tabla directa, inspecciona descripciones,
+ * nombres de cola, tipo de mapa e indicador gameMode.
  */
-export function detectarModoPorSesion(sesion: SesionGameflow | null | undefined): TipoModo | null {
-  const porCola = detectarModoPorCola(sesion?.gameData?.queue?.id);
+export function detectarModoPorSesion(sesion: any): TipoModo | null {
+  if (!sesion) return null;
+
+  // 1. Prioridad por ID de cola
+  const idCola = sesion?.gameData?.queue?.id ?? sesion?.gameData?.gameQueueConfigId;
+  const porCola = detectarModoPorCola(idCola);
   if (porCola) return porCola;
 
-  const modoLcu = leerTexto(sesion?.gameData?.gameMode)?.toUpperCase() ?? null;
-  if (modoLcu === 'CHERRY') return 'arena';
-  if (modoLcu === 'ARAM') return 'aram';
-  if (modoLcu === 'CLASSIC') return 'ranked';
+  // 2. Comprobar descripciones y nombres de cola
+  const descQueue = (
+    sesion?.gameData?.queue?.description ??
+    sesion?.gameData?.queue?.name ??
+    sesion?.gameData?.queue?.shortName ??
+    ''
+  ).toLowerCase();
+
+  if (descQueue.includes('arena') || descQueue.includes('cherry')) return 'arena';
+  if (descQueue.includes('mayhem') || descQueue.includes('caos')) return 'aram_mayhem';
+  if (descQueue.includes('aram')) return 'aram';
+
+  // 3. Comprobar identificadores de modo y mapa
+  const modoTexto = (
+    sesion?.gameData?.queue?.gameMode ??
+    sesion?.gameData?.queue?.type ??
+    sesion?.gameData?.gameMode ??
+    sesion?.map?.gameMode ??
+    sesion?.map?.gameModeName ??
+    ''
+  ).toUpperCase();
+
+  const mapId = Number(sesion?.map?.id ?? sesion?.gameData?.queue?.mapId);
+
+  if (modoTexto === 'CHERRY' || mapId === 30) return 'arena';
+  if (modoTexto === 'ARAM_MAYHEM' || modoTexto === 'MAYHEM') return 'aram_mayhem';
+  if (modoTexto === 'ARAM' || mapId === 12) {
+    const mutator = (sesion?.gameData?.queue?.assetMutator ?? sesion?.map?.gameMutator ?? '').toLowerCase();
+    if (mutator.includes('mayhem') || descQueue.includes('mayhem') || descQueue.includes('caos')) {
+      return 'aram_mayhem';
+    }
+    return 'aram';
+  }
+
+  if (modoTexto === 'CLASSIC' || mapId === 11) {
+    if (idCola === 420 || idCola === 440) return 'ranked';
+    return 'normal';
+  }
+
   return null;
 }
 
 /**
- * Consulta `/lol-gameflow/v1/session` en la LCU y traduce la cola. Los fallos
- * son esperables cuando el cliente no está abierto, por lo que se registran y
- * se devuelve `null` en lugar de propagar la excepción.
+ * Consulta la LCU para determinar el modo de juego actual.
+ * Inspecciona `/lol-gameflow/v1/session` y, como respaldo si no hay partida en curso,
+ * consulta `/lol-lobby/v1/lobby` para saber qué modo tiene seleccionado el jugador.
  */
 export async function detectarModoEnLcu(
   lcu: ClienteLcuGameflow,
   registrar: (mensaje: string) => void = registrarLog
 ): Promise<TipoModo | null> {
   try {
-    const sesion = await lcu.request<SesionGameflow | null>('GET', '/lol-gameflow/v1/session');
-    return detectarModoPorSesion(sesion);
+    const sesion = await lcu.request<any>('GET', '/lol-gameflow/v1/session');
+    const modo = detectarModoPorSesion(sesion);
+    if (modo) return modo;
   } catch (error) {
     registrar(
       `[LiveClientData] No se pudo consultar el Gameflow de la LCU: ${
         error instanceof Error ? error.message : String(error)
       }`
     );
-    return null;
   }
+
+  try {
+    const lobby = await lcu.request<any>('GET', '/lol-lobby/v1/lobby');
+    const idCola = lobby?.gameConfig?.queueId;
+    const modoLobby = detectarModoPorCola(idCola);
+    if (modoLobby) return modoLobby;
+
+    const descLobby = (lobby?.gameConfig?.gameMode ?? '').toUpperCase();
+    if (descLobby === 'CHERRY') return 'arena';
+    if (descLobby === 'ARAM') return 'aram';
+    if (descLobby === 'CLASSIC') {
+      if (idCola === 420 || idCola === 440) return 'ranked';
+      return 'normal';
+    }
+  } catch {}
+
+  return null;
 }
 
 /**

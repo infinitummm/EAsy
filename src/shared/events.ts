@@ -30,6 +30,7 @@ export const IPC_CHANNELS = {
   // Eventos emitidos por Main hacia Renderer
   LCU_STATE_CHANGED: 'lcu:state-changed',
   LCU_GAMEFLOW_CHANGED: 'lcu:gameflow-changed',
+  LCU_GAME_MODE_CHANGED: 'lcu:game-mode-changed',
   LCU_READY_CHECK: 'lcu:ready-check',
   LCU_CHAMP_SELECT_SESSION: 'lcu:champ-select-session',
   LCU_PERMISSION_ERROR: 'lcu:permission-error',
@@ -63,6 +64,7 @@ export const IPC_CHANNELS = {
   LCU_CLEAN_APP_ASSETS: 'lcu:clean-app-assets',
   LCU_GET_CLIENT_VERSION: 'lcu:get-client-version',
   LCU_SYNC_LOCAL_ACCOUNT: 'lcu:sync-local-account',
+  LCU_GET_GAME_MODE: 'lcu:get-game-mode',
   SETTINGS_EXPORT_DIAGNOSTIC: 'settings:export-diagnostic',
 
   // Canales de Overlay y Modos Especiales (ARAM Caos / Arena)
@@ -73,6 +75,7 @@ export const IPC_CHANNELS = {
   OVERLAY_STATE_CHANGED: 'overlay:state-changed',
   MODES_GET_CHAMPION_AUGMENTS: 'modes:get-champion-augments',
   MODES_CHECK_BORDERLESS: 'modes:check-borderless',
+  MODES_APPLY_BORDERLESS: 'modes:apply-borderless',
 } as const;
 
 // ==========================================

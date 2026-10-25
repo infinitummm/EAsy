@@ -1,6 +1,17 @@
-import React from 'react';
-import { AlertCircle, Zap, Wifi, WifiOff, Activity } from 'lucide-react';
-import type { LcuConnectionState, GameflowPhase, ReadyCheckEvent } from '../../shared/types';
+import React, { useState, useEffect } from 'react';
+import {
+  AlertCircle,
+  Zap,
+  Wifi,
+  WifiOff,
+  Activity,
+  Swords,
+  Layers,
+  AlertTriangle,
+  CheckCircle2,
+} from 'lucide-react';
+import type { LcuConnectionState, GameflowPhase, ReadyCheckEvent, TipoModo } from '../../shared/types';
+import { obtenerNombreModo } from '../../shared/types';
 import { formatGameflowPhase } from '../../shared/constants';
 import { P3rButton } from '../components/p3r/P3rButton';
 import { P3rBadge } from '../components/p3r/P3rBadge';
@@ -10,6 +21,7 @@ interface DashboardViewProps {
   lcuState: LcuConnectionState;
   mainLcuState?: LcuConnectionState;
   gameflow: GameflowPhase;
+  gameMode?: TipoModo | null;
   readyCheck: ReadyCheckEvent | null;
   autoAcceptEnabled: boolean;
   autoAcceptDelay: number;
@@ -28,6 +40,7 @@ interface DashboardViewProps {
 export const DashboardView: React.FC<DashboardViewProps> = ({
   lcuState,
   gameflow,
+  gameMode,
   readyCheck,
   autoAcceptEnabled,
   autoAcceptDelay,
@@ -36,6 +49,64 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onToggleAutoAccept,
   onChangeDelay,
 }) => {
+  const [borderlessState, setBorderlessState] = useState<{
+    isBorderless: boolean;
+    configPath: string;
+    checked: boolean;
+    applying: boolean;
+    appliedSuccess: boolean;
+  }>({
+    isBorderless: true,
+    configPath: '',
+    checked: false,
+    applying: false,
+    appliedSuccess: false,
+  });
+
+  useEffect(() => {
+    if (window.api?.checkBorderless) {
+      window.api
+        .checkBorderless()
+        .then((res) => {
+          if (res) {
+            setBorderlessState((prev) => ({
+              ...prev,
+              isBorderless: res.isBorderless,
+              configPath: res.configPath,
+              checked: true,
+            }));
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
+
+  const handleApplyBorderless = async () => {
+    if (!window.api?.applyBorderless) return;
+    setBorderlessState((prev) => ({ ...prev, applying: true }));
+    try {
+      const res = await window.api.applyBorderless();
+      if (res && res.success) {
+        setBorderlessState((prev) => ({
+          ...prev,
+          isBorderless: true,
+          applying: false,
+          appliedSuccess: true,
+        }));
+      } else {
+        setBorderlessState((prev) => ({ ...prev, applying: false }));
+      }
+    } catch {
+      setBorderlessState((prev) => ({ ...prev, applying: false }));
+    }
+  };
+
+  const handleToggleOverlay = async () => {
+    if (window.api?.overlayToggle) {
+      await window.api.overlayToggle();
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-8">
       {/* Cabecera con Arte P3R */}
@@ -101,8 +172,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       )}
 
-      {/* Tarjetas de Conexión y Fase */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+      {/* Tarjetas de Conexión, Fase y Modo de Juego */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {/* Conexión */}
         <div className="bg-[#050E20] p-5 border-2 border-[#16335F] p3r-bevel p3r-shadow-hard flex items-center space-x-4">
           <div
@@ -162,6 +233,121 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Modo de juego */}
+        <div className="bg-[#050E20] p-5 border-2 border-[#16335F] p3r-bevel p3r-shadow-hard flex items-center space-x-4">
+          <div className="w-14 h-14 bg-[#FFE277]/15 text-[#FFE277] border-2 border-[#FFE277] flex items-center justify-center transform -skew-x-8 shrink-0">
+            <div className="transform skew-x-8">
+              <Swords className="w-7 h-7" />
+            </div>
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-[#7E9BB8] font-black uppercase tracking-wider font-p3r-head">
+                Modo de juego
+              </span>
+              <P3rBadge
+                label={
+                  gameMode === 'arena'
+                    ? 'Arena'
+                    : gameMode === 'aram_mayhem'
+                    ? 'ARAM Caos'
+                    : gameMode === 'aram'
+                    ? 'ARAM'
+                    : gameMode === 'normal'
+                    ? 'Normal'
+                    : gameMode === 'ranked'
+                    ? 'Ranked'
+                    : 'Sin partida'
+                }
+                variant={
+                  gameMode === 'arena'
+                    ? 'green'
+                    : gameMode === 'aram_mayhem'
+                    ? 'yellow'
+                    : gameMode === 'aram'
+                    ? 'cyan'
+                    : gameMode === 'normal'
+                    ? 'cyan'
+                    : gameMode === 'ranked'
+                    ? 'yellow'
+                    : 'neutral'
+                }
+              />
+            </div>
+            <div className="text-xl font-black font-mono text-white tracking-wider truncate mt-0.5">
+              {obtenerNombreModo(gameMode)}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Panel del Overlay In-Game y Estado de Pantalla de LoL */}
+      <div className="bg-[#050E20] p-6 border-2 border-[#16335F] p3r-bevel p3r-shadow-hard space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className="flex items-center space-x-3">
+              <h3 className="text-lg font-black text-white uppercase tracking-wider font-p3r flex items-center gap-2">
+                <Layers className="w-5 h-5 text-[#00E5FF]" />
+                Overlay In-Game
+              </h3>
+              <P3rBadge
+                label={borderlessState.isBorderless ? 'Listo para superposición' : 'Requiere Sin Bordes'}
+                variant={borderlessState.isBorderless ? 'green' : 'yellow'}
+              />
+            </div>
+            <p className="text-xs text-[#CBD5E1]">
+              Muestra automáticamente los tiers de mejoras (S+/S/A/B/C/D) y porcentajes de Pick Rate sobre el juego en ARAM Caos y Arena.
+            </p>
+            <p className="text-[11px] text-[#7E9BB8] font-mono">
+              Atajo rápido para mostrar u ocultar: <strong className="text-[#00E5FF]">Ctrl + Shift + O</strong>
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 shrink-0">
+            <P3rButton
+              variant="secondary"
+              size="md"
+              onClick={handleToggleOverlay}
+            >
+              Mostrar / Ocultar Overlay
+            </P3rButton>
+          </div>
+        </div>
+
+        {/* Advertencia si LoL está en pantalla completa exclusiva */}
+        {!borderlessState.isBorderless && borderlessState.checked && (
+          <div className="p-4 bg-[#2A1805] border-2 border-[#FFE277] flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs text-[#FFE277] p3r-bevel">
+            <div className="flex items-start space-x-3">
+              <AlertTriangle className="w-5 h-5 text-[#FFE277] shrink-0 mt-0.5" />
+              <div>
+                <strong className="text-white block font-p3r-head uppercase tracking-wider">
+                  LoL está en Pantalla Completa exclusiva
+                </strong>
+                <span className="text-[#CBD5E1] text-[11px] leading-relaxed">
+                  DirectX exclusivo oculta cualquier ventana superpuesta. Para que el overlay se mantenga siempre visible sobre League of Legends, la pantalla debe configurarse en "Sin bordes".
+                </span>
+              </div>
+            </div>
+
+            <P3rButton
+              variant="cyan"
+              size="sm"
+              onClick={handleApplyBorderless}
+              disabled={borderlessState.applying}
+            >
+              {borderlessState.applying ? 'Aplicando...' : 'Configurar LoL en Sin Bordes (1 clic)'}
+            </P3rButton>
+          </div>
+        )}
+
+        {borderlessState.appliedSuccess && (
+          <div className="p-3 bg-[#062615] border border-[#00E676] flex items-center space-x-2 text-xs text-[#00E676]">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span>LoL configurado en "Sin Bordes" con éxito. El overlay se mantendrá siempre por encima del juego.</span>
+          </div>
+        )}
       </div>
 
       {/* Auto-Accept */}

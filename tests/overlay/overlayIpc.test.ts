@@ -63,6 +63,11 @@ describe('overlayIpc - Registro y Respuestas IPC', () => {
       windowMode: 1,
       configPath: path || 'C:\\Riot Games\\League of Legends\\Config\\game.cfg',
     })),
+    applyBorderless: vi.fn(async (path) => ({
+      success: true,
+      configPath: path || 'C:\\Riot Games\\League of Legends\\Config\\game.cfg',
+      previousMode: 0,
+    })),
   };
 
   beforeEach(() => {
@@ -120,3 +125,4 @@ describe('overlayIpc - Registro y Respuestas IPC', () => {
     expect(mockOverlayManager.setIgnoreMouseEvents).toHaveBeenCalledWith(true, false);
   });
 });
+

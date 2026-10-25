@@ -2,7 +2,8 @@ import { ipcMain, WebContents, dialog, BrowserWindow } from 'electron';
 import { IPC_CHANNELS } from '../../shared/events';
 import type { ILcuClient } from '../../shared/contracts';
 import { EVENTOS_LCU_CLIENT, LcuClient } from '../lcu/LcuClient';
-import type { RunePage, LcuStateInfo } from '../../shared/types';
+import type { RunePage, LcuStateInfo, TipoModo } from '../../shared/types';
+import { detectarModoEnLcu } from '../lcu/LiveClientDataClient';
 
 /**
  * Conecta los eventos del cliente LCU con el sistema IPC de Electron.
@@ -20,12 +21,24 @@ export function registrarLcuIpc(lcuClient: ILcuClient, _getWebContents?: () => W
   };
 
   // 1. Escuchar eventos del LcuClient y retransmitirlos a todas las ventanas
-  lcuClient.on(EVENTOS_LCU_CLIENT.ESTADO_CAMBIADO, (estado) => {
+  lcuClient.on(EVENTOS_LCU_CLIENT.ESTADO_CAMBIADO, async (estado) => {
     difundirEvento(IPC_CHANNELS.LCU_STATE_CHANGED, estado);
+    if (estado === 'connected') {
+      try {
+        const modo = await detectarModoEnLcu(lcuClient);
+        difundirEvento(IPC_CHANNELS.LCU_GAME_MODE_CHANGED, modo);
+      } catch {}
+    } else {
+      difundirEvento(IPC_CHANNELS.LCU_GAME_MODE_CHANGED, null);
+    }
   });
 
-  lcuClient.on(EVENTOS_LCU_CLIENT.GAMEFLOW_CAMBIADO, (fase) => {
+  lcuClient.on(EVENTOS_LCU_CLIENT.GAMEFLOW_CAMBIADO, async (fase) => {
     difundirEvento(IPC_CHANNELS.LCU_GAMEFLOW_CHANGED, fase);
+    try {
+      const modo = await detectarModoEnLcu(lcuClient);
+      difundirEvento(IPC_CHANNELS.LCU_GAME_MODE_CHANGED, modo);
+    } catch {}
   });
 
   lcuClient.on(EVENTOS_LCU_CLIENT.READY_CHECK, (readyCheck) => {
@@ -90,5 +103,14 @@ export function registrarLcuIpc(lcuClient: ILcuClient, _getWebContents?: () => W
       lcuClient.setAutoAccept(params.enabled, params.delaySeconds);
     }
   );
+
+  ipcMain.removeHandler(IPC_CHANNELS.LCU_GET_GAME_MODE);
+  ipcMain.handle(IPC_CHANNELS.LCU_GET_GAME_MODE, async (): Promise<TipoModo | null> => {
+    try {
+      return await detectarModoEnLcu(lcuClient);
+    } catch {
+      return null;
+    }
+  });
 }
 

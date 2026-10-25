@@ -19,7 +19,10 @@ import {
   AppSettings,
   RegionalRouting,
   PlatformRouting,
-  PersonalChampionStats
+  PersonalChampionStats,
+  TipoModo,
+  DatosModoCampeon,
+  AugmentInfo,
 } from './types';
 
 // ==========================================
@@ -124,6 +127,8 @@ export interface IDatabaseService {
   getPersonalChampionStats(puuid: string, championId: number, opponentId?: number): PersonalChampionStats | null;
   getMatchupCache(cacheKey: string): GeminiMatchupRecommendation | null;
   setMatchupCache(cacheKey: string, data: GeminiMatchupRecommendation, ttlSeconds?: number): void;
+  getModeCache(cacheKey: string): DatosModoCampeon | null;
+  setModeCache(cacheKey: string, data: DatosModoCampeon, ttlSeconds?: number): void;
   pruneExpiredCache(): number;
   getSettings(): AppSettings;
   saveSettings(settings: Partial<AppSettings>): void;
@@ -137,4 +142,21 @@ export interface IDatabaseService {
 export interface ISecurityService {
   encrypt(plainText: string): string;
   decrypt(cipherText: string): string;
+}
+
+// ==========================================
+// 7. Cliente Live Client Data API (In-Game 127.0.0.1:2999)
+// ==========================================
+export interface ILiveClientDataClient {
+  isGameActive(): Promise<boolean>;
+  getActivePlayer(): Promise<{ summonerName: string; championName: string } | null>;
+  getAllGameData(): Promise<any | null>;
+}
+
+// ==========================================
+// 8. Servicio de Modos y Augments
+// ==========================================
+export interface IModeService {
+  getChampionAugments(championId: number, mode: TipoModo, patch?: string): Promise<DatosModoCampeon>;
+  checkBorderless(installationPath?: string): Promise<{ isBorderless: boolean; windowMode: number; configPath: string }>;
 }

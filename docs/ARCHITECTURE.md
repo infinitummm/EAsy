@@ -217,3 +217,36 @@ Para añadir un nuevo proveedor compatible con OpenAI:
 3. Registrar la instancia en `AiProviderManager.registerProvider(new OpenAiCompatibleProvider({ id: 'groq', baseUrl: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' }))`.
 4. El resto de la aplicación continuará funcionando idénticamente.
 
+
+
+---
+
+## 7. Arquitectura del Overlay In-Game y Modos Especiales (v1.1.0)
+
+### 7.1. Arquitectura Multi-Ventana en Electron
+El sistema opera con dos ventanas coordinadas desde el proceso principal (`src/main/`):
+1. **Ventana Principal (`MainWindow`):**
+   - Interfaz de usuario completa estilo Persona 3 Reload (Dashboard, Selección de Campeón, Ajustes, Historial).
+   - Controla el ciclo de vida de la aplicación y la configuración general.
+2. **Ventana de Overlay (`OverlayWindow`):**
+   - Ventana transparente, sin bordes (`frame: false`), sin sombra (`hasShadow: false`), que flota sobre el juego.
+   - Propiedades de ventana: `alwaysOnTop: true, level: 'screen-saver'`, `skipTaskbar: true`, `focusable: false`.
+   - Control de clics: `setIgnoreMouseEvents(true, { forward: true })` para permitir jugar normalmente sin interferencia de clics. Cuando el cursor entra en zonas interactivas de la tarjeta, se reactiva la interacción mediante eventos `mouseenter` / `mouseleave`.
+
+### 7.2. Detección de Pantalla y Compatibilidad con DirectX
+- DirectX oculta ventanas transparentes superpuestas cuando el juego está en **Pantalla completa exclusiva** (`WindowMode=0`).
+- El servicio `BorderlessDetector` inspecciona `<leaguePath>\Config\game.cfg`. Si detecta `WindowMode === 0`, el sistema informa al usuario para alternar a "Sin bordes" (`WindowMode=1`).
+
+### 7.3. Flujo de Datos para ARAM Caos y Arena
+```mermaid
+flowchart TD
+    LCU[LCU WebSocket / Gameflow] -->|Detecta Queue 2400 / 1700| ModeDetector[Detector de Modo]
+    LCD[Live Client Data API 127.0.0.1:2999] -->|Campeón Activo| ModeDetector
+    ModeDetector --> ModeService[ModeAugmentService]
+    ModeService -->|Consulta SQLite| ModeCache[(mode_cache SQLite)]
+    ModeCache -->|Hit TTL < 24h| OverlayManager
+    ModeCache -->|Miss| Extractor[OP.GG RSC + Community Dragon]
+    Extractor -->|Guarda en SQLite| ModeCache
+    Extractor --> OverlayManager[OverlayManager en Main]
+    OverlayManager -->|IPC overlay:state-changed| OverlayUI[Overlay React UI]
+```

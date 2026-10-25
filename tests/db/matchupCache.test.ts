@@ -176,4 +176,60 @@ describe('MatchupCacheRepo (T-5.1)', () => {
       expect(repo.obtener(266, 84, 'TOP', '14.20')).not.toBeNull();
     });
   });
+  describe('mode_cache (ARAM Caos y Arena)', () => {
+    it('guarda y recupera datos de modo en SQLite', () => {
+      const datos = {
+        championId: 266,
+        championName: 'Aatrox',
+        mode: 'aram_mayhem' as const,
+        patch: '16.21',
+        augments: [
+          {
+            id: 1205,
+            name: 'ADAPt',
+            nameEs: 'A-DA-PH-TARSE',
+            key: 'ARAM_ADAPt',
+            rarity: 'silver' as const,
+            iconUrl: 'https://opgg-static.akamaized.net/meta/images/lol/latest/aram-augment/ADAPt_small.png',
+            desc: 'Convert Bonus Attack Damage to Ability Power',
+            tier: 'S' as const,
+            pickRate: 2.7,
+            winRate: 83.07,
+            isBest: true,
+          },
+        ],
+        suggestedAugments: {
+          silver: [],
+          gold: [],
+          prismatic: [],
+        },
+        lastUpdated: Date.now(),
+      };
+
+      const clave = 'mode:aram_mayhem:266:16.21';
+      bd.setModeCache(clave, datos, 86400);
+
+      const recuperado = bd.getModeCache(clave);
+      expect(recuperado).toEqual(datos);
+    });
+
+    it('expira y poda entradas de modo vencidas', () => {
+      const datos = {
+        championId: 266,
+        championName: 'Aatrox',
+        mode: 'arena' as const,
+        patch: '16.21',
+        augments: [],
+        suggestedAugments: { silver: [], gold: [], prismatic: [] },
+        lastUpdated: Date.now(),
+      };
+
+      const clave = 'mode:arena:266:16.21';
+      bd.setModeCache(clave, datos, 0); // Expira de inmediato
+
+      expect(bd.getModeCache(clave)).toBeNull();
+      const podados = bd.pruneExpiredCache();
+      expect(podados).toBeGreaterThanOrEqual(1);
+    });
+  });
 });

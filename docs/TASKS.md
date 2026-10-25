@@ -77,7 +77,7 @@ Este documento desglosa todas las tareas del proyecto por fases, asignando un ú
 
 ---
 
-## FASE 7: Pulido, Verificación E2E y Empaquetado
+## FASE 7: Verificación E2E y Empaquetado Inicial
 
 | ID | Responsable | Objetivo | Archivos | Dependencias | Criterio de Terminado |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -85,3 +85,17 @@ Este documento desglosa todas las tareas del proyecto por fases, asignando un ú
 | **T-7.2** | ANTIGRAVITY | Refinamiento de UI/UX, animaciones, modo oscuro y estados de error | `src/renderer/**/*` | Todas las vistas | Interfaz responsiva, sin parpadeos, con retroalimentación clara de estados de red y errores. |
 | **T-7.3** | ANTIGRAVITY | Configuración de empaquetado para Windows (.exe) con Electron Builder | `package.json`, `electron-builder.json5` | T-7.1, T-7.2 | Generación exitosa de ejecutable local sin dependencias externas. |
 | **T-7.4** | ANTIGRAVITY | Revisión final de contratos, pruebas de humo y entrega al usuario | `docs/` | T-7.3 | Reporte de finalización de proyecto y verificación de todos los requisitos de SPEC.md. |
+
+---
+
+## FASE 8: Modos Especiales (ARAM Caos y Arena) y Overlay In-Game (v1.1.0)
+
+| ID | Responsable | Objetivo | Archivos | Dependencias | Criterio de Terminado |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **T-8.1** | ANTIGRAVITY | Sondeo Fase 0 y Contratos de Dominio (`TipoModo`, `AugmentInfo`, `DatosModoCampeon`, Canales IPC, DB `mode_cache`) | `docs/VERIFICACION_MODOS.md`, `src/shared/*`, `src/main/db/schema.sql`, `src/main/db/DatabaseService.ts` | T-7.4 | Pruebas de sondeo verificadas, tipos y eventos definidos, compilación limpia y pruebas unitarias de caché de modo pasando. |
+| **T-8.2** | OPENCODE | Cliente Live Client Data API (`https://127.0.0.1:2999`) y detector de modo en LCU | `src/main/lcu/LiveClientDataClient.ts`, `tests/lcu/liveClientData.test.ts` | T-8.1 | Conexión HTTPS autofirmada, sondeo de `/liveclientdata/activeplayer` y `/allgamedata`; detección de cola 2400 (Mayhem) y 1700 (Arena). |
+| **T-8.3** | OPENCODE | Servicio de Augments de Modos (`ModeAugmentService`) con catálogo OP.GG y Community Dragon en caché SQLite | `src/main/modes/ModeAugmentService.ts`, `tests/modes/modeAugments.test.ts` | T-8.1 | Extrae augments reales con tier, pick rate y recomendación óptima para el campeón; almacena en `mode_cache` (TTL 24h). |
+| **T-8.4** | OPENCODE | Verificador de pantalla sin bordes (`BorderlessDetector`) en `game.cfg` | `src/main/modes/BorderlessDetector.ts`, `tests/modes/borderless.test.ts` | T-8.1 | Lee `[General] WindowMode` en `<leaguePath>\Config\game.cfg`; alerta si está en fullscreen (0) y valida borderless (1). |
+| **T-8.5** | ANTIGRAVITY | Ventana Electron Overlay (Transparente, Always-on-top, Click-through e Inactive) | `src/main/overlay/OverlayManager.ts`, `src/main/index.ts` | T-8.2, T-8.4 | Ventana `frame:false`, `transparent:true`, atajos globales `Ctrl+Shift+O`, control de opacidad e ignoreMouseEvents. |
+| **T-8.6** | ANTIGRAVITY | Componentes React Overlay UI (Tarjeta Blitz, Badge de Tier Dorado/Plateado, Pick Rate Cian) | `src/overlay/*`, `overlay.html`, `vite.config.ts` | T-8.3, T-8.5 | Tarjeta visual con estética P3R/Blitz, nombre del campeón, tier badges coloreados, pick rate cian y distinción de la mejor opción. |
+| **T-8.7** | ANTIGRAVITY | Verificación integral, suite completa de tests y build de producción v1.1.0 | `tests/*`, `dist/` | T-8.6 | 100% tests pasando (`vitest run`), `tsc --noEmit` limpio, y empaquetado sin errores. |

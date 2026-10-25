@@ -40,3 +40,4 @@ itero-diagnostic-*.json
 .env.local
 .DS_Store
 Thumbs.db
+scratch/

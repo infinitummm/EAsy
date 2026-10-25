@@ -183,13 +183,25 @@ export class OpGgClient {
    * Clave para análisis general por campeón y rol con Elo (soporta tier):
    * `opgg:general:{campeón}:{posición}:{elo}:{parche}`
    */
+  /**
+   * Resuelve dinámicamente el parche a partir del traductor o el parámetro provisto.
+   */
+  public resolverParche(patch?: string): string {
+    if (patch && patch.trim()) return patch;
+    const versionTranslator = this.translator?.getPatchVersion();
+    if (versionTranslator && versionTranslator.trim()) {
+      return versionTranslator.split('.').slice(0, 2).join('.');
+    }
+    return '26.20';
+  }
+
   public construirClaveGeneral(
     championId: number,
     role: Role,
     elo: string = 'emerald_plus',
-    patch: string = '26.20'
+    patch?: string
   ): string {
-    const normPatch = patch.split('.').slice(0, 2).join('.');
+    const normPatch = this.resolverParche(patch).split('.').slice(0, 2).join('.');
     const pos = roleToOpGgPosition(role);
     return `opgg:general:${championId}:${pos}:${elo}:${normPatch}`;
   }
@@ -202,9 +214,9 @@ export class OpGgClient {
     championId: number,
     role: Role,
     opponentId: number,
-    patch: string = '26.20'
+    patch?: string
   ): string {
-    const normPatch = patch.split('.').slice(0, 2).join('.');
+    const normPatch = this.resolverParche(patch).split('.').slice(0, 2).join('.');
     const pos = roleToOpGgPosition(role);
     return `opgg:matchup:${championId}:${pos}:${opponentId}:${normPatch}`;
   }
@@ -215,9 +227,9 @@ export class OpGgClient {
     role: Role,
     opponentId: number | undefined,
     elo: string = 'emerald_plus',
-    patch: string = '26.20'
+    patch?: string
   ): string {
-    const normPatch = patch.split('.').slice(0, 2).join('.');
+    const normPatch = this.resolverParche(patch).split('.').slice(0, 2).join('.');
     const oppPart = opponentId ? String(opponentId) : 'none';
     const pos = roleToOpGgPosition(role);
     return `opgg:${championId}:${pos}:${oppPart}:${elo}:${normPatch}`;
@@ -236,7 +248,7 @@ export class OpGgClient {
   }): Promise<OpGgMatchupData> {
     const { championId, role, forceRefresh } = params;
     const elo = params.elo || 'emerald_plus';
-    const patch = params.patch || '26.20';
+    const patch = this.resolverParche(params.patch);
     const cacheKey = this.construirClaveGeneral(championId, role, elo, patch);
 
     if (!forceRefresh && this.dbService) {
@@ -319,7 +331,7 @@ export class OpGgClient {
    */
   public async getLaneMatchupGuide(params: OpGgRequestParams): Promise<OpGgMatchupData> {
     const { championId, opponentId, role, forceRefresh } = params;
-    const patch = params.patch || '26.20';
+    const patch = this.resolverParche(params.patch);
     const elo = params.elo || 'emerald_plus';
 
     // Si no hay rival, delegar directamente a la build general
@@ -402,7 +414,7 @@ export class OpGgClient {
   public async warmupPreferredChampions(
     preferences: Record<Role, { preferredChampions: number[] }>,
     elo: string = 'emerald_plus',
-    patch: string = '26.20'
+    patch?: string
   ): Promise<number> {
     let warmed = 0;
     const roles: Role[] = ['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY'];

@@ -9,7 +9,10 @@ import {
   LcuDetectionReport,
   LcuConnectionState,
   GameflowPhase,
-  LcuStateInfo
+  LcuStateInfo,
+  TipoModo,
+  OverlayState,
+  DatosModoCampeon,
 } from '../shared/types';
 
 export const api = {
@@ -69,6 +72,25 @@ export const api = {
     ipcRenderer.invoke(IPC_CHANNELS.LCU_SYNC_LOCAL_ACCOUNT),
   exportDiagnostic: () =>
     ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_EXPORT_DIAGNOSTIC),
+
+  // In-Game Overlay y Modos Especiales (ARAM Caos / Arena)
+  overlayShow: (): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.OVERLAY_SHOW),
+  overlayHide: (): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.OVERLAY_HIDE),
+  overlayToggle: (): Promise<{ visible: boolean }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.OVERLAY_TOGGLE),
+  overlayGetState: (): Promise<OverlayState> =>
+    ipcRenderer.invoke(IPC_CHANNELS.OVERLAY_GET_STATE),
+  getChampionAugments: (params: { championId: number; mode: TipoModo; patch?: string }): Promise<DatosModoCampeon> =>
+    ipcRenderer.invoke(IPC_CHANNELS.MODES_GET_CHAMPION_AUGMENTS, params),
+  checkBorderless: (installationPath?: string): Promise<{ isBorderless: boolean; windowMode: number; configPath: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.MODES_CHECK_BORDERLESS, installationPath),
+  onOverlayStateChanged: (cb: (state: OverlayState) => void) => {
+    const sub = (_: any, data: any) => cb(data);
+    ipcRenderer.on(IPC_CHANNELS.OVERLAY_STATE_CHANGED, sub);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.OVERLAY_STATE_CHANGED, sub);
+  },
 
   // AutoUpdater
   checkForUpdates: () => ipcRenderer.invoke('app:check-for-updates'),

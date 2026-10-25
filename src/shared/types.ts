@@ -500,6 +500,49 @@ export interface AutoAcceptStatusInfo {
 }
 
 // ==========================================
+// Modos de Juego Especiales (ARAM Caos, Arena) y Augments
+// ==========================================
+export type TipoModo = 'ranked' | 'aram' | 'aram_mayhem' | 'arena';
+
+export type TierBadge = 'S+' | 'S' | 'A' | 'B' | 'C' | 'D';
+
+export type RarityAugment = 'silver' | 'gold' | 'prismatic';
+
+export interface AugmentInfo {
+  id: number;
+  name: string;
+  nameEs: string;
+  key: string;
+  rarity: RarityAugment;
+  iconUrl: string;
+  desc: string;
+  tier: TierBadge;
+  pickRate: number; // Porcentaje, ej. 8.6
+  winRate?: number;
+  isBest?: boolean;
+}
+
+export interface DatosModoCampeon {
+  championId: number;
+  championName: string;
+  mode: TipoModo;
+  patch: string;
+  augments: AugmentInfo[];
+  suggestedAugments: Record<RarityAugment, AugmentInfo[]>;
+  lastUpdated: number;
+}
+
+export interface OverlayState {
+  visible: boolean;
+  isBorderless: boolean;
+  gameMode: TipoModo | null;
+  championId: number | null;
+  championName: string | null;
+  data: DatosModoCampeon | null;
+  activeAugments: AugmentInfo[];
+}
+
+// ==========================================
 // Recomendaciones de Draft / Champ Select en vivo
 // ==========================================
 export interface PickRecommendationItem {

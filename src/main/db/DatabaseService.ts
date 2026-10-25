@@ -19,6 +19,7 @@ import { getChampionName } from '@shared/champions';
 import type { AccountEntity, IDatabaseService } from '@shared/contracts';
 import type {
   AppSettings,
+  DatosModoCampeon,
   GeminiMatchupRecommendation,
   ParsedMatchSummary,
   Role,
@@ -570,11 +571,61 @@ export class DatabaseService implements IDatabaseService {
     );
   }
 
+  // ---------- Caché de modos especiales (ARAM Caos / Arena) ----------
+
+  getModeCache(cacheKey: string): DatosModoCampeon | null {
+    const fila = this.sentencia(
+      'SELECT data_json, expires_at FROM mode_cache WHERE cache_key = ?'
+    ).get(cacheKey);
+
+    if (!fila || aNumero(fila.expires_at) <= Date.now()) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(aTexto(fila.data_json)) as DatosModoCampeon;
+    } catch {
+      return null;
+    }
+  }
+
+  setModeCache(
+    cacheKey: string,
+    data: DatosModoCampeon,
+    ttlSeconds: number = 24 * 60 * 60
+  ): void {
+    const ahora = Date.now();
+    const ttl = Number.isFinite(ttlSeconds) ? Math.max(0, ttlSeconds) : 24 * 60 * 60;
+
+    this.sentencia(
+      `INSERT OR REPLACE INTO mode_cache
+         (cache_key, mode, champion_id, patch_version, data_json, created_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      cacheKey,
+      data.mode,
+      data.championId,
+      data.patch,
+      JSON.stringify(data),
+      ahora,
+      ahora + ttl * 1000
+    );
+  }
+
   /** Elimina las entradas expiradas y devuelve cuántas se borraron. */
   pruneExpiredCache(): number {
-    const resultado = this.sentencia('DELETE FROM matchup_cache WHERE expires_at <= ?').run(Date.now());
-    return Number(resultado.changes);
+    const ahora = Date.now();
+    const res1 = this.sentencia('DELETE FROM matchup_cache WHERE expires_at <= ?').run(ahora);
+    let total = Number(res1.changes);
+    try {
+      const res2 = this.sentencia('DELETE FROM mode_cache WHERE expires_at <= ?').run(ahora);
+      total += Number(res2.changes);
+    } catch {
+      // Ignorar si la tabla no existiera
+    }
+    return total;
   }
+
 
   // ---------- Ajustes ----------
 

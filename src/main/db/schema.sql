@@ -73,6 +73,19 @@ CREATE TABLE IF NOT EXISTS matchup_cache (
 
 CREATE INDEX IF NOT EXISTS idx_matchup_cache_expires ON matchup_cache(expires_at);
 
+-- Caché Persistente para Modos Especiales (ARAM Caos / Arena)
+CREATE TABLE IF NOT EXISTS mode_cache (
+    cache_key TEXT PRIMARY KEY,
+    mode TEXT NOT NULL,
+    champion_id INTEGER NOT NULL,
+    patch_version TEXT NOT NULL,
+    data_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_mode_cache_expires ON mode_cache(expires_at);
+
 -- Tabla Clave-Valor para Configuraciones Locales
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,

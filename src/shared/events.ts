@@ -17,6 +17,9 @@ import {
   ParsedMatchSummary,
   LcuDetectionReport,
   LcuStateInfo,
+  TipoModo,
+  DatosModoCampeon,
+  OverlayState,
 } from './types';
 import { AccountEntity, KeyHealthStatus } from './contracts';
 
@@ -61,6 +64,15 @@ export const IPC_CHANNELS = {
   LCU_GET_CLIENT_VERSION: 'lcu:get-client-version',
   LCU_SYNC_LOCAL_ACCOUNT: 'lcu:sync-local-account',
   SETTINGS_EXPORT_DIAGNOSTIC: 'settings:export-diagnostic',
+
+  // Canales de Overlay y Modos Especiales (ARAM Caos / Arena)
+  OVERLAY_SHOW: 'overlay:show',
+  OVERLAY_HIDE: 'overlay:hide',
+  OVERLAY_TOGGLE: 'overlay:toggle',
+  OVERLAY_GET_STATE: 'overlay:get-state',
+  OVERLAY_STATE_CHANGED: 'overlay:state-changed',
+  MODES_GET_CHAMPION_AUGMENTS: 'modes:get-champion-augments',
+  MODES_CHECK_BORDERLESS: 'modes:check-borderless',
 } as const;
 
 // ==========================================
@@ -132,6 +144,20 @@ export interface IpcInvokeHandlers {
   [IPC_CHANNELS.LCU_GET_CLIENT_VERSION]: () => Promise<{ clientVersion?: string; ddragonVersion: string; matches: boolean; displayPatch: string }>;
   [IPC_CHANNELS.LCU_SYNC_LOCAL_ACCOUNT]: () => Promise<{ success: boolean; account?: AccountEntity; error?: string }>;
   [IPC_CHANNELS.SETTINGS_EXPORT_DIAGNOSTIC]: () => Promise<{ success: boolean; filePath?: string; error?: string }>;
+  [IPC_CHANNELS.OVERLAY_SHOW]: () => Promise<{ success: boolean }>;
+  [IPC_CHANNELS.OVERLAY_HIDE]: () => Promise<{ success: boolean }>;
+  [IPC_CHANNELS.OVERLAY_TOGGLE]: () => Promise<{ visible: boolean }>;
+  [IPC_CHANNELS.OVERLAY_GET_STATE]: () => Promise<OverlayState>;
+  [IPC_CHANNELS.MODES_GET_CHAMPION_AUGMENTS]: (params: {
+    championId: number;
+    mode: TipoModo;
+    patch?: string;
+  }) => Promise<DatosModoCampeon>;
+  [IPC_CHANNELS.MODES_CHECK_BORDERLESS]: (installationPath?: string) => Promise<{
+    isBorderless: boolean;
+    windowMode: number;
+    configPath: string;
+  }>;
 }
 
 // ==========================================
@@ -146,4 +172,5 @@ export interface IpcEventPayloads {
   [IPC_CHANNELS.LCU_AUTO_ACCEPT_EVENT]: { action: string; timestamp: number; delay?: number };
   [IPC_CHANNELS.RIOT_KEY_WARNING]: KeyHealthStatus;
   [IPC_CHANNELS.API_QUOTA_UPDATED]: { riotCount: number; geminiCount: number };
+  [IPC_CHANNELS.OVERLAY_STATE_CHANGED]: OverlayState;
 }

@@ -616,3 +616,112 @@ export interface IpcApiContract {
   }) => Promise<GeminiMatchupRecommendation>;
 }
 ```
+
+
+---
+
+## 5. Contratos para Modos Especiales (ARAM Caos y Arena) y Overlay In-Game (v1.1.0)
+
+### 5.1. Tipos de Dominio de Modos y Augments (`src/shared/types.ts`)
+
+```typescript
+export type TipoModo = 'ranked' | 'aram' | 'aram_mayhem' | 'arena';
+
+export type TierBadge = 'S+' | 'S' | 'A' | 'B' | 'C' | 'D';
+
+export type RarityAugment = 'silver' | 'gold' | 'prismatic';
+
+export interface AugmentInfo {
+  id: number;
+  name: string;
+  nameEs: string;
+  key: string;
+  rarity: RarityAugment;
+  iconUrl: string;
+  desc: string;
+  tier: TierBadge;
+  pickRate: number; // Porcentaje directo, ej. 8.6 (%)
+  winRate?: number;
+  isBest?: boolean;
+}
+
+export interface DatosModoCampeon {
+  championId: number;
+  championName: string;
+  mode: TipoModo;
+  patch: string;
+  augments: AugmentInfo[];
+  suggestedAugments: Record<RarityAugment, AugmentInfo[]>;
+  lastUpdated: number;
+}
+
+export interface OverlayState {
+  visible: boolean;
+  isBorderless: boolean;
+  gameMode: TipoModo | null;
+  championId: number | null;
+  championName: string | null;
+  data: DatosModoCampeon | null;
+  activeAugments: AugmentInfo[];
+}
+```
+
+### 5.2. Esquema DDL de Caché de Modos (`src/main/db/schema.sql`)
+
+```sql
+CREATE TABLE IF NOT EXISTS mode_cache (
+    cache_key TEXT PRIMARY KEY, -- ej. mode:aram_mayhem:266:16.21
+    mode TEXT NOT NULL,
+    champion_id INTEGER NOT NULL,
+    patch_version TEXT NOT NULL,
+    data_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_mode_cache_expires ON mode_cache(expires_at);
+```
+
+### 5.3. Interfaz de Base de Datos Extendida (`src/shared/contracts.ts`)
+
+```typescript
+export interface IDatabaseService {
+  // ... métodos existentes ...
+  getModeCache(cacheKey: string): DatosModoCampeon | null;
+  setModeCache(cacheKey: string, data: DatosModoCampeon, ttlSeconds?: number): void;
+}
+```
+
+### 5.4. Cliente Live Client Data API (`src/shared/contracts.ts`)
+
+```typescript
+export interface ILiveClientDataClient {
+  isGameActive(): Promise<boolean>;
+  getActivePlayer(): Promise<{ summonerName: string; championName: string } | null>;
+  getAllGameData(): Promise<any | null>;
+}
+```
+
+### 5.5. Servicio de Modos y Augments (`src/shared/contracts.ts`)
+
+```typescript
+export interface IModeService {
+  getChampionAugments(championId: number, mode: TipoModo, patch?: string): Promise<DatosModoCampeon>;
+  checkBorderless(installationPath?: string): Promise<{ isBorderless: boolean; windowMode: number; configPath: string }>;
+}
+```
+
+### 5.6. Canales IPC de Overlay y Modos (`src/shared/events.ts`)
+
+```typescript
+export const IPC_CHANNELS = {
+  // ... existentes ...
+  OVERLAY_SHOW: 'overlay:show',
+  OVERLAY_HIDE: 'overlay:hide',
+  OVERLAY_TOGGLE: 'overlay:toggle',
+  OVERLAY_GET_STATE: 'overlay:get-state',
+  OVERLAY_STATE_CHANGED: 'overlay:state-changed',
+  MODES_GET_CHAMPION_AUGMENTS: 'modes:get-champion-augments',
+  MODES_CHECK_BORDERLESS: 'modes:check-borderless',
+};
+```

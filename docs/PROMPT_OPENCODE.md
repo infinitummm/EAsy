@@ -94,3 +94,33 @@ Ninguna tarea se considera terminada sin su suite de tests automatizados:
 - **Cero lectura de memoria o inyección DLL:** Todo acceso al cliente se realiza mediante LCU API (lockfile + WSS/HTTPS local).
 - **Cifrado local:** Las API keys deben cifrarse con AES-256-GCM antes de persistirse en SQLite (`src/main/security/`).
 - **Idioma:** Todo el código, nombres de variables públicas, mensajes de log y comentarios deben estar redactados en **español**.
+
+
+---
+
+## 7. FASE 8: Modos Especiales (ARAM Caos y Arena) y Soporte Overlay (v1.1.0)
+
+¡Nuevas tareas asignadas a OpenCode para la versión 1.1.0!
+
+### Tareas Asignadas:
+1. **T-8.2:** Implementar `LiveClientDataClient` (`src/main/lcu/LiveClientDataClient.ts`, `tests/lcu/liveClientData.test.ts`)
+   - Cliente HTTPS hacia `https://127.0.0.1:2999` con `rejectUnauthorized: false`.
+   - Consulta `/liveclientdata/activeplayer` y `/liveclientdata/allgamedata`.
+   - Manejo elegante de fallo cuando el juego no está en partida activa.
+   - Detecta colas 2400 (ARAM Caos / Mayhem) y 1700 (Arena / Cherry) vía LCU gameflow.
+
+2. **T-8.3:** Implementar `ModeAugmentService` (`src/main/modes/ModeAugmentService.ts`, `tests/modes/modeAugments.test.ts`)
+   - Obtiene augments para un campeón en ARAM Caos y Arena.
+   - Consulta `mode_cache` en SQLite antes de red (TTL 24h).
+   - Extrae catálogo de OP.GG RSC (`https://op.gg/lol/modes/aram-mayhem`) y cruza con nombres en español de Community Dragon (`cherry-augments.json`).
+   - Asigna Tiers deterministas (`0=S+`, `1=S`, `2=A`, `3=B`, `4=C`, `5=D`), Pick Rates y marca el mejor augment (`isBest: true`).
+
+3. **T-8.4:** Implementar `BorderlessDetector` (`src/main/modes/BorderlessDetector.ts`, `tests/modes/borderless.test.ts`)
+   - Lee `<leaguePath>\Config\game.cfg`.
+   - Parsea la sección `[General]` y extrae `WindowMode`.
+   - Devuelve `{ isBorderless: boolean, windowMode: number, configPath: string }` (`WindowMode === 1` es borderless).
+
+### Comando Inicial para Fase 8:
+```bash
+git merge main
+```

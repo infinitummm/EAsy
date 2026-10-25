@@ -143,3 +143,24 @@ El diseño prioriza la simplicidad, la resiliencia, la ejecución 100% local y e
 - En caso de caída de internet o falta de API keys, las funciones de LCU (auto-accept, auto-pick, lectura de sesión) continúan operando con datos locales y presets almacenados.
 - El sistema no degrada los FPS ni interfiere con la ejecución de *League of Legends*.
 - El 100% de los textos, menús y comentarios de código están escritos en español.
+
+
+---
+
+### 3.7. Modos Especiales (ARAM Caos y Arena) y Overlay In-Game (v1.1.0)
+
+1. **Overlay In-Game Superpuesto:**
+   - Ventana Electron transparente, sin marco (`frame: false`), sin sombra (`hasShadow: false`), fijada en capa superior (`setAlwaysOnTop(true, 'screen-saver')`), no enfocable (`focusable: false`), con soporte de paso de clics (`setIgnoreMouseEvents(true, { forward: true })`).
+   - Atajos globales configurables (`Ctrl+Shift+O` para alternar visibilidad, `Ctrl+Shift+I` para ocultar).
+   - Verificación proactiva de modo de pantalla en `game.cfg` (`WindowMode === 1` para Sin Bordes).
+
+2. **Detección Automática de Modo y Campeón:**
+   - Detección de colas LCU: Cola 2400 (ARAM Caos / Mayhem) y Cola 1700 (Arena / Cherry).
+   - Consulta opcional a Live Client Data API local (`https://127.0.0.1:2999/liveclientdata/activeplayer`) durante la partida activa sin credenciales.
+
+3. **Recomendaciones de Mejoras (Augments):**
+   - Catálogo exhaustivo de augments (306+ mejoras) extraído de estadísticas oficiales de OP.GG y traducido al español neutro mediante Community Dragon.
+   - Clasificación por Tier: `S+` (Dorado brillante), `S` (Dorado), `A` (Azul eléctrico), `B` (Verde esmeralda), `C` (Naranja/bronce), `D` (Gris).
+   - Muestra directa de Pick Rate en cian brillante (ej. `12.4%`).
+   - Resaltado estético evidente para la mejor opción de cada categoría/rareza (Plata, Oro, Prismático).
+   - Almacenamiento local en SQLite (`mode_cache`) con vigencia TTL de 24 horas.

@@ -211,25 +211,28 @@ app.whenReady().then(async () => {
     opggClient = new OpGgClient({
       dbService: dbService || undefined,
       translator: dataDragonTranslator,
+      dataDragonService,
     });
 
-    // Precalentamiento en segundo plano de builds generales para campeones preferidos (B5)
+    // Precalentamiento diferido y condicional (solo si habilitado expresamente y no durante partida)
     const currentDb = dbService;
     if (opggClient && currentDb) {
       setTimeout(() => {
         try {
           const settings = currentDb.getSettings();
-          if (settings?.autoChampSelect?.rolePreferences) {
+          // Desactivado por defecto para evitar congestión de red y micro-lag (Optimización de Rendimiento)
+          if ((settings as any)?.enableOpGgWarmup && settings?.autoChampSelect?.rolePreferences) {
+            const parche = dataDragonService?.obtenerVersionEnMemoria()?.split('.').slice(0, 2).join('.') || undefined;
             void opggClient?.warmupPreferredChampions(
               settings.autoChampSelect.rolePreferences,
               settings.opggTier || 'emerald_plus',
-              '26.20'
+              parche
             ).catch((e) => {
               console.warn('[Main] Error en warmup de campeones:', e);
             });
           }
         } catch {}
-      }, 2000);
+      }, 15000);
     }
 
     // Carga no bloqueante del catálogo de campeones y diccionarios

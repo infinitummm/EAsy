@@ -221,32 +221,42 @@ Para añadir un nuevo proveedor compatible con OpenAI:
 
 ---
 
-## 7. Arquitectura del Overlay In-Game y Modos Especiales (v1.1.0)
+## 8. Arquitectura del Visor Ligero In-Game y Optimización de Rendimiento (v1.1.0)
 
-### 7.1. Arquitectura Multi-Ventana en Electron
-El sistema opera con dos ventanas coordinadas desde el proceso principal (`src/main/`):
-1. **Ventana Principal (`MainWindow`):**
-   - Interfaz de usuario completa estilo Persona 3 Reload (Dashboard, Selección de Campeón, Ajustes, Historial).
-   - Controla el ciclo de vida de la aplicación y la configuración general.
-2. **Ventana de Overlay (`OverlayWindow`):**
-   - Ventana transparente, sin bordes (`frame: false`), sin sombra (`hasShadow: false`), que flota sobre el juego.
-   - Propiedades de ventana: `alwaysOnTop: true, level: 'screen-saver'`, `skipTaskbar: true`, `focusable: false`.
-   - Control de clics: `setIgnoreMouseEvents(true, { forward: true })` para permitir jugar normalmente sin interferencia de clics. Cuando el cursor entra en zonas interactivas de la tarjeta, se reactiva la interacción mediante eventos `mouseenter` / `mouseleave`.
+### 8.1. Arquitectura de Visor Ligero vs Overlay Pesado
+En versiones tempranas se evaluó una ventana overlay transparente de pantalla completa (1920×1080). Dicha aproximación causa sobrecarga en el Desktop Window Manager (DWM) de Windows y latencia/stuttering en partidas con hardware ajustado.
 
-### 7.2. Detección de Pantalla y Compatibilidad con DirectX
-- DirectX oculta ventanas transparentes superpuestas cuando el juego está en **Pantalla completa exclusiva** (`WindowMode=0`).
-- El servicio `BorderlessDetector` inspecciona `<leaguePath>\Config\game.cfg`. Si detecta `WindowMode === 0`, el sistema informa al usuario para alternar a "Sin bordes" (`WindowMode=1`).
+La arquitectura v1.1.0 adopta un **Visor Ligero y Compacto**:
+1. **Ventana de Visor Compacto (`VisorWindow`):**
+   - Tamaño reducido y discreto (ej. 420×220 px) en lugar de pantalla completa.
+   - `frame: false, transparent: true, hasShadow: false, skipTaskbar: true, focusable: false, resizable: false`.
+   - `setAlwaysOnTop(true, 'normal')` y mostrado con `showInactive()` para no robar foco en ningún momento.
+   - `setIgnoreMouseEvents(true, { forward: true })` para garantizar que el cursor y los clics lleguen intactos a League of Legends.
+   - Alternativa integrada: el usuario puede alternar la visualización del visor dentro del dashboard principal de la app situada en un segundo monitor o al lado del juego.
 
-### 7.3. Flujo de Datos para ARAM Caos y Arena
+### 8.2. Detección de Pantalla y Compatibilidad con DirectX
+- DirectX oculta ventanas ajenas cuando el juego corre en **Pantalla completa exclusiva** (`WindowMode=0`).
+- El servicio `BorderlessDetector` inspecciona `<leaguePath>\Config\game.cfg`. Si detecta `WindowMode === 0`, el sistema notifica de forma clara: *"Usa modo Sin bordes (Borderless) para ver el visor dentro del juego"*.
+
+### 8.3. Pipeline de Datos y Fuentes de Aumentos
 ```mermaid
 flowchart TD
-    LCU[LCU WebSocket / Gameflow] -->|Detecta Queue 2400 / 1700| ModeDetector[Detector de Modo]
-    LCD[Live Client Data API 127.0.0.1:2999] -->|Campeón Activo| ModeDetector
+    LCU[LCU Client & WebSocket] -->|Detecta Queue 2400 / 1700| ModeDetector[Detector de Modo]
+    LCD[Live Client Data API 127.0.0.1:2999] -->|Campeón Activo, Nivel, Vida/Muerte| ModeDetector
     ModeDetector --> ModeService[ModeAugmentService]
     ModeService -->|Consulta SQLite| ModeCache[(mode_cache SQLite)]
-    ModeCache -->|Hit TTL < 24h| OverlayManager
-    ModeCache -->|Miss| Extractor[OP.GG RSC + Community Dragon]
+    ModeCache -->|Hit TTL < 24h| VisorManager
+    ModeCache -->|Miss ARAM Caos| OpGgMcp[OP.GG MCP lol_list_aram_augments]
+    ModeCache -->|Miss Arena| Extractor[OP.GG RSC + Community Dragon]
+    OpGgMcp -->|Guarda en SQLite| ModeCache
     Extractor -->|Guarda en SQLite| ModeCache
-    Extractor --> OverlayManager[OverlayManager en Main]
-    OverlayManager -->|IPC overlay:state-changed| OverlayUI[Overlay React UI]
+    ModeService -->|Calcula Tier determinista| VisorManager[Visor / OverlayManager]
+    VisorManager -->|IPC aumentos:detectados| VisorUI[Visor Ligero React UI]
 ```
+
+### 8.4. Medidas de Optimización de Rendimiento
+1. **LCU WebSocket:** Suscripción filtrada por URIs específicas (`lol-gameflow/v1/gameflow-phase`, `lol-champ-select/v1/session`, `lol-matchmaking/v1/ready-check`). Se evita procesar el torrente de eventos globales innecesarios.
+2. **Sondeo WMI / Lockfile:** Pausado automáticamente cuando la conexión WebSocket está establecida y durante partida activa (`InProgress`).
+3. **Warmup OP.GG:** Diferido y opcional; nunca se ejecuta en partida activa.
+4. **Data Dragon:** Comprobación estricta de versión en memoria antes de verificar disco o red.
+5. **Consumo de Memoria:** Memoria RSS en reposo objetivo < 150 MB, CPU < 2%. Cero llamadas remotas no solicitadas durante el juego.

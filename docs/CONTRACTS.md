@@ -723,5 +723,46 @@ export const IPC_CHANNELS = {
   OVERLAY_STATE_CHANGED: 'overlay:state-changed',
   MODES_GET_CHAMPION_AUGMENTS: 'modes:get-champion-augments',
   MODES_CHECK_BORDERLESS: 'modes:check-borderless',
+  MODES_APPLY_BORDERLESS: 'modes:apply-borderless',
+
+  // Canales de Visor Ligero de Aumentos y Rendimiento (Fase 10)
+  AUMENTOS_DETECTADOS: 'aumentos:detectados',
+  VISOR_MOSTRAR: 'visor:mostrar',
+  VISOR_OCULTAR: 'visor:ocultar',
+  RENDIMIENTO_ALERTA: 'rendimiento:alerta',
 };
+```
+
+### 5.7. Contratos de Dominio para Visor Ligero de Aumentos (`src/shared/types.ts`)
+
+```typescript
+export type RarezaAumento = 'Plata' | 'Oro' | 'Prismático';
+
+export interface AumentoInfo {
+  idModo: number;
+  apiName: string;
+  nombre: string;
+  icono: string;
+  rareza: RarezaAumento;
+}
+
+export interface AumentoTier extends AumentoInfo {
+  tier: TierBadge;
+  winRate: number;
+  pickRate: number;
+  muestras: number;
+  actualizadoEn: number;
+  fuente: 'opgg_mcp' | 'opgg_web' | 'community_dragon' | 'local_cache';
+  esMejorOpcion?: boolean;
+}
+
+export function calcularTierAumento(
+  winRate: number,
+  pickRate: number,
+  muestras?: number
+): TierBadge;
+
+export function seleccionarMejorAumento(
+  aumentos: AumentoTier[]
+): AumentoTier | null;
 ```

@@ -1,0 +1,103 @@
+{
+  "activePlayer": {
+    "error": null,
+    "level": 6,
+    "summonerName": "Infi",
+    "currentGold": 1250,
+    "championStats": {
+      "abilityPower": 0,
+      "armor": 38,
+      "attackDamage": 72,
+      "attackSpeed": 0.651,
+      "currentHealth": 850,
+      "maxHealth": 1100,
+      "moveSpeed": 345
+    }
+  },
+  "allPlayers": [
+    {
+      "championName": "Aatrox",
+      "isBot": false,
+      "isDead": false,
+      "items": [
+        {
+          "canUse": false,
+          "count": 1,
+          "displayName": "Dorans Blade",
+          "itemID": 1055,
+          "price": 450,
+          "slot": 0
+        },
+        {
+          "canUse": false,
+          "count": 1,
+          "displayName": "Plated Steelcaps",
+          "itemID": 3047,
+          "price": 1100,
+          "slot": 1
+        }
+      ],
+      "level": 6,
+      "position": "NONE",
+      "rawChampionName": "game_character_displayname_Aatrox",
+      "respawnTimer": 0,
+      "runes": {
+        "keystone": {
+          "displayName": "Conqueror",
+          "id": 8010,
+          "rawDescription": "perk_displayname_Conqueror"
+        },
+        "primaryRuneTree": {
+          "displayName": "Precision",
+          "id": 8000
+        },
+        "secondaryRuneTree": {
+          "displayName": "Resolve",
+          "id": 8400
+        }
+      },
+      "scores": {
+        "assists": 1,
+        "deaths": 0,
+        "kills": 2,
+        "creepScore": 45,
+        "wardScore": 0
+      },
+      "summonerName": "Infi",
+      "summonerSpells": {
+        "summonerSpellOne": {
+          "displayName": "Flash",
+          "rawDescription": "Flash"
+        },
+        "summonerSpellTwo": {
+          "displayName": "Mark",
+          "rawDescription": "Snowball"
+        }
+      },
+      "team": "ORDER"
+    }
+  ],
+  "events": {
+    "Events": [
+      {
+        "EventID": 0,
+        "EventName": "GameStart",
+        "EventTime": 0.03
+      },
+      {
+        "EventID": 1,
+        "EventName": "ChampionKill",
+        "EventTime": 142.5,
+        "KillerName": "Infi",
+        "VictimName": "TargetDummy"
+      }
+    ]
+  },
+  "gameData": {
+    "gameMode": "CHERRY",
+    "gameTime": 185.4,
+    "mapName": "Map30",
+    "mapNumber": 30,
+    "mapTerrain": "Default"
+  }
+}

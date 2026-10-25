@@ -1130,6 +1130,11 @@ export class LcuClient extends EventEmitter implements ILcuClient {
         credenciales = null;
       }
     } else {
+      // Optimización de rendimiento: Si el socket está conectado y saludable,
+      // no ejecutar sondeo WMI/PowerShell pesado de proceso cada 2s.
+      if (this.estado === 'connected' && this.ws.estaConectado()) {
+        return;
+      }
       const rutaManual = this.opciones.obtenerRutaManual?.();
       const reporte = await ejecutarDeteccionLcu({ rutaManual });
       this.ultimoReporte = reporte;

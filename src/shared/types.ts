@@ -502,7 +502,7 @@ export interface AutoAcceptStatusInfo {
 // ==========================================
 // Modos de Juego Especiales (ARAM Caos, Arena) y Augments
 // ==========================================
-export type TipoModo = 'normal' | 'ranked' | 'aram' | 'aram_mayhem' | 'arena';
+export type TipoModo = 'normal' | 'ranked' | 'aram' | 'aram_mayhem' | 'arena' | 'ARAM_MAYHEM' | 'ARENA';
 
 /**
  * Devuelve el nombre en español legible del modo de juego para la interfaz.
@@ -512,10 +512,12 @@ export function obtenerNombreModo(modo: TipoModo | null | undefined): string {
     case 'normal':
       return 'Partida normal';
     case 'aram_mayhem':
+    case 'ARAM_MAYHEM':
       return 'ARAM Caos';
     case 'aram':
       return 'ARAM normal';
     case 'arena':
+    case 'ARENA':
       return 'Arena';
     case 'ranked':
       return 'Clasificatoria';
@@ -524,9 +526,91 @@ export function obtenerNombreModo(modo: TipoModo | null | undefined): string {
   }
 }
 
-export type TierBadge = 'S+' | 'S' | 'A' | 'B' | 'C' | 'D';
+export type TierBadge = 'S+' | 'S' | 'A' | 'B' | 'C' | 'D' | '?';
 
 export type RarityAugment = 'silver' | 'gold' | 'prismatic';
+export type RarezaAumento = 'Plata' | 'Oro' | 'Prismático';
+
+/**
+ * Información básica de un aumento in-game.
+ */
+export interface AumentoInfo {
+  idModo: number;
+  apiName: string;
+  nombre: string;
+  icono: string;
+  rareza: RarezaAumento;
+}
+
+/**
+ * Aumento evaluado con estadísticas analíticas y tier asignado.
+ */
+export interface AumentoTier extends AumentoInfo {
+  tier: TierBadge;
+  winRate: number;
+  pickRate: number;
+  muestras: number;
+  actualizadoEn: number;
+  fuente: 'opgg_mcp' | 'opgg_web' | 'community_dragon' | 'local_cache';
+  esMejorOpcion?: boolean;
+}
+
+/**
+ * Regla determinista de asignación de tier a partir de winRate, pickRate y muestras.
+ * Sigue el patrón analítico ponderado de OP.GG.
+ */
+export function calcularTierAumento(
+  winRate: number,
+  pickRate: number,
+  muestras = 100
+): TierBadge {
+  if (muestras < 30) {
+    // Muestra pequeña: evaluación conservadora
+    if (winRate >= 56 && pickRate >= 8) return 'A';
+    if (winRate >= 50) return 'B';
+    return 'C';
+  }
+
+  // Puntuación combinada ponderada (winRate + bonificación por pickRate)
+  const puntuacion = winRate + Math.min(pickRate, 20) * 0.5;
+
+  if (puntuacion >= 60) return 'S+';
+  if (puntuacion >= 55) return 'S';
+  if (puntuacion >= 51) return 'A';
+  if (puntuacion >= 47) return 'B';
+  if (puntuacion >= 43) return 'C';
+  return 'D';
+}
+
+/**
+ * Selecciona y resalta la mejor opción entre los aumentos ofrecidos.
+ */
+export function seleccionarMejorAumento(aumentos: AumentoTier[]): AumentoTier | null {
+  if (!aumentos || aumentos.length === 0) return null;
+
+  const pesosTier: Record<TierBadge, number> = {
+    'S+': 100,
+    'S': 85,
+    'A': 70,
+    'B': 55,
+    'C': 40,
+    'D': 25,
+    '?': 0,
+  };
+
+  let mejor = aumentos[0];
+  let mejorPuntaje = -1;
+
+  for (const a of aumentos) {
+    const pt = (pesosTier[a.tier] || 0) * 0.6 + a.winRate * 0.3 + a.pickRate * 0.1;
+    if (pt > mejorPuntaje) {
+      mejorPuntaje = pt;
+      mejor = a;
+    }
+  }
+
+  return { ...mejor, esMejorOpcion: true };
+}
 
 export interface AugmentInfo {
   id: number;

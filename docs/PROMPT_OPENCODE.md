@@ -124,3 +124,31 @@ Ninguna tarea se considera terminada sin su suite de tests automatizados:
 ```bash
 git merge main
 ```
+
+---
+
+## 8. FASE 10: Visor Ligero In-Game y Optimización de Rendimiento (v1.1.0)
+
+¡Nuevas tareas asignadas a OpenCode para la versión 1.1.0!
+
+### Paso 1 Obligatorio:
+```bash
+git merge main
+```
+
+### Tareas Asignadas a OpenCode:
+1. **T-10.3: Optimización de Rendimiento Backend (`src/main/lcu/`, `src/main/opgg/`)**
+   - **LCU WebSocket (`LcuWebSocket.ts`):** Añadir opción para suscripciones filtradas a endpoints exactos (`lol-gameflow/v1/gameflow-phase`, `lol-champ-select/v1/session`, `lol-matchmaking/v1/ready-check`). Evitar procesar eventos innecesarios.
+   - **LcuClient (`LcuClient.ts`):** Mantener la pausa del sondeo WMI/PowerShell cuando el WebSocket esté conectado y durante partida activa (`InProgress`).
+   - **OpGgClient (`OpGgClient.ts`):** Resolver parche dinámicamente desde `DataDragonTranslator` o `DataDragonService.obtenerVersionEnMemoria()`. Ningún string hardcodeado `'26.20'`.
+
+2. **T-10.4: Integración de `lol_list_aram_augments` de OP.GG MCP (`OpGgClient.ts`, `ModeAugmentService.ts`)**
+   - Implementar método en `OpGgClient` para invocar la herramienta `lol_list_aram_augments`:
+     ```typescript
+     async getAramAugments(championId: number, lang = 'es_ES'): Promise<AumentoTier[]>
+     ```
+   - Parsear la respuesta estructurada (`id`, `name`, `tier`, `performance`, `popular`), calcular tier con `calcularTierAumento()`, y marcar `esMejorOpcion` con `seleccionarMejorAumento()`.
+   - Almacenar en SQLite `mode_cache` con clave `modo:campeon:parche` y TTL de 24 horas.
+   - Si el MCP falla o está en modo Arena, conmutar elegantemente al parser RSC web existente en `ModeAugmentService`.
+   - Escribir pruebas unitarias en `tests/opgg/` usando mocks sin peticiones reales a Internet.
+

@@ -20,6 +20,7 @@ import {
   TipoModo,
   DatosModoCampeon,
   OverlayState,
+  AumentoTier,
 } from './types';
 import { AccountEntity, KeyHealthStatus } from './contracts';
 
@@ -76,6 +77,12 @@ export const IPC_CHANNELS = {
   MODES_GET_CHAMPION_AUGMENTS: 'modes:get-champion-augments',
   MODES_CHECK_BORDERLESS: 'modes:check-borderless',
   MODES_APPLY_BORDERLESS: 'modes:apply-borderless',
+
+  // Canales de Visor Ligero de Aumentos y Rendimiento (Fase 10)
+  AUMENTOS_DETECTADOS: 'aumentos:detectados',
+  VISOR_MOSTRAR: 'visor:mostrar',
+  VISOR_OCULTAR: 'visor:ocultar',
+  RENDIMIENTO_ALERTA: 'rendimiento:alerta',
 } as const;
 
 // ==========================================
@@ -161,6 +168,8 @@ export interface IpcInvokeHandlers {
     windowMode: number;
     configPath: string;
   }>;
+  [IPC_CHANNELS.VISOR_MOSTRAR]: () => Promise<{ success: boolean }>;
+  [IPC_CHANNELS.VISOR_OCULTAR]: () => Promise<{ success: boolean }>;
 }
 
 // ==========================================
@@ -176,4 +185,6 @@ export interface IpcEventPayloads {
   [IPC_CHANNELS.RIOT_KEY_WARNING]: KeyHealthStatus;
   [IPC_CHANNELS.API_QUOTA_UPDATED]: { riotCount: number; geminiCount: number };
   [IPC_CHANNELS.OVERLAY_STATE_CHANGED]: OverlayState;
+  [IPC_CHANNELS.AUMENTOS_DETECTADOS]: AumentoTier[];
+  [IPC_CHANNELS.RENDIMIENTO_ALERTA]: { nivel: 'warning' | 'critical'; mensaje: string; metrica: string; valor: number };
 }

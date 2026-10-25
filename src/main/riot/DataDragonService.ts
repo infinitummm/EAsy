@@ -265,6 +265,13 @@ export class DataDragonService {
   }
 
   /**
+   * Devuelve la versión actual cacheada en memoria si ya fue consultada.
+   */
+  obtenerVersionEnMemoria(): string | null {
+    return this.versionActual;
+  }
+
+  /**
    * Lista completa de versiones publicadas en `versions.json` (la primera es
    * la vigente). Se cachea en memoria y permite resolver el parche anterior
    * para el diff entre parches (REQ-014).

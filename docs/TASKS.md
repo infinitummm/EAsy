@@ -113,3 +113,17 @@ Este documento desglosa todas las tareas del proyecto por fases, asignando un ú
 | **T-9.4** | ANTIGRAVITY | Orquestación en ciclo de vida del juego (`index.ts`, `OverlayManager.ts`) | `src/main/index.ts`, `src/main/overlay/OverlayManager.ts`, `tests/overlay/overlayManager.test.ts` | T-9.1, T-9.3 | Apertura reactiva al detectar panel, cierre inmediato al elegir augment ($\le 1.5$s), tope de seguridad 45s. | **COMPLETADO** |
 | **T-9.5** | ANTIGRAVITY | Verificación integral (TypeScript, 474 tests Vitest, documentación y build) | `docs/REQUESTS.md`, `docs/TASKS.md` | T-9.1 a T-9.4 | `tsc --noEmit` limpio, 38 suites pasando, documentación alineada a la Ley 1. | **COMPLETADO** |
 
+---
+
+## FASE 10: Visor Ligero In-Game y Optimización de Rendimiento (Cero Lag/Ping)
+
+| ID | Responsable | Objetivo | Archivos | Dependencias | Criterio de Terminado | Estado |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **T-10.1** | ANTIGRAVITY | Fase 0: Sondeos de Live Client Data API y OP.GG MCP con fixtures reales y documentación | `scripts/sondeo-liveclient.mjs`, `scripts/sondeo-opgg-modos.mjs`, `docs/VERIFICACION_AUMENTOS.md` | T-9.5 | Endpoints probados, JSON canónico en `tests/fixtures/`, descubrimiento de `lol_list_aram_augments` documentado. | **COMPLETADO** |
+| **T-10.2** | ANTIGRAVITY | Contratos compartidos (`AumentoInfo`, `AumentoTier`, regla determinista `calcularTierAumento`, eventos IPC, eliminación de parche hardcoded) | `src/shared/types.ts`, `src/shared/events.ts`, `src/main/opgg/OpGgClient.ts`, `src/main/riot/DataDragonService.ts` | T-10.1 | Tipos exportados, regla determinista probada en `tests/shared/aumentosTier.test.ts`, cero parches fijos `'26.20'`. | **COMPLETADO** |
+| **T-10.3** | OPENCODE | Optimización de rendimiento backend (filtrado WebSocket puntual, suspensión de sondeo WMI/PowerShell durante partida, diferir warmup) | `src/main/lcu/LcuWebSocket.ts`, `src/main/lcu/LcuClient.ts`, `src/main/index.ts` | T-10.2 | CPU en reposo < 2%, cero invocaciones WMI cada 2s mientras conectado, tests de LCU pasando. | **EN CURSO** |
+| **T-10.4** | OPENCODE | Integración backend de `lol_list_aram_augments` en `OpGgClient` y caché SQLite `mode_cache` TTL 24h | `src/main/opgg/OpGgClient.ts`, `src/main/modes/ModeAugmentService.ts`, `tests/opgg/opGgClient.test.ts` | T-10.2 | Extracción de aumentos ARAM Caos vía MCP oficial con fallback a web RSC, tests pasando sin red real. | **PENDIENTE** |
+| **T-10.5** | ANTIGRAVITY | UI del Visor Ligero compacto (ventana flotante no intrusiva `focusable:false`, clics pasantes, estilo Blitz) | `src/renderer/overlay/OverlayApp.tsx` o `src/renderer/visor/`, `src/main/overlay/OverlayManager.ts` | T-10.3, T-10.4 | Visor discreto sin sobrecarga de GPU, badge S+/S/A/B/C/D, pick rate en cian, mejor opción resaltada. | **PENDIENTE** |
+| **T-10.6** | ANTIGRAVITY | Verificación E2E, 100% tests Vitest, build de producción v1.1.0 y documentación final | `README.md`, `docs/RELEASE.md`, `package.json` | T-10.1 a T-10.5 | `npx tsc && vitest run` al 100%, empaquetado NSIS v1.1.0 limpio, guía de modo Sin bordes incluida. | **PENDIENTE** |
+
+

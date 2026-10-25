@@ -378,4 +378,27 @@ Si OpenCode encuentra alguna ambigüedad técnica, inconsistencia o necesidad de
 - **Estado:** APROBADO Y COMPLETADO
 - **Respuesta de Antigravity:** Implementado y verificado con 474 pruebas unitarias pasando y TypeScript 100% limpio. Se respeta escrupulosamente la Ley 1 y la integridad ante Riot Vanguard.
 
+---
+
+### [REQ-024] Visor Ligero In-Game de Aumentos y Auditoría de Rendimiento (Fase 10)
+- **Fecha:** 2026-10-25
+- **Tarea asociada:** T-10.1 a T-10.6
+- **Módulos afectados:** `src/shared/types.ts`, `src/shared/events.ts`, `src/main/opgg/OpGgClient.ts`, `src/main/lcu/LcuClient.ts`, `src/main/lcu/LcuWebSocket.ts`, `src/main/riot/DataDragonService.ts`, `docs/VERIFICACION_AUMENTOS.md`
+- **Problema encontrado:**
+  1. El overlay previo de pantalla completa (1920×1080) forzaba composición de GPU continua en Windows DWM, generando lag y sensación pesada para el usuario.
+  2. En el proceso principal existían cuellos de botella:
+     - El WebSocket de la LCU escuchaba `[5, "OnJsonApiEvent"]` de forma masiva sin filtrar.
+     - Detección de proceso ejecutaba PowerShell WMI cada 2 s incluso estando ya conectado o en partida.
+     - Warmup de OP.GG al arranque causaba ráfagas de red innecesarias y usaba `'26.20'` hardcodeado.
+  3. El usuario solicitó un visor pequeño, discreto y sin pérdida de clics ni foco, con datos de aumentos para ARAM Caos y Arena.
+- **Propuesta de solución / Firma requerida:**
+  1. Nuevos tipos en `src/shared/types.ts`: `AumentoInfo`, `AumentoTier`, regla determinista `calcularTierAumento(winRate, pickRate, muestras)` y `seleccionarMejorAumento()`.
+  2. Nuevos eventos IPC en `src/shared/events.ts`: `AUMENTOS_DETECTADOS`, `VISOR_MOSTRAR`, `VISOR_OCULTAR`, `RENDIMIENTO_ALERTA`.
+  3. Resolución de parche dinámica vía `DataDragonService` / `DataDragonTranslator`, eliminando `'26.20'` fijo.
+  4. Optimización de detección en `LcuClient.ts`: omitir sondeo WMI mientras el WebSocket esté conectado y saludable.
+  5. OpenCode implementará en el worktree `opencode-impl` la integración de `lol_list_aram_augments` del MCP oficial de OP.GG y pruebas asociadas.
+- **Estado:** APROBADO Y PARCIALMENTE IMPLEMENTADO (Fase 0 y contratos listos)
+- **Respuesta de Antigravity:** Fase 0 validada empíricamente en `docs/VERIFICACION_AUMENTOS.md`. Contratos, tipos y optimizaciones iniciales listos en `main`. Proceder con la delegación a OpenCode vía Orca.
+
+
 

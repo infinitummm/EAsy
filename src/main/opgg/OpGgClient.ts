@@ -13,6 +13,7 @@ import type { IDatabaseService } from '../../shared/contracts';
 import type { Role, OpGgMatchupData, OpGgRunePage, GeminiMatchupRecommendation } from '../../shared/types';
 import { getChampionById } from '../../shared/champions';
 import { DataDragonTranslator } from '../riot/DataDragonTranslator';
+import type { DataDragonService } from '../riot/DataDragonService';
 import { registrarLog } from '../lcu/LcuDetector';
 
 export const OPGG_MCP_ENDPOINT = 'https://mcp-api.op.gg/mcp';
@@ -24,6 +25,7 @@ export interface OpcionesOpGgClient {
   fetchImpl?: typeof fetch;
   dbService?: IDatabaseService;
   translator?: DataDragonTranslator;
+  dataDragonService?: DataDragonService;
   minSampleThreshold?: number;
 }
 
@@ -169,6 +171,7 @@ export class OpGgClient {
   private readonly fetchImpl: typeof fetch;
   private readonly dbService?: IDatabaseService;
   private readonly translator?: DataDragonTranslator;
+  private readonly dataDragonService?: DataDragonService;
   private readonly minSampleThreshold: number;
   private lastRequestTime = 0;
 
@@ -177,6 +180,7 @@ export class OpGgClient {
     this.fetchImpl = opciones.fetchImpl ?? globalThis.fetch.bind(globalThis);
     this.dbService = opciones.dbService;
     this.translator = opciones.translator;
+    this.dataDragonService = opciones.dataDragonService;
     this.minSampleThreshold = opciones.minSampleThreshold ?? UMBRAL_MUESTRA_MINIMA;
   }
 

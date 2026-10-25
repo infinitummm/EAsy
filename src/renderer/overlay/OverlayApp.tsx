@@ -22,28 +22,28 @@ function TierShield({ tier }: { tier: TierBadge }) {
           bg: 'bg-gradient-to-b from-yellow-300 via-amber-400 to-amber-600',
           border: 'border-yellow-200',
           text: 'text-gray-950 font-black',
-          glow: 'shadow-[0_0_12px_rgba(251,191,36,0.7)]',
+          glow: 'shadow-[0_0_8px_rgba(251,191,36,0.6)]',
         };
       case 'S':
         return {
           bg: 'bg-gradient-to-b from-amber-400 via-amber-500 to-amber-700',
           border: 'border-amber-300',
           text: 'text-gray-950 font-black',
-          glow: 'shadow-[0_0_10px_rgba(245,158,11,0.6)]',
+          glow: 'shadow-[0_0_7px_rgba(245,158,11,0.5)]',
         };
       case 'A':
         return {
           bg: 'bg-gradient-to-b from-cyan-400 via-teal-500 to-teal-700',
           border: 'border-cyan-300',
           text: 'text-gray-950 font-black',
-          glow: 'shadow-[0_0_10px_rgba(6,182,212,0.6)]',
+          glow: 'shadow-[0_0_7px_rgba(6,182,212,0.5)]',
         };
       case 'B':
         return {
           bg: 'bg-gradient-to-b from-emerald-400 via-emerald-500 to-emerald-700',
           border: 'border-emerald-300',
           text: 'text-white font-extrabold',
-          glow: 'shadow-[0_0_8px_rgba(16,185,129,0.5)]',
+          glow: 'shadow-[0_0_6px_rgba(16,185,129,0.4)]',
         };
       case 'C':
         return {
@@ -65,13 +65,13 @@ function TierShield({ tier }: { tier: TierBadge }) {
 
   return (
     <div
-      className={`relative w-9 h-10 flex items-center justify-center border-2 ${config.bg} ${config.border} ${config.glow}`}
+      className={`relative w-7 h-8 shrink-0 flex items-center justify-center border ${config.bg} ${config.border} ${config.glow}`}
       style={{
         clipPath: 'polygon(0% 0%, 100% 0%, 100% 70%, 50% 100%, 0% 70%)',
       }}
       title={`Tier ${tier}`}
     >
-      <span className={`text-sm tracking-tighter ${config.text} -mt-1`}>{tier}</span>
+      <span className={`text-[11px] tracking-tighter ${config.text} -mt-0.5`}>{tier}</span>
     </div>
   );
 }
@@ -83,12 +83,12 @@ function RarityTag({ rarity }: { rarity: RarityAugment }) {
   const info = {
     silver: { label: 'PLATA', color: 'text-slate-300 border-slate-500/60 bg-slate-800/60' },
     gold: { label: 'ORO', color: 'text-amber-300 border-amber-500/60 bg-amber-950/60' },
-    prismatic: { label: 'PRISMÁTICO', color: 'text-fuchsia-300 border-fuchsia-500/60 bg-fuchsia-950/60' },
+    prismatic: { label: 'PRISMA', color: 'text-fuchsia-300 border-fuchsia-500/60 bg-fuchsia-950/60' },
   }[rarity] || { label: 'MEJORA', color: 'text-cyan-300 border-cyan-500/60 bg-cyan-950/60' };
 
   return (
     <span
-      className={`text-[9px] uppercase px-1.5 py-0.5 rounded border tracking-wider font-mono font-bold ${info.color}`}
+      className={`text-[8px] uppercase px-1 py-0.2 rounded border tracking-wider font-mono font-bold ${info.color}`}
     >
       {info.label}
     </span>
@@ -115,7 +115,7 @@ export function OverlayApp() {
   const [borderlessApplying, setBorderlessApplying] = useState<boolean>(false);
 
   // Temporizador de auto-cierre
-  const [countdown, setCountdown] = useState<number>(30);
+  const [countdown, setCountdown] = useState<number>(25);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -128,6 +128,7 @@ export function OverlayApp() {
           setState((prev) => ({
             ...prev,
             ...s,
+            data: s.data || prev.data,
             championId: s.championId && s.championId > 0 ? s.championId : prev.championId,
             championName: s.championName || prev.championName,
           }));
@@ -140,6 +141,7 @@ export function OverlayApp() {
         setState((prev) => ({
           ...prev,
           ...newState,
+          data: newState.data || prev.data,
           championId: newState.championId && newState.championId > 0 ? newState.championId : prev.championId,
           championName: newState.championName || prev.championName,
         }));
@@ -150,7 +152,7 @@ export function OverlayApp() {
     }
   }, []);
 
-  // Escuchar disparador automático de aumentos (cuando el juego entra en momento de elegir)
+  // Escuchar disparador automático de aumentos (cuando el jugador muere o sube de nivel 3/7/11/15)
   useEffect(() => {
     const api = getApi();
     if (api?.on) {
@@ -195,29 +197,41 @@ export function OverlayApp() {
     };
   }, [collapsed, isPaused]);
 
-  // Manejar paso de eventos de ratón según estado colapsado / expandido
+  // Manejar paso de clics transparentes hacia League of Legends
+  const handleMouseEnter = () => {
+    const api = getApi();
+    api?.setIgnoreMouseEvents?.(false);
+  };
+
+  const handleMouseLeave = () => {
+    const api = getApi();
+    api?.setIgnoreMouseEvents?.(true, { forward: true });
+  };
+
   useEffect(() => {
     const api = getApi();
-    if (!api?.setIgnoreMouseEvents) return;
     if (collapsed) {
-      api.setIgnoreMouseEvents(true, { forward: true });
-    } else {
-      api.setIgnoreMouseEvents(false);
+      api?.setIgnoreMouseEvents?.(true, { forward: true });
     }
   }, [collapsed]);
 
   const activeChampionId: number = manualChampionId ?? (state.championId && state.championId > 0 ? state.championId : 0);
 
-  // Cargar datos de mejoras del campeón
+  // Cargar datos de mejoras del campeón si aún no están cargados
   useEffect(() => {
     if (activeChampionId > 0) {
-      setLoading(true);
       const api = getApi();
       const modoConsulta: TipoModo =
         state.gameMode === 'arena' || state.gameMode === 'aram_mayhem'
           ? state.gameMode
           : 'aram_mayhem';
 
+      // Si ya tenemos datos para este campeón y modo, no parpadear con loading
+      if (state.data && state.data.championId === activeChampionId && state.data.mode === modoConsulta && state.data.augments?.length > 0) {
+        return;
+      }
+
+      setLoading(true);
       if (api?.getChampionAugments) {
         api
           .getChampionAugments({
@@ -225,7 +239,7 @@ export function OverlayApp() {
             mode: modoConsulta,
           })
           .then((data: DatosModoCampeon) => {
-            if (data) {
+            if (data && data.augments && data.augments.length > 0) {
               setState((prev) => ({ ...prev, data }));
             }
           })
@@ -233,7 +247,7 @@ export function OverlayApp() {
           .finally(() => setLoading(false));
       }
     }
-  }, [activeChampionId, state.gameMode]);
+  }, [activeChampionId, state.gameMode, state.data]);
 
   const champion = useMemo(() => {
     return activeChampionId > 0 ? getChampionById(activeChampionId) : null;
@@ -241,16 +255,15 @@ export function OverlayApp() {
 
   // Lista de campeones para búsqueda manual
   const championsFiltrados = useMemo(() => {
-    if (!searchQuery.trim()) return ALL_CHAMPIONS.slice(0, 10);
+    if (!searchQuery.trim()) return ALL_CHAMPIONS.slice(0, 12);
     const q = searchQuery.toLowerCase().trim();
-    return ALL_CHAMPIONS.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 10);
+    return ALL_CHAMPIONS.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 12);
   }, [searchQuery]);
 
   // Lista de augments filtrados
   const augmentsFiltrados = useMemo(() => {
     const lista = state.data?.augments || [];
     if (selectedRarity === 'recommended') {
-      // Ordenar por Tier (S+ -> S -> A -> B...) y luego por Pick Rate
       const tierRank: Record<TierBadge, number> = { 'S+': 0, 'S': 1, 'A': 2, 'B': 3, 'C': 4, 'D': 5 };
       return [...lista].sort((a, b) => {
         const d = (tierRank[a.tier] ?? 9) - (tierRank[b.tier] ?? 9);
@@ -258,8 +271,8 @@ export function OverlayApp() {
         return (b.pickRate || 0) - (a.pickRate || 0);
       }).slice(0, 4);
     }
-    if (selectedRarity === 'all') return lista;
-    return lista.filter((a) => a.rarity === selectedRarity);
+    if (selectedRarity === 'all') return lista.slice(0, 4);
+    return lista.filter((a) => a.rarity === selectedRarity).slice(0, 4);
   }, [state.data, selectedRarity]);
 
   // Identificar el mejor augment absoluto
@@ -279,7 +292,7 @@ export function OverlayApp() {
     if (state.gameMode === 'arena') return 'ARENA';
     if (state.gameMode === 'aram_mayhem') return 'ARAM CAOS';
     if (state.gameMode === 'aram') return 'ARAM';
-    return 'PARTIDA ACTIVA';
+    return 'ARAM CAOS';
   }, [state.gameMode]);
 
   const handleApplyBorderless = async () => {
@@ -296,140 +309,104 @@ export function OverlayApp() {
     }
   };
 
-  const reabrirOverlay = () => {
-    setCollapsed(false);
-    setCountdown(25);
-    setIsPaused(false);
-  };
-
-  // ==========================================
-  // VISTA 1: Modo Colapsado (Píldora Flotante Mínima)
-  // ==========================================
+  // VISTA COLAPSADA: Píldora ultra-discreta en el margen superior
   if (collapsed) {
     return (
-      <div className="w-full h-full flex flex-col items-center justify-start pt-1 select-none pointer-events-none">
+      <div className="w-screen h-screen pointer-events-none flex justify-center items-start">
         <div
-          onMouseEnter={() => {
-            const api = getApi();
-            if (api?.setIgnoreMouseEvents) api.setIgnoreMouseEvents(false);
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+          onClick={() => {
+            setCollapsed(false);
+            setCountdown(25);
           }}
-          onMouseLeave={() => {
-            const api = getApi();
-            if (api?.setIgnoreMouseEvents) api.setIgnoreMouseEvents(true, { forward: true });
-          }}
-          onClick={reabrirOverlay}
-          className="pointer-events-auto flex items-center gap-2 px-3 py-1 bg-[#050E20]/95 hover:bg-[#071630] border-2 border-cyan-400/80 rounded-full shadow-[0_0_15px_rgba(6,182,212,0.4)] cursor-pointer transition-all transform hover:scale-105"
-          title="Clic para ver las mejores opciones de aumentos (Ctrl+Shift+O)"
+          className="pointer-events-auto mt-0.5 px-3 py-1 bg-[#040814]/90 hover:bg-[#071324] border-b border-x border-cyan-500/60 rounded-b-md shadow-lg text-[10px] font-bold tracking-wider text-cyan-300 hover:text-white flex items-center gap-1.5 cursor-pointer transition-all"
+          title="Ver recomendaciones de mejoras (Ctrl+Shift+O)"
         >
-          {champion ? (
-            <img
-              src={`https://ddragon.leagueoflegends.com/cdn/img/champion/tiles/${champion.key}_0.jpg`}
-              alt={champion.name}
-              className="w-5 h-5 rounded-full object-cover border border-cyan-300"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src =
-                  'https://ddragon.leagueoflegends.com/cdn/16.20.1/img/profileicon/29.png';
-              }}
-            />
-          ) : (
-            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-          )}
-
-          <span className="text-xs font-black uppercase tracking-wider text-white font-mono">
-            {champion?.name || state.championName || 'AUMENTOS'}
-          </span>
-
-          <span className="text-[10px] bg-cyan-950 text-cyan-300 px-1.5 py-0.5 rounded border border-cyan-500/50 font-bold font-mono">
-            {modeLabel}
-          </span>
+          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+          <span className="font-black text-amber-300">EA</span>
+          <span>•</span>
+          <span className="uppercase">{champion?.name || state.championName || 'AUMENTOS'}</span>
+          <span className="text-[9px] text-gray-400 font-normal">({countdown > 0 ? `${countdown}s` : 'oculto'})</span>
         </div>
       </div>
     );
   }
 
-  // ==========================================
-  // VISTA 2: Modo Expandido (Tarjetas Estilo Blitz / P3R)
-  // ==========================================
+  // VISTA EXPANDIDA: Barra táctica horizontal ultra-compacta ubicada arriba de las cartas
   return (
-    <div
-      className="w-full h-full p-2 select-none font-sans text-gray-100 flex flex-col justify-start items-center"
-      onMouseEnter={() => {
-        const api = getApi();
-        if (api?.setIgnoreMouseEvents) api.setIgnoreMouseEvents(false);
-      }}
-      onMouseLeave={() => {
-        // En vista expandida, mantener interactivo sobre el panel
-      }}
-    >
-      <div className="w-[800px] bg-[#050E20]/95 border-2 border-[#16335F] rounded-lg shadow-2xl backdrop-blur-md flex flex-col overflow-hidden relative">
-        {/* Cabecera con Campeón, Temporizador de Auto-Cierre y Botones */}
-        <div className="px-4 py-2.5 bg-gradient-to-r from-[#071326] via-[#091b36] to-[#040812] border-b border-cyan-500/40 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {/* Retrato del Campeón */}
-            <div className="relative w-10 h-10 rounded border-2 border-cyan-400/80 overflow-hidden shadow-[0_0_8px_rgba(6,182,212,0.4)] bg-gray-900 shrink-0">
-              <img
-                src={
-                  champion
-                    ? `https://ddragon.leagueoflegends.com/cdn/img/champion/tiles/${champion.key}_0.jpg`
-                    : 'https://ddragon.leagueoflegends.com/cdn/16.20.1/img/profileicon/29.png'
-                }
-                alt={champion?.name || 'Campeón'}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src =
-                    'https://ddragon.leagueoflegends.com/cdn/16.20.1/img/profileicon/29.png';
-                }}
-              />
+    <div className="w-screen h-screen pointer-events-none flex flex-col items-center justify-start pt-1.5">
+      <div
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        className="pointer-events-auto w-[840px] max-w-[96vw] bg-[#030712]/95 backdrop-blur-md border border-cyan-800/80 rounded-lg shadow-[0_6px_24px_rgba(0,0,0,0.85)] p-2 flex flex-col gap-1.5 select-none relative"
+      >
+        {/* FILA SUPERIOR: Encabezado compacto */}
+        <div className="flex items-center justify-between gap-2 border-b border-cyan-900/40 pb-1.5">
+          {/* Campeón y Modo */}
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-6 h-6 rounded bg-gray-950 border border-cyan-500/70 overflow-hidden shrink-0 flex items-center justify-center">
+              {champion ? (
+                <img
+                  src={`https://ddragon.leagueoflegends.com/cdn/16.20.1/img/champion/${champion.image}`}
+                  alt={champion.name}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src =
+                      'https://ddragon.leagueoflegends.com/cdn/16.20.1/img/profileicon/29.png';
+                  }}
+                />
+              ) : (
+                <span className="text-[10px] font-black text-amber-300">EA</span>
+              )}
             </div>
 
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-base font-black italic tracking-wide uppercase text-white drop-shadow">
-                  {champion?.name || state.championName || 'SELECCIONA TU CAMPEÓN'}
-                </h1>
-                <span className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-cyan-950/90 text-cyan-300 border border-cyan-500/50">
-                  {modeLabel}
-                </span>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-xs font-black tracking-wide uppercase text-white truncate">
+                {champion?.name || state.championName || 'SELECCIONA CAMPEÓN'}
+              </span>
+              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-cyan-950/90 text-cyan-300 border border-cyan-500/50 uppercase shrink-0">
+                {modeLabel}
+              </span>
 
-                {manualChampionId !== null && (
-                  <button
-                    onClick={() => setManualChampionId(null)}
-                    className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-500/40 hover:bg-amber-900 transition-colors"
-                    title="Volver a detección automática de LoL"
-                  >
-                    Auto
-                  </button>
-                )}
-
+              {manualChampionId !== null && (
                 <button
-                  onClick={() => setShowChampSearch(!showChampSearch)}
-                  className="text-xs text-gray-400 hover:text-cyan-300 p-0.5 rounded hover:bg-cyan-950/40 transition-colors"
-                  title="Cambiar campeón manualmente"
+                  onClick={() => setManualChampionId(null)}
+                  className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-500/40 hover:bg-amber-900 transition-colors shrink-0"
+                  title="Volver a detección automática de LoL"
                 >
-                  🔍
+                  Auto
                 </button>
-              </div>
+              )}
 
-              <div className="flex items-center gap-2 text-[11px] text-gray-400 font-mono mt-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-                <span>Parche {state.data?.patch || '26.20'}</span>
-                <span>•</span>
-                <span className="text-cyan-300">
-                  {isPaused ? 'Pausado' : `Auto-oculta en ${countdown}s`}
-                </span>
-                <button
-                  onClick={() => setIsPaused(!isPaused)}
-                  className="text-[10px] text-gray-400 hover:text-white underline ml-1"
-                >
-                  {isPaused ? 'Reanudar' : 'Pausar'}
-                </button>
-              </div>
+              <button
+                onClick={() => setShowChampSearch(!showChampSearch)}
+                className="text-xs text-gray-400 hover:text-cyan-300 p-0.5 rounded transition-colors shrink-0"
+                title="Cambiar campeón manualmente"
+              >
+                🔍
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1.5 text-[10px] text-gray-400 font-mono ml-1 shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+              <span>Parche {state.data?.patch || '16.21'}</span>
+              <span>•</span>
+              <span className="text-cyan-300">
+                {isPaused ? 'Pausado' : `${countdown}s`}
+              </span>
+              <button
+                onClick={() => setIsPaused(!isPaused)}
+                className="text-[9px] text-gray-400 hover:text-white underline"
+              >
+                {isPaused ? '▶' : '⏸'}
+              </button>
             </div>
           </div>
 
-          {/* Filtros de Rareza y Botón Ocultar */}
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1 bg-[#03060f] p-1 rounded border border-cyan-950">
+          {/* Filtros de Rareza y Botón Cerrar */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-0.5 bg-[#02050b] p-0.5 rounded border border-cyan-950">
               {(
                 [
                   { key: 'recommended', label: '★ MEJORES' },
@@ -441,9 +418,9 @@ export function OverlayApp() {
                 <button
                   key={tab.key}
                   onClick={() => setSelectedRarity(tab.key)}
-                  className={`py-1 px-2 text-[10px] font-bold tracking-wider uppercase rounded transition-colors ${
+                  className={`py-0.5 px-1.5 text-[9px] font-bold tracking-wider uppercase rounded transition-colors ${
                     selectedRarity === tab.key
-                      ? 'bg-cyan-600 text-white shadow-sm'
+                      ? 'bg-cyan-600 text-white shadow-xs'
                       : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/40'
                   }`}
                 >
@@ -454,25 +431,24 @@ export function OverlayApp() {
 
             <button
               onClick={() => setCollapsed(true)}
-              className="px-2.5 py-1 bg-red-950/40 hover:bg-red-900/60 border border-red-800/50 text-red-300 hover:text-white rounded text-xs font-bold transition-colors flex items-center gap-1"
-              title="Ocultar interfaz (Ctrl+Shift+O para alternar)"
+              className="px-2 py-0.5 bg-red-950/40 hover:bg-red-900/60 border border-red-800/50 text-red-300 hover:text-white rounded text-[10px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
+              title="Ocultar (Ctrl+Shift+O para alternar)"
             >
               <span>✕</span>
-              <span>Ocultar</span>
             </button>
           </div>
         </div>
 
-        {/* Buscador de Campeón Desplegable */}
+        {/* Buscador Desplegable de Campeón */}
         {showChampSearch && (
-          <div className="p-2.5 bg-[#03070f] border-b border-cyan-900/60 flex flex-col gap-1.5">
+          <div className="absolute top-10 left-2 right-2 z-50 p-2 bg-[#02050b] border border-cyan-700/80 rounded-md shadow-2xl flex flex-col gap-1.5">
             <div className="flex items-center gap-2">
               <input
                 type="text"
-                placeholder="Escribe el nombre del campeón (Kai'Sa, Jayce, Aatrox...)..."
+                placeholder="Escribe el nombre del campeón (Sylas, Kai'Sa, Jayce...)..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1 bg-[#02050b] border border-cyan-700/60 rounded px-2.5 py-1 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-cyan-400"
+                className="flex-1 bg-[#050d1a] border border-cyan-800 rounded px-2 py-1 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-cyan-400"
                 autoFocus
               />
               <button
@@ -495,7 +471,7 @@ export function OverlayApp() {
                     setShowChampSearch(false);
                     setSearchQuery('');
                   }}
-                  className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${
+                  className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
                     activeChampionId === c.id
                       ? 'bg-cyan-600 text-white border-cyan-400 font-bold'
                       : 'bg-[#091526] text-gray-300 border-cyan-900/40 hover:bg-cyan-950 hover:text-cyan-200'
@@ -508,65 +484,62 @@ export function OverlayApp() {
           </div>
         )}
 
-        {/* Alerta de Modo Pantalla Completa si no es Sin Bordes */}
+        {/* Alerta de Modo Pantalla Completa */}
         {!state.isBorderless && (
-          <div className="px-3 py-1.5 bg-amber-950/90 border-b border-amber-600/60 flex items-center justify-between gap-2 text-[11px] text-amber-200">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="text-amber-400 font-bold shrink-0">⚠</span>
-              <span className="truncate">LoL en pantalla completa: el overlay puede ocultarse.</span>
-            </div>
+          <div className="px-2 py-0.5 bg-amber-950/80 border border-amber-600/50 rounded flex items-center justify-between gap-2 text-[10px] text-amber-200">
+            <span className="truncate">LoL en pantalla completa: el overlay requiere Sin Bordes.</span>
             <button
               onClick={handleApplyBorderless}
               disabled={borderlessApplying}
-              className="px-2 py-0.5 bg-amber-500 hover:bg-amber-400 text-gray-950 font-black text-[10px] rounded uppercase tracking-wider shrink-0 cursor-pointer shadow disabled:opacity-50"
+              className="px-2 py-0.5 bg-amber-500 hover:bg-amber-400 text-gray-950 font-black text-[9px] rounded uppercase shrink-0 cursor-pointer"
             >
-              {borderlessApplying ? '...' : 'Configurar Sin Bordes'}
+              {borderlessApplying ? '...' : 'Poner Sin Bordes'}
             </button>
           </div>
         )}
 
-        {/* CUERPO: Tarjetas de Aumentos Idénticas al Estilo Blitz / P3R */}
-        <div className="p-3 bg-[#03070f]/90 min-h-[300px] flex items-center justify-center">
+        {/* FILA INFERIOR: 4 Tarjetas Horizontales de Aumentos */}
+        <div className="min-h-[56px] flex items-center justify-center">
           {loading ? (
-            <div className="py-16 text-center text-cyan-400 font-mono text-sm animate-pulse flex flex-col items-center gap-2">
-              <span className="text-2xl animate-spin">⚙</span>
+            <div className="py-2 text-cyan-400 font-mono text-xs animate-pulse flex items-center gap-2">
+              <span className="animate-spin text-sm">⚙</span>
               <span>Cargando análisis de mejoras para {champion?.name || 'tu campeón'}...</span>
             </div>
           ) : !activeChampionId || activeChampionId <= 0 ? (
-            <div className="py-14 text-center text-cyan-300/80 font-mono text-sm flex flex-col items-center gap-2">
-              <span className="text-3xl">⚔️</span>
-              <span className="font-bold">Esperando que elijas un campeón en LoL</span>
-              <span className="text-xs text-gray-400">
-                Al entrar a partida o pulsar 🔍 arriba se cargarán las mejores opciones automáticamente.
-              </span>
+            <div className="py-2 text-cyan-300/80 font-mono text-xs flex items-center gap-2">
+              <span>⚔️</span>
+              <span>Esperando selección de campeón en LoL (o usa 🔍 para buscarlo)</span>
             </div>
           ) : augmentsFiltrados.length === 0 ? (
-            <div className="py-14 text-center text-gray-400 text-sm">
+            <div className="py-2 text-gray-400 text-xs">
               No hay mejoras registradas para este filtro en {champion?.name}.
             </div>
           ) : (
-            <div className="w-full grid grid-cols-4 gap-3">
+            <div className="w-full grid grid-cols-4 gap-2">
               {augmentsFiltrados.slice(0, 4).map((augment) => {
                 const isBest = augment.id === bestAugmentId || augment.isBest;
 
                 return (
                   <div
                     key={augment.id}
-                    className={`relative rounded-lg p-3 flex flex-col items-center justify-between transition-all border-2 ${
+                    className={`relative rounded p-1.5 flex items-center gap-2 transition-all border ${
                       isBest
-                        ? 'bg-gradient-to-b from-[#0f233d] via-[#071322] to-[#040914] border-amber-400 shadow-[0_0_18px_rgba(245,158,11,0.35)]'
-                        : 'bg-gradient-to-b from-[#0a182c] via-[#050e1c] to-[#030712] border-cyan-800/60 hover:border-cyan-400/70 shadow-lg'
+                        ? 'bg-gradient-to-r from-amber-950/50 via-[#0a182c] to-[#040814] border-amber-400/90 shadow-[0_0_10px_rgba(245,158,11,0.25)]'
+                        : 'bg-[#060e1d]/90 border-cyan-900/60 hover:border-cyan-400/70 shadow-xs'
                     }`}
                   >
-                    {/* Cinta de Mejor Opción */}
+                    {/* Cinta Mejor Opción */}
                     {isBest && (
-                      <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 text-gray-950 font-black text-[9px] uppercase px-2.5 py-0.5 rounded shadow-md tracking-wider whitespace-nowrap">
-                        ★ MEJOR OPCIÓN
+                      <div className="absolute -top-1.5 left-2 bg-gradient-to-r from-amber-400 to-yellow-300 text-gray-950 font-black text-[7px] uppercase px-1 py-0 rounded shadow-xs tracking-wider">
+                        ★ MEJOR
                       </div>
                     )}
 
-                    {/* Parte Superior: Icono del Aumento */}
-                    <div className="relative w-14 h-14 rounded-md border-2 border-amber-300/60 bg-gray-950 p-1 mt-1 shadow-inner overflow-hidden flex items-center justify-center">
+                    {/* Escudo de Tier */}
+                    <TierShield tier={augment.tier} />
+
+                    {/* Icono del Aumento */}
+                    <div className="w-8 h-8 rounded border border-cyan-700/60 bg-gray-950 shrink-0 overflow-hidden flex items-center justify-center">
                       <img
                         src={
                           augment.iconUrl ||
@@ -581,58 +554,21 @@ export function OverlayApp() {
                       />
                     </div>
 
-                    {/* Parte Media: Título y Retrato del Campeón (Igual a Blitz) */}
-                    <div className="w-full flex flex-col items-center text-center my-2">
-                      <h3 className="font-bold text-white text-[13px] leading-tight truncate w-full" title={augment.nameEs || augment.name}>
+                    {/* Información: Nombre + Pick Rate + Rareza */}
+                    <div className="flex-1 min-w-0 flex flex-col justify-center">
+                      <span
+                        className="text-[11px] font-bold text-white truncate leading-tight"
+                        title={`${augment.nameEs || augment.name} - ${augment.desc || ''}`}
+                      >
                         {augment.nameEs || augment.name}
-                      </h3>
+                      </span>
 
-                      {augment.nameEs && augment.nameEs !== augment.name && (
-                        <span className="text-[10px] text-gray-400 font-mono truncate w-full">
-                          {augment.name}
-                        </span>
-                      )}
-
-                      <div className="mt-1 flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 mt-0.5">
                         <RarityTag rarity={augment.rarity} />
-                      </div>
-
-                      {/* Retrato del Campeón asignado (Kai'Sa / Jayce / etc.) */}
-                      {champion && (
-                        <div className="mt-2 flex items-center gap-1.5 px-2 py-0.5 bg-[#03060c] border border-cyan-900/50 rounded-full">
-                          <img
-                            src={`https://ddragon.leagueoflegends.com/cdn/img/champion/tiles/${champion.key}_0.jpg`}
-                            alt={champion.name}
-                            className="w-4 h-4 rounded-full object-cover border border-cyan-400"
-                          />
-                          <span className="text-[10px] text-gray-300 font-mono uppercase font-bold">
-                            {champion.name}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Descripción breve */}
-                      {augment.desc && (
-                        <p
-                          className="text-[10px] text-gray-400 leading-snug line-clamp-2 mt-1.5 px-1 text-center"
-                          dangerouslySetInnerHTML={{ __html: augment.desc }}
-                        />
-                      )}
-                    </div>
-
-                    {/* Parte Inferior: Pick Rate en Cian + Escudo de Tier Centrado */}
-                    <div className="w-full pt-2 border-t border-cyan-950 flex flex-col items-center gap-1 mt-auto">
-                      <div className="text-center">
-                        <span className="text-[9px] text-gray-400 uppercase tracking-tight block font-mono">
-                          Pick Rate
-                        </span>
-                        <span className="text-sm font-black text-cyan-300 tracking-tight font-mono drop-shadow-[0_0_6px_rgba(6,182,212,0.5)]">
+                        <span className="text-[10px] font-black text-cyan-300 font-mono drop-shadow-[0_0_4px_rgba(6,182,212,0.4)]">
                           {augment.pickRate != null ? `${augment.pickRate.toFixed(1)}%` : '—'}
                         </span>
                       </div>
-
-                      {/* Escudo de Tier Centrado al Fondo de la Tarjeta */}
-                      <TierShield tier={augment.tier} />
                     </div>
                   </div>
                 );
@@ -641,11 +577,11 @@ export function OverlayApp() {
           )}
         </div>
 
-        {/* Barra de Progreso del Temporizador de Cierre */}
-        <div className="w-full bg-[#03070f] h-1">
+        {/* Barra de progreso de auto-cierre */}
+        <div className="w-full bg-[#02050b] h-0.5 rounded-full overflow-hidden">
           <div
-            className="bg-cyan-500 h-full transition-all duration-1000 ease-linear"
-            style={{ width: `${Math.max(0, Math.min(100, (countdown / 30) * 100))}%` }}
+            className="bg-cyan-400 h-full transition-all duration-1000 ease-linear"
+            style={{ width: `${Math.max(0, Math.min(100, (countdown / 25) * 100))}%` }}
           />
         </div>
       </div>

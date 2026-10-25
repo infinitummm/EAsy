@@ -360,11 +360,15 @@ app.whenReady().then(async () => {
     // Resolver campeón local usando la LCU (funciona en ChampSelect, InProgress y PreEndOfGame)
     const campeonLocal = await resolverCampeonLocalLcu(lcuClient).catch(() => null);
     if (campeonLocal && campeonLocal.championId > 0) {
+      const modoActivo = modo || overlayManager?.getState().gameMode || 'aram_mayhem';
       overlayManager?.setCampeonYModo(
         campeonLocal.championId,
         campeonLocal.championName,
-        modo || overlayManager?.getState().gameMode || 'aram_mayhem'
+        modoActivo
       );
+      if (modeAugmentService && (modoActivo === 'aram_mayhem' || modoActivo === 'arena')) {
+        modeAugmentService.getChampionAugments(campeonLocal.championId, modoActivo).then((d) => overlayManager?.setDatosModo(d)).catch(() => {});
+      }
     }
 
     if (fase === 'ChampSelect') {
@@ -404,7 +408,10 @@ app.whenReady().then(async () => {
                   const hitMilestone = [3, 7, 11, 15].includes(nivel) && nivel !== ultimoNivelJugador;
                   const murioConAumento = estaMuerto && !estabaMuerto && nivel >= 3;
                   if (hitMilestone || murioConAumento) {
-                    overlayManager?.triggerAugmentSelection(30);
+                    overlayManager?.triggerAugmentSelection(25);
+                  }
+                  if (!estaMuerto && estabaMuerto) {
+                    overlayManager?.hide();
                   }
                   if (nivel > 0) ultimoNivelJugador = nivel;
                   estabaMuerto = estaMuerto;

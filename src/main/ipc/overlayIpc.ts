@@ -48,6 +48,18 @@ export function registrarOverlayIpc(
           return await modeService.getChampionAugments(championId, mode, patch);
         } catch (e: any) {
           registrarLog(`[OverlayIPC] Error en modeService.getChampionAugments: ${e.message}`);
+          if (mode === 'aram_mayhem') {
+            try {
+              registrarLog(`[OverlayIPC] Intentando catálogo de Arena como respaldo para campeón ${championId}...`);
+              const fallback = await modeService.getChampionAugments(championId, 'arena', patch);
+              return {
+                ...fallback,
+                mode: 'aram_mayhem',
+              };
+            } catch (errArena: any) {
+              registrarLog(`[OverlayIPC] Error también en fallback de Arena: ${errArena.message}`);
+            }
+          }
         }
       }
 

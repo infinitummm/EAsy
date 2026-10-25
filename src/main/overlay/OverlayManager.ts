@@ -36,10 +36,11 @@ export class OverlayManager {
     const primaryDisplay = screen.getPrimaryDisplay();
     const { width } = primaryDisplay.workAreaSize;
 
-    const windowWidth = 820;
-    const windowHeight = 440;
+    // Dimensiones compactas superiores para no obstruir las cartas de LoL
+    const windowWidth = 860;
+    const windowHeight = 115;
     const posX = Math.max(0, Math.round((width - windowWidth) / 2));
-    const posY = 35;
+    const posY = 8; // Ubicado en el margen superior (cartas de Riot van de y=280 a y=750)
 
     this.window = new BrowserWindow({
       width: windowWidth,
@@ -49,9 +50,10 @@ export class OverlayManager {
       frame: false,
       transparent: true,
       hasShadow: false,
-      resizable: true,
+      resizable: false,
       skipTaskbar: true,
-      focusable: true,
+      focusable: false, // CRÍTICO: jamás robar foco de entrada a DirectX / League of Legends
+      type: 'toolbar', // Tipo barra de herramientas en Windows para evitar activación y alt-tab
       show: false,
       backgroundColor: '#00000000',
       webPreferences: {
@@ -64,6 +66,8 @@ export class OverlayManager {
 
     this.window.setAlwaysOnTop(true, 'screen-saver', 1);
     this.window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    // Por defecto, permitir que los clics del ratón atraviesen hacia el juego
+    this.window.setIgnoreMouseEvents(true, { forward: true });
 
     // Cargar URL según entorno
     if (process.env.VITE_DEV_SERVER_URL) {
@@ -79,7 +83,7 @@ export class OverlayManager {
     // Registrar atajos globales
     this.registrarAtajos();
 
-    registrarLog('[OverlayManager] Ventana de overlay inicializada con éxito.');
+    registrarLog('[OverlayManager] Ventana de overlay compacta inicializada con éxito.');
   }
 
   /**
@@ -101,8 +105,6 @@ export class OverlayManager {
     }
   }
 
-  private topInterval: NodeJS.Timeout | null = null;
-
   /**
    * Muestra la ventana del overlay sin robar el foco de Windows (`showInactive`).
    */
@@ -111,11 +113,7 @@ export class OverlayManager {
     if (this.window) {
       this.window.showInactive();
       this.window.setAlwaysOnTop(true, 'screen-saver', 1);
-      if (typeof this.window.moveTop === 'function') {
-        this.window.moveTop();
-      }
       this.state.visible = true;
-      this.iniciarMantenimientoTop();
       this.emitirEstado();
       registrarLog('[OverlayManager] Overlay mostrado (inactivo sin robar foco).');
     }
@@ -126,30 +124,10 @@ export class OverlayManager {
    */
   public hide(): void {
     if (this.window && this.state.visible) {
-      this.detenerMantenimientoTop();
       this.window.hide();
       this.state.visible = false;
       this.emitirEstado();
       registrarLog('[OverlayManager] Overlay ocultado.');
-    }
-  }
-
-  private iniciarMantenimientoTop(): void {
-    if (this.topInterval) clearInterval(this.topInterval);
-    this.topInterval = setInterval(() => {
-      if (this.window && !this.window.isDestroyed() && this.state.visible) {
-        this.window.setAlwaysOnTop(true, 'screen-saver', 1);
-        if (typeof this.window.moveTop === 'function') {
-          this.window.moveTop();
-        }
-      }
-    }, 1500);
-  }
-
-  private detenerMantenimientoTop(): void {
-    if (this.topInterval) {
-      clearInterval(this.topInterval);
-      this.topInterval = null;
     }
   }
 
@@ -168,8 +146,7 @@ export class OverlayManager {
 
   /**
    * Activa automáticamente el overlay en el momento de escoger aumentos.
-   * Abre el overlay si estaba oculto, asegura mantenimiento de capa superior
-   * y emite el evento 'overlay:auto-trigger' con la duración temporal de auto-cierre.
+   * Abre el overlay si estaba oculto sin robar foco y emite la duración temporal de auto-cierre.
    */
   public triggerAugmentSelection(duracionSegundos = 25): void {
     if (!this.state.visible) {
@@ -190,7 +167,7 @@ export class OverlayManager {
    * Configura si los eventos de ratón deben atravesar la ventana hacia el juego.
    */
   public setIgnoreMouseEvents(ignore: boolean, forward = true): void {
-    if (this.window) {
+    if (this.window && !this.window.isDestroyed()) {
       this.ignoreMouse = ignore;
       this.window.setIgnoreMouseEvents(ignore, { forward });
     }
@@ -205,9 +182,13 @@ export class OverlayManager {
    * Actualiza el campeón y modo de juego detectados.
    */
   public setCampeonYModo(championId: number, championName: string, mode: TipoModo): void {
+    const cambioCampeon = this.state.championId !== championId;
     this.state.championId = championId;
     this.state.championName = championName;
     this.state.gameMode = mode;
+    if (cambioCampeon && championId <= 0) {
+      this.state.data = null;
+    }
     this.emitirEstado();
   }
 
@@ -241,7 +222,6 @@ export class OverlayManager {
   }
 
   public destroy(): void {
-    this.detenerMantenimientoTop();
     globalShortcut.unregister('CommandOrControl+Shift+O');
     globalShortcut.unregister('CommandOrControl+Shift+I');
     if (this.window && !this.window.isDestroyed()) {

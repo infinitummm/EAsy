@@ -52,7 +52,6 @@ export class OverlayManager {
       resizable: false,
       skipTaskbar: true,
       focusable: false, // CRÍTICO: jamás robar foco de entrada a DirectX / League of Legends
-      type: 'toolbar', // Tipo barra de herramientas en Windows para evitar activación y alt-tab
       show: false,
       backgroundColor: '#00000000',
       webPreferences: {

@@ -113,7 +113,7 @@ export function OverlayApp() {
   ]);
   const [bestCardIndex, setBestCardIndex] = useState<1 | 2 | 3 | null>(null);
   const [isScanning, setIsScanning] = useState<boolean>(false);
-  const [collapsed, setCollapsed] = useState<boolean>(false);
+  const [collapsed, setCollapsed] = useState<boolean>(true);
 
   // Temporizador de auto-cierre
   const [countdown, setCountdown] = useState<number>(25);
@@ -145,6 +145,12 @@ export function OverlayApp() {
           championId: newState.championId && newState.championId > 0 ? newState.championId : prev.championId,
           championName: newState.championName || prev.championName,
         }));
+        if (newState.visible) {
+          setCollapsed(false);
+          setCountdown(25);
+        } else {
+          setCollapsed(true);
+        }
       });
       return () => {
         unsub?.();
@@ -309,7 +315,10 @@ export function OverlayApp() {
   ];
 
   return (
-    <div className="w-screen h-screen relative pointer-events-none select-none overflow-hidden">
+    <div
+      className="w-screen h-screen relative pointer-events-none select-none overflow-hidden bg-transparent"
+      style={{ background: 'transparent', backgroundColor: 'transparent' }}
+    >
       {/* 3 INSIGNIAS FLOTANTES DEBAJO DE CADA CARTA CENTRAL (ESTILO BLITZ) */}
       {cardPositions.map((pos, i) => {
         const card = displayCards[i];

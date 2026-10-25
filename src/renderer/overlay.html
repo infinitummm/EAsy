@@ -1,12 +1,21 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" style="background: transparent !important; background-color: transparent !important;">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EAsy Overlay</title>
+    <style>
+      html, body, #overlay-root {
+        background: transparent !important;
+        background-color: transparent !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+      }
+    </style>
   </head>
-  <body class="bg-transparent text-gray-100 select-none overflow-hidden antialiased m-0 p-0">
-    <div id="overlay-root"></div>
+  <body class="overlay-body bg-transparent text-gray-100 select-none overflow-hidden antialiased m-0 p-0" style="background: transparent !important; background-color: transparent !important;">
+    <div id="overlay-root" style="background: transparent !important; background-color: transparent !important;"></div>
     <script type="module" src="./overlay/main.tsx"></script>
   </body>
 </html>

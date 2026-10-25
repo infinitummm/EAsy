@@ -23,12 +23,20 @@
   color-scheme: dark;
 }
 
-body {
+body:not(.overlay-body) {
   margin: 0;
   padding: 0;
   background-color: #030814;
   color: #E2E8F0;
   overflow: hidden;
+}
+
+body.overlay-body {
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  overflow: hidden !important;
 }
 
 /* Persona 3 Reload Scrollbar - Hard-edge, angular */

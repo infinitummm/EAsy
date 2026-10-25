@@ -374,15 +374,16 @@ app.whenReady().then(async () => {
     }
 
     if (fase === 'ChampSelect') {
-      if (modo === 'aram_mayhem' || modo === 'arena' || modo === 'aram') {
+      if (modo === 'aram_mayhem' || modo === 'arena') {
         try {
           const csSession = await lcuClient.request<any>('GET', '/lol-champ-select/v1/session');
           actualizarCampeonSeleccionado(csSession, modo);
         } catch {}
-        overlayManager?.show();
       }
+      // NUNCA mostrar overlay en selección de campeones. El overlay es exclusivo para aumentos in-game.
+      overlayManager?.hide();
     } else if (fase === 'InProgress') {
-      if (modo === 'aram_mayhem' || modo === 'arena' || modo === 'aram') {
+      if (modo === 'aram_mayhem' || modo === 'arena') {
         // En partida activa de Arena o ARAM Caos, activar automáticamente el selector temporal de aumentos
         overlayManager?.triggerAugmentSelection(30);
 
@@ -438,8 +439,11 @@ app.whenReady().then(async () => {
             } catch {}
           }, 2000);
         }
+      } else {
+        // En cualquier otro modo (Ranked, Normal, ARAM estándar) ocultar el overlay
+        overlayManager?.hide();
       }
-    } else if (fase === 'None' || fase === 'Lobby' || fase === 'PreEndOfGame' || fase === 'WaitingForStats') {
+    } else {
       if (inGamePollingInterval) {
         clearInterval(inGamePollingInterval);
         inGamePollingInterval = null;

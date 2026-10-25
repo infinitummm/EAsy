@@ -36,7 +36,7 @@ import { iniciarAutoUpdater } from './updater';
 import { OverlayManager } from './overlay/OverlayManager';
 import { registrarOverlayIpc } from './ipc/overlayIpc';
 import { BorderlessDetector } from './modes/BorderlessDetector';
-import { ModeAugmentService } from './modes/ModeAugmentService';
+import { ModeAugmentService, construirDatosModoDesdeCatalogoLocal } from './modes/ModeAugmentService';
 import { LiveClientDataClient, detectarModoEnLcu, resolverCampeonLocalLcu } from './lcu/LiveClientDataClient';
 import type { IModeService } from '../shared/contracts';
 import type { TipoModo, GameflowPhase } from '../shared/types';
@@ -376,8 +376,23 @@ app.whenReady().then(async () => {
         campeonLocal.championName,
         modoActivo
       );
-      if (modeAugmentService && (modoActivo === 'aram_mayhem' || modoActivo === 'arena')) {
-        modeAugmentService.getChampionAugments(campeonLocal.championId, modoActivo).then((d) => overlayManager?.setDatosModo(d)).catch(() => {});
+      if (modoActivo === 'aram_mayhem' || modoActivo === 'arena') {
+        // Asignar inmediatamente los datos locales en 0 ms para garantizar que el detector siempre tenga catálogo
+        const datosLocales = construirDatosModoDesdeCatalogoLocal({
+          championId: campeonLocal.championId,
+          championName: campeonLocal.championName,
+          modo: modoActivo,
+          parche: '16.21',
+          ahora: Date.now(),
+        });
+        overlayManager?.setDatosModo(datosLocales);
+
+        // Si OP.GG responde en segundo plano, enriquecer con estadísticas en vivo
+        if (modeAugmentService) {
+          modeAugmentService.getChampionAugments(campeonLocal.championId, modoActivo)
+            .then((d) => overlayManager?.setDatosModo(d))
+            .catch(() => {});
+        }
       }
     }
 

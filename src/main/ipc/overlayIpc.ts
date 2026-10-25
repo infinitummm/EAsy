@@ -9,6 +9,8 @@ import type { IModeService } from '../../shared/contracts';
 import type { OverlayManager } from '../overlay/OverlayManager';
 import type { TipoModo } from '../../shared/types';
 import { registrarLog } from '../lcu/LcuDetector';
+import { construirDatosModoDesdeCatalogoLocal } from '../modes/ModeAugmentService';
+import { getChampionById } from '../../shared/champions';
 
 export function registrarOverlayIpc(
   overlayManager: OverlayManager,
@@ -63,20 +65,15 @@ export function registrarOverlayIpc(
         }
       }
 
-      // Si aún no está listo el servicio de modo, devolver estructura vacía consistente
-      return {
+      // Fallback garantizado desde el catálogo local completo (594 aumentos en 0 ms)
+      const champ = getChampionById(championId);
+      return construirDatosModoDesdeCatalogoLocal({
         championId,
-        championName: `Campeón ${championId}`,
-        mode,
-        patch: patch || '16.21',
-        augments: [],
-        suggestedAugments: {
-          silver: [],
-          gold: [],
-          prismatic: [],
-        },
-        lastUpdated: Date.now(),
-      };
+        championName: champ?.name || `Campeón ${championId}`,
+        modo: mode,
+        parche: patch || '16.21',
+        ahora: Date.now(),
+      });
     }
   );
 

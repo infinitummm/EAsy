@@ -191,7 +191,7 @@ export class OverlayManager {
    * Si la detección no arroja resultado o falla, notifica al renderer para desactivar el spinner.
    */
   public async reanalyze(): Promise<boolean> {
-    if (!this.state.data || !this.window || this.window.isDestroyed()) {
+    if (!this.window || this.window.isDestroyed()) {
       return false;
     }
 

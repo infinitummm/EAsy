@@ -7,9 +7,12 @@
 
 import { BrowserWindow, screen, globalShortcut, app } from 'electron';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { IPC_CHANNELS } from '../../shared/events';
 import type { OverlayState, TipoModo, DatosModoCampeon } from '../../shared/types';
 import { registrarLog } from '../lcu/LcuDetector';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export class OverlayManager {
   private window: BrowserWindow | null = null;

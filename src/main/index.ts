@@ -280,35 +280,39 @@ app.whenReady().then(async () => {
   setupProfileIpc(dbService || undefined, riotClient, profileSyncService || undefined, lcuClient);
 
   // 5.1. Inicializar Overlay In-Game para ARAM Caos y Arena (v1.1.0)
-  const preloadPath = path.join(__dirname, '../preload/index.js');
-  overlayManager = new OverlayManager(preloadPath);
-  overlayManager.initialize();
+  try {
+    const preloadPath = path.join(__dirname, '../preload/index.js');
+    overlayManager = new OverlayManager(preloadPath);
+    overlayManager.initialize();
 
-  borderlessDetector = new BorderlessDetector({
-    rutaInstalacionPorDefecto: dbService?.getSettings().leagueInstallationPath,
-  });
-  modeAugmentService = dbService ? new ModeAugmentService(dbService) : null;
-  liveClientDataClient = new LiveClientDataClient();
+    borderlessDetector = new BorderlessDetector({
+      rutaInstalacionPorDefecto: dbService?.getSettings().leagueInstallationPath,
+    });
+    modeAugmentService = dbService ? new ModeAugmentService(dbService) : null;
+    liveClientDataClient = new LiveClientDataClient();
 
-  const modeService: IModeService = {
-    async getChampionAugments(championId: number, mode: TipoModo, patch?: string) {
-      if (!modeAugmentService) {
-        throw new Error('Servicio de mejoras de modo no disponible (base de datos inactiva)');
-      }
-      return modeAugmentService.getChampionAugments(championId, mode, patch);
-    },
-    async checkBorderless(installationPath?: string) {
-      const ruta = installationPath || dbService?.getSettings().leagueInstallationPath;
-      return borderlessDetector!.checkBorderless(ruta);
-    },
-  };
+    const modeService: IModeService = {
+      async getChampionAugments(championId: number, mode: TipoModo, patch?: string) {
+        if (!modeAugmentService) {
+          throw new Error('Servicio de mejoras de modo no disponible (base de datos inactiva)');
+        }
+        return modeAugmentService.getChampionAugments(championId, mode, patch);
+      },
+      async checkBorderless(installationPath?: string) {
+        const ruta = installationPath || dbService?.getSettings().leagueInstallationPath;
+        return borderlessDetector!.checkBorderless(ruta);
+      },
+    };
 
-  registrarOverlayIpc(overlayManager, modeService);
+    registrarOverlayIpc(overlayManager, modeService);
 
-  // Verificar estado sin bordes al arrancar
-  borderlessDetector.checkBorderless().then((res) => {
-    overlayManager?.setBorderless(res.isBorderless);
-  }).catch(() => {});
+    // Verificar estado sin bordes al arrancar
+    borderlessDetector.checkBorderless().then((res) => {
+      overlayManager?.setBorderless(res.isBorderless);
+    }).catch(() => {});
+  } catch (err) {
+    console.error('[Main] Advertencia inicializando Overlay:', err);
+  }
 
   // Manejador para actualizar el campeón en selección
   const actualizarCampeonSeleccionado = (sesion: any, modo: TipoModo) => {

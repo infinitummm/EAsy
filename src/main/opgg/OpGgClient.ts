@@ -88,9 +88,10 @@ export function roleToOpGgPosition(role: Role): string {
  * Parsea respuestas en formato Python Dataclasses que devuelve lol_get_champion_analysis.
  */
 export function parsePythonDataclasses(rawText: string): any {
-  const parts = rawText.split('\n\n');
+  const textoLimpio = rawText.replace(/\r\n/g, '\n');
+  const parts = textoLimpio.split('\n\n');
   if (parts.length < 2) {
-    if (rawText.trim().startsWith('{')) return JSON.parse(rawText);
+    if (textoLimpio.trim().startsWith('{')) return JSON.parse(textoLimpio);
     throw new Error('Formato de OP.GG MCP no reconocido.');
   }
 

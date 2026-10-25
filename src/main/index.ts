@@ -23,6 +23,10 @@ import { PatchDiffService } from './riot/PatchDiffService';
 import { DEFAULT_APP_SETTINGS, APP_NAME } from '../shared/constants';
 import { IPC_CHANNELS } from '../shared/events';
 import { iniciarAutoUpdater } from './updater';
+import { OverlayManager } from './overlay/OverlayManager';
+import { registrarOverlayIpc } from './ipc/overlayIpc';
+import type { TipoModo } from '../shared/types';
+
 
 let mainWindow: BrowserWindow | null = null;
 const lcuClient = new LcuClient({
@@ -45,6 +49,7 @@ let profileSyncService: ProfileSyncService | null = null;
 let matchupCacheRepo: MatchupCacheRepo | null = null;
 let opggClient: OpGgClient | null = null;
 let podaCacheInterval: NodeJS.Timeout | null = null;
+let overlayManager: OverlayManager | null = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -249,6 +254,30 @@ app.whenReady().then(async () => {
   );
   setupProfileIpc(dbService || undefined, riotClient, profileSyncService || undefined, lcuClient);
 
+  // 5.1. Inicializar Overlay In-Game para ARAM Caos y Arena (v1.1.0)
+  const preloadPath = path.join(__dirname, '../preload/index.js');
+  overlayManager = new OverlayManager(preloadPath);
+  overlayManager.initialize();
+  registrarOverlayIpc(overlayManager);
+
+  // Reaccionar a cambios de Gameflow para mostrar/ocultar el overlay automáticamente
+  lcuClient.on(EVENTOS_LCU_CLIENT.GAMEFLOW_CAMBIADO, async (fase) => {
+    if (fase === 'ChampSelect' || fase === 'InProgress') {
+      try {
+        const session = await lcuClient.request<any>('GET', '/lol-gameflow/v1/session');
+        const queueId = session?.gameData?.queue?.id;
+        if (queueId === 2400 || queueId === 1700 || queueId === 450) {
+          const mode: TipoModo = queueId === 1700 ? 'arena' : queueId === 2400 ? 'aram_mayhem' : 'aram';
+          overlayManager?.setCampeonYModo(0, '', mode);
+          overlayManager?.show();
+        }
+      } catch {}
+    } else if (fase === 'None' || fase === 'Lobby' || fase === 'EndOfGame') {
+      overlayManager?.hide();
+    }
+  });
+
+
   createWindow();
   iniciarAutoUpdater(() => mainWindow?.webContents ?? null);
 
@@ -273,6 +302,7 @@ app.on('window-all-closed', () => {
     champSelectManager.detener();
     champSelectManager = null;
   }
+  overlayManager?.destroy();
   lcuClient.disconnect();
   if (dbService) {
     try {

@@ -86,6 +86,8 @@ export const api = {
     ipcRenderer.invoke(IPC_CHANNELS.MODES_GET_CHAMPION_AUGMENTS, params),
   checkBorderless: (installationPath?: string): Promise<{ isBorderless: boolean; windowMode: number; configPath: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.MODES_CHECK_BORDERLESS, installationPath),
+  setIgnoreMouseEvents: (ignore: boolean, options?: { forward: boolean }) =>
+    ipcRenderer.send('overlay:set-ignore-mouse-events', ignore, options?.forward ?? true),
   onOverlayStateChanged: (cb: (state: OverlayState) => void) => {
     const sub = (_: any, data: any) => cb(data);
     ipcRenderer.on(IPC_CHANNELS.OVERLAY_STATE_CHANGED, sub);

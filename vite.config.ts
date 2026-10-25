@@ -51,6 +51,12 @@ export default defineConfig({
   root: path.join(__dirname, 'src/renderer'),
   build: {
     outDir: path.join(__dirname, 'dist/renderer'),
-    emptyOutDir: true
+    emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'src/renderer/index.html'),
+        overlay: path.resolve(__dirname, 'src/renderer/overlay.html')
+      }
+    }
   }
 });

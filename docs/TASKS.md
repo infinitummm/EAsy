@@ -99,3 +99,17 @@ Este documento desglosa todas las tareas del proyecto por fases, asignando un ú
 | **T-8.5** | ANTIGRAVITY | Ventana Electron Overlay (Transparente, Always-on-top, Click-through e Inactive) | `src/main/overlay/OverlayManager.ts`, `src/main/index.ts` | T-8.2, T-8.4 | Ventana `frame:false`, `transparent:true`, atajos globales `Ctrl+Shift+O`, control de opacidad e ignoreMouseEvents. |
 | **T-8.6** | ANTIGRAVITY | Componentes React Overlay UI (Tarjeta Blitz, Badge de Tier Dorado/Plateado, Pick Rate Cian) | `src/overlay/*`, `overlay.html`, `vite.config.ts` | T-8.3, T-8.5 | Tarjeta visual con estética P3R/Blitz, nombre del campeón, tier badges coloreados, pick rate cian y distinción de la mejor opción. |
 | **T-8.7** | ANTIGRAVITY | Verificación integral, suite completa de tests y build de producción v1.1.0 | `tests/*`, `dist/` | T-8.6 | 100% tests pasando (`vitest run`), `tsc --noEmit` limpio, y empaquetado sin errores. |
+
+---
+
+## FASE 9: Overlay de Augments V2 (Lectura en Pantalla + Visibilidad Exacta)
+
+| ID | Responsable | Objetivo | Archivos | Dependencias | Criterio de Terminado | Estado |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **T-9.0** | ANTIGRAVITY | Fase 0: Verificación empírica sobre capturas reales in-game, calibración de ROIs y PSM | `docs/VERIFICACION_PANTALLA_AUGMENTS.md`, `scripts/sondeo-pantalla-augments.cjs` | T-8.7 | Coordenadas parametrizadas verificadas, PSM 6 validado con 95%+ confianza, umbrales RGB determinados. | **COMPLETADO** |
+| **T-9.1** | ANTIGRAVITY | Detector visual de presencia del panel (`AugmentPanelDetector`) | `src/main/ocr/AugmentPanelDetector.ts`, `tests/ocr/augmentPanelDetector.test.ts` | T-9.0 | Muestreo ligero de color, máquina de estados con debounce (1 tick abrir, 2 ticks cerrar), oferta consumida, 100% tests pasando. | **COMPLETADO** |
+| **T-9.2** | ANTIGRAVITY | Reparación de `ScreenAugmentDetector` (PSM 6, preprocesado, Damerau-Levenshtein $\ge 0.70$, erradicación de tiers inventados) | `src/main/ocr/ScreenAugmentDetector.ts`, `tests/ocr/screenDetector.test.ts` | T-9.0 | Matching difuso con Damerau-Levenshtein, sin tiers fabricados, fallback "Sin datos" conforme a Ley 1. | **COMPLETADO** |
+| **T-9.3** | ANTIGRAVITY | Actualización de UI Overlay (`OverlayApp.tsx`) para datos estrictamente reales | `src/renderer/overlay/OverlayApp.tsx` | T-9.2 | Eliminado fallback a "top 3 recomendado"; muestra "Escaneando...", "No reconocido" o "Sin datos" fielmente. | **COMPLETADO** |
+| **T-9.4** | ANTIGRAVITY | Orquestación en ciclo de vida del juego (`index.ts`, `OverlayManager.ts`) | `src/main/index.ts`, `src/main/overlay/OverlayManager.ts`, `tests/overlay/overlayManager.test.ts` | T-9.1, T-9.3 | Apertura reactiva al detectar panel, cierre inmediato al elegir augment ($\le 1.5$s), tope de seguridad 45s. | **COMPLETADO** |
+| **T-9.5** | ANTIGRAVITY | Verificación integral (TypeScript, 474 tests Vitest, documentación y build) | `docs/REQUESTS.md`, `docs/TASKS.md` | T-9.1 a T-9.4 | `tsc --noEmit` limpio, 38 suites pasando, documentación alineada a la Ley 1. | **COMPLETADO** |
+

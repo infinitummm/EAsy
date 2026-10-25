@@ -358,3 +358,24 @@ Si OpenCode encuentra alguna ambigüedad técnica, inconsistencia o necesidad de
 - **Estado:** APROBADO
 - **Respuesta de Antigravity:** Aprobado. OpenCode desarrollará en su worktree `OpGgClient`, los métodos de versión de LCU, la limpieza de activos `[IL]` y las pruebas unitarias asociadas. Antigravity actualizará `src/shared/`, corregirá el bug de desmontaje del selector en Ajustes, adaptará los prompts de Gemini y la UI.
 
+---
+
+### [REQ-023] Overlay de Augments V2: Detección Visual, OCR Fiable y Visibilidad Exacta (Fase 9)
+- **Fecha:** 2026-10-25
+- **Tarea asociada:** T-9.0 a T-9.5 (Prompt Maestro `docs/PROMPT_LECTURA_AUGMENTS_V2.md`)
+- **Módulos afectados:** `src/main/ocr/AugmentPanelDetector.ts`, `src/main/ocr/ScreenAugmentDetector.ts`, `src/main/overlay/OverlayManager.ts`, `src/renderer/overlay/OverlayApp.tsx`, `src/main/index.ts`
+- **Problema encontrado:**
+  1. El overlay se abría y cerraba por temporizadores o eventos fijos de partida (nivel 3/7/11/15, rondas fijas de Arena), causando que se superpusiera en momentos indebidos o no cerrara al elegir augment.
+  2. El OCR previo usaba PSM por defecto sin preprocesamiento específico y matching por recuento de palabras en descripciones, produciendo falsos positivos.
+  3. Existía fallback con tiers fabricados (`idx % 3`, `pickRate: 8.0`) violando la Ley 1 ("NUNCA inventar datos").
+  4. Inyección en memoria en `League of Legends.exe` solicitada por el usuario es estrictamente inviable por Riot Vanguard (`vgk.sys`), lo que causaría baneo permanente de hardware (HWID ban).
+- **Propuesta de solución / Firma requerida:**
+  1. `AugmentPanelDetector`: sondeo de píxeles no invasivo (detección de botones de reroll y marco de cartas) a 0.5-1.4 Hz para activar `onPanelAbierto` y `onPanelCerrado` con debounce.
+  2. `ScreenAugmentDetector`: recortes calibrados en 16:9 (`CARD_TITLE_ROIS`), reescalado 2x/3x, Tesseract PSM 6 (validado empíricamente al 95-96% de confianza), matching difuso con Damerau-Levenshtein ($\ge 0.70$) sobre catálogo oficial y datos de OP.GG.
+  3. Eliminación absoluta de tiers ficticios. Si OP.GG no posee datos para el campeón, se muestra explícitamente `tier: '?'` y `'Sin datos'`.
+  4. Eliminación de fallback "top 3 recomendado" en `OverlayApp.tsx`. Si una carta no se reconoce con confianza, se presenta como "No reconocido" + botón "Re-escanear".
+  5. Mantener overlay pasante (`setIgnoreMouseEvents(true, { forward: true })`) y `focusable: false` para no interferir con la entrada de LoL.
+- **Estado:** APROBADO Y COMPLETADO
+- **Respuesta de Antigravity:** Implementado y verificado con 474 pruebas unitarias pasando y TypeScript 100% limpio. Se respeta escrupulosamente la Ley 1 y la integridad ante Riot Vanguard.
+
+

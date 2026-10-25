@@ -154,10 +154,10 @@ export class OverlayManager {
 
   /**
    * Activa automáticamente el overlay en el momento de escoger aumentos.
-   * Abre el overlay si estaba oculto sin robar foco, programa el auto-cierre
-   * garantizado en el proceso principal y lanza el análisis OCR en pantalla.
+   * Abre el overlay si estaba oculto sin robar foco, programa un tope de seguridad de 45s
+   * y lanza el análisis OCR en pantalla.
    */
-  public triggerAugmentSelection(duracionSegundos = 25): void {
+  public triggerAugmentSelection(duracionSegundos = 45): void {
     if (!this.state.visible) {
       this.show();
     }
@@ -167,7 +167,7 @@ export class OverlayManager {
       this.autoDismissTimer = null;
     }
 
-    // Temporizador de auto-cierre blindado en el proceso principal (no depende del renderer)
+    // Tope de seguridad blindado en el proceso principal (45 s)
     this.autoDismissTimer = setTimeout(() => {
       this.hide();
     }, duracionSegundos * 1000);
@@ -179,11 +179,25 @@ export class OverlayManager {
         gameMode: this.state.gameMode,
         autoDismissSeconds: duracionSegundos,
       });
-      registrarLog(`[OverlayManager] Activación automática de aumentos disparada (${duracionSegundos}s).`);
+      registrarLog(`[OverlayManager] Activación automática de aumentos disparada (tope seguridad: ${duracionSegundos}s).`);
 
-      // Ejecutar detección en pantalla si disponemos de aumentos cargados
+      // Ejecutar detección en pantalla
       this.reanalyze().catch(() => {});
     }
+  }
+
+  /**
+   * Notificado por AugmentPanelDetector cuando el panel de aumentos aparece en pantalla.
+   */
+  public onPanelAbierto(): void {
+    this.triggerAugmentSelection(45);
+  }
+
+  /**
+   * Notificado por AugmentPanelDetector cuando el usuario elige augment y las cartas desaparecen.
+   */
+  public onPanelCerrado(): void {
+    this.hide();
   }
 
   /**

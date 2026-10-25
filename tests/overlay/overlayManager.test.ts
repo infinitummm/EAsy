@@ -153,5 +153,18 @@ describe('OverlayManager - Control de Ventana Superpuesta', () => {
     expect(estado.data?.augments).toHaveLength(1);
     expect(estado.data?.augments[0].tier).toBe('S+');
   });
+
+  it('abre y cierra el overlay al recibir eventos de AugmentPanelDetector', () => {
+    manager.initialize();
+    expect(manager.getState().visible).toBe(false);
+
+    // Al abrir el panel
+    manager.onPanelAbierto();
+    expect(manager.getState().visible).toBe(true);
+
+    // Al cerrar el panel (el usuario seleccionó augment)
+    manager.onPanelCerrado();
+    expect(manager.getState().visible).toBe(false);
+  });
 });
 

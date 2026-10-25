@@ -34,6 +34,7 @@ import { DEFAULT_APP_SETTINGS, APP_NAME } from '../shared/constants';
 import { IPC_CHANNELS } from '../shared/events';
 import { iniciarAutoUpdater } from './updater';
 import { OverlayManager } from './overlay/OverlayManager';
+import { AugmentPanelDetector } from './ocr/AugmentPanelDetector';
 import { registrarOverlayIpc } from './ipc/overlayIpc';
 import { BorderlessDetector } from './modes/BorderlessDetector';
 import { ModeAugmentService, construirDatosModoDesdeCatalogoLocal } from './modes/ModeAugmentService';
@@ -65,6 +66,7 @@ let matchupCacheRepo: MatchupCacheRepo | null = null;
 let opggClient: OpGgClient | null = null;
 let podaCacheInterval: NodeJS.Timeout | null = null;
 let overlayManager: OverlayManager | null = null;
+let augmentPanelDetector: AugmentPanelDetector | null = null;
 let borderlessDetector: BorderlessDetector | null = null;
 let modeAugmentService: ModeAugmentService | null = null;
 let liveClientDataClient: LiveClientDataClient | null = null;
@@ -298,6 +300,7 @@ app.whenReady().then(async () => {
     const preloadPath = path.join(__dirname, '../preload/index.js');
     overlayManager = new OverlayManager(preloadPath);
     overlayManager.initialize();
+    augmentPanelDetector = new AugmentPanelDetector();
 
     borderlessDetector = new BorderlessDetector({
       rutaInstalacionPorDefecto: dbService?.getSettings().leagueInstallationPath,
@@ -407,6 +410,14 @@ app.whenReady().then(async () => {
       overlayManager?.hide();
     } else if (fase === 'InProgress') {
       if (modo === 'aram_mayhem' || modo === 'arena') {
+        // Iniciar detector visual de panel de aumentos (RF-1: control primario por píxeles)
+        if (augmentPanelDetector) {
+          augmentPanelDetector.start(
+            () => overlayManager?.onPanelAbierto(),
+            () => overlayManager?.onPanelCerrado()
+          );
+        }
+
         if (!inGamePollingInterval) {
           inGamePollingInterval = setInterval(async () => {
             try {
@@ -431,7 +442,11 @@ app.whenReady().then(async () => {
                   const hitMilestone = [3, 7, 11, 15].includes(nivel) && nivel !== ultimoNivelJugador;
                   const murioConAumento = estaMuerto && !estabaMuerto && nivel >= 3;
                   if (hitMilestone || murioConAumento) {
-                    overlayManager?.triggerAugmentSelection(25);
+                    augmentPanelDetector?.resetOferta();
+                    // Respaldo de seguridad si el detector de píxeles no hubiese capturado aún
+                    if (!augmentPanelDetector?.isPanelVisible()) {
+                      overlayManager?.triggerAugmentSelection(45);
+                    }
                   }
                   if (!estaMuerto && estabaMuerto) {
                     overlayManager?.hide();
@@ -451,7 +466,10 @@ app.whenReady().then(async () => {
                   for (const ventana of ventanasRondas) {
                     if (sec >= ventana.min && sec <= ventana.max && !aumentosDisparadosPorRonda.has(ventana.id)) {
                       aumentosDisparadosPorRonda.add(ventana.id);
-                      overlayManager?.triggerAugmentSelection(30);
+                      augmentPanelDetector?.resetOferta();
+                      if (!augmentPanelDetector?.isPanelVisible()) {
+                        overlayManager?.triggerAugmentSelection(45);
+                      }
                     }
                   }
                 }
@@ -460,10 +478,12 @@ app.whenReady().then(async () => {
           }, 2000);
         }
       } else {
-        // En cualquier otro modo (Ranked, Normal, ARAM estándar) ocultar el overlay
+        // En cualquier otro modo (Ranked, Normal, ARAM estándar) ocultar el overlay y apagar el detector
+        augmentPanelDetector?.stop();
         overlayManager?.hide();
       }
     } else {
+      augmentPanelDetector?.stop();
       if (inGamePollingInterval) {
         clearInterval(inGamePollingInterval);
         inGamePollingInterval = null;

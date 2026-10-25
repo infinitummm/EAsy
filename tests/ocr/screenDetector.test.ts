@@ -1,8 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { emparejarAumento } from '../../src/main/ocr/ScreenAugmentDetector';
+import {
+  emparejarAumento,
+  calcularDistanciaDamerauLevenshtein,
+  calcularSimilitudDamerauLevenshtein,
+  evaluarSimilitudOcrConTitulo,
+} from '../../src/main/ocr/ScreenAugmentDetector';
 import type { AugmentInfo } from '../../src/shared/types';
 
-describe('ScreenAugmentDetector - Emparejamiento de Aumentos por OCR', () => {
+describe('ScreenAugmentDetector - Emparejamiento Difuso de Aumentos por OCR (RF-2)', () => {
   const mockAugments: AugmentInfo[] = [
     {
       id: 101,
@@ -54,28 +59,46 @@ describe('ScreenAugmentDetector - Emparejamiento de Aumentos por OCR', () => {
     },
   ];
 
-  it('empareja correctamente por nombre en inglés', () => {
-    const res = emparejarAumento('Hybrid Damage Attack Ability deals increased', mockAugments);
+  it('calcula distancia y similitud Damerau-Levenshtein correctamente', () => {
+    // 1 sustitución
+    expect(calcularDistanciaDamerauLevenshtein('hybrid', 'hybrld')).toBe(1);
+    // 1 transposición (Damerau)
+    expect(calcularDistanciaDamerauLevenshtein('hybird', 'hybrid')).toBe(1);
+
+    expect(calcularSimilitudDamerauLevenshtein('hybrid', 'hybrid')).toBe(1.0);
+    expect(calcularSimilitudDamerauLevenshtein('hybrld', 'hybrid')).toBeGreaterThanOrEqual(0.8);
+  });
+
+  it('empareja correctamente con lectura OCR exacta en inglés', () => {
+    const res = emparejarAumento('Hybrid', mockAugments);
     expect(res.augment).not.toBeNull();
     expect(res.augment?.name).toBe('Hybrid');
     expect(res.augment?.tier).toBe('S+');
+    expect(res.score).toBe(1.0);
   });
 
-  it('empareja correctamente por nombre en español', () => {
-    const res = emparejarAumento('Sacrificio voluntario otorga escudo a aliados', mockAugments);
+  it('empareja con 1 o 2 caracteres errados por ruido de OCR (Levenshtein >= 0.70)', () => {
+    // "Sacriflcio voluntario" con 'l' en lugar de 'i'
+    const res = emparejarAumento('Sacriflcio voluntario', mockAugments);
     expect(res.augment).not.toBeNull();
     expect(res.augment?.name).toBe('Willing Sacrifice');
-    expect(res.augment?.tier).toBe('B');
+    expect(res.score).toBeGreaterThanOrEqual(0.70);
   });
 
-  it('empareja por palabras clave de la descripción cuando el título está cortado', () => {
-    const res = emparejarAumento('Gain 100 Item Haste equivalent to Item CDR', mockAugments);
+  it('tolera texto adicional capturado junto al título', () => {
+    const res = emparejarAumento('Apex Inventor Speed Utility', mockAugments);
     expect(res.augment).not.toBeNull();
     expect(res.augment?.name).toBe('Apex Inventor');
+    expect(res.score).toBeGreaterThanOrEqual(0.70);
   });
 
-  it('devuelve null cuando el texto de OCR no coincide con nada', () => {
-    const res = emparejarAumento('Texto desconocido totalmente aleatorio xyz 123', mockAugments);
-    expect(res.augment).toBeNull();
+  it('rechaza y devuelve null cuando el texto es ruido aleatorio o palabras sueltas de descripción', () => {
+    // Palabras de descripción no deben activar emparejamiento espurio
+    const resDescripcion = emparejarAumento('Gain 100 Item Haste equivalent', mockAugments);
+    expect(resDescripcion.augment).toBeNull();
+
+    const resRuido = emparejarAumento('Texto desconocido totalmente aleatorio xyz 123', mockAugments);
+    expect(resRuido.augment).toBeNull();
+    expect(resRuido.score).toBeLessThan(0.70);
   });
 });

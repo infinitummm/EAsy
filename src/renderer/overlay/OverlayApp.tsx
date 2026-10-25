@@ -272,27 +272,8 @@ export function OverlayApp() {
     }
   }, [activeChampionId, state.gameMode, state.data]);
 
-  // Si aún no hay cartas reconocidas por OCR, mostrar los 3 mejores aumentos recomendados
-  const displayCards = useMemo(() => {
-    const [c1, c2, c3] = cards;
-    if (c1 || c2 || c3) {
-      return [c1, c2, c3];
-    }
-    // Respaldo inmediato: top 3 de la lista calculada
-    const lista = state.data?.augments || [];
-    const tierRank: Record<TierBadge, number> = { 'S+': 0, S: 1, A: 2, B: 3, C: 4, D: 5 };
-    const sorted = [...lista].sort((a, b) => {
-      const d = (tierRank[a.tier] ?? 9) - (tierRank[b.tier] ?? 9);
-      if (d !== 0) return d;
-      return (b.pickRate || 0) - (a.pickRate || 0);
-    });
-
-    return [
-      sorted[0] ? { ...sorted[0], isBest: true } : null,
-      sorted[1] ? { ...sorted[1], isBest: false } : null,
-      sorted[2] ? { ...sorted[2], isBest: false } : null,
-    ];
-  }, [cards, state.data]);
+  // Cartas reales leídas por OCR (NUNCA sustituir por top 3 recomendado - Ley 1)
+  const displayCards = cards;
 
   const handleReanalyze = async () => {
     const api = getApi();
@@ -324,9 +305,7 @@ export function OverlayApp() {
       {/* 3 INSIGNIAS FLOTANTES DEBAJO DE CADA CARTA CENTRAL (ESTILO BLITZ) */}
       {cardPositions.map((pos, i) => {
         const card = displayCards[i];
-        const isBest = card?.isBest || bestCardIndex === pos.index || (i === 0 && !bestCardIndex);
-
-        if (!card && !isScanning) return null;
+        const isBest = Boolean(card?.isBest || (bestCardIndex === pos.index && card));
 
         return (
           <div
@@ -376,7 +355,7 @@ export function OverlayApp() {
 
               {/* Escudo de Tier: Superpuesto sobre la parte inferior del avatar */}
               <div className="-mt-3.5 z-10">
-                {card ? <TierShield tier={card.tier} /> : <div className="w-8 h-9" />}
+                <TierShield tier={card ? card.tier : ('?' as TierBadge)} />
               </div>
 
               {/* Nombre del Aumento y Pick Rate en Cian */}
@@ -392,13 +371,23 @@ export function OverlayApp() {
                   <div className="flex items-center justify-center gap-1.5 mt-1 font-mono">
                     <RarityTag rarity={card.rarity} />
                     <span className="text-[11px] font-black text-cyan-300 drop-shadow-[0_0_5px_rgba(6,182,212,0.6)]">
-                      {card.pickRate != null ? `${card.pickRate.toFixed(1)}%` : '—'}
+                      {card.pickRate != null && !isNaN(card.pickRate)
+                        ? `${card.pickRate.toFixed(1)}%`
+                        : 'Sin datos'}
                     </span>
                   </div>
                 </div>
               ) : (
-                <div className="mt-1 text-[10px] text-cyan-400 font-mono animate-pulse">
-                  Analizando...
+                <div className="mt-1 w-full text-center">
+                  {isScanning ? (
+                    <div className="text-[10px] text-cyan-400 font-mono animate-pulse">
+                      Escaneando...
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-amber-300 font-mono">
+                      No reconocido
+                    </div>
+                  )}
                 </div>
               )}
             </div>

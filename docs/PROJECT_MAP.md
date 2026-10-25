@@ -45,3 +45,6 @@ docs/                     # Documentación técnica (PROJECT_MAP, RELEASE, AMIGO
 - **Orquestador IPC**: `src/main/ipc/champSelectIpc.ts` (Canales IPC de draft, matchups, assets y versiones).
 - **Asesor IA**: `src/main/ai/PersonalizedAdvisor.ts` (Generación de consejos contextuales con Gemini).
 - **Base de Datos**: `src/main/db/DatabaseService.ts` (Caché de matchups, historial y preferencias).
+- **Detector Visual de Panel de Aumentos**: `src/main/ocr/AugmentPanelDetector.ts` (Sondeo visual RGB en tiempo real para visibilidad exacta).
+- **Detector OCR de Pantalla**: `src/main/ocr/ScreenAugmentDetector.ts` (Tesseract PSM 6 y matching Damerau-Levenshtein $\ge 0.70$).
+- **Overlay Manager y App**: `src/main/overlay/OverlayManager.ts` y `src/renderer/overlay/OverlayApp.tsx` (Ventana transparente click-through con insignias de aumentos estilo Blitz).

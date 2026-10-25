@@ -1,16 +1,16 @@
 /**
  * src/main/ocr/ScreenAugmentDetector.ts
- * Detector OCR en pantalla para reconocer los 3 aumentos ofrecidos en ARAM Caos y Arena.
- * Captura las 3 cartas centrales del juego de LoL y las empareja contra el catálogo real
- * de aumentos del campeón para mostrar el tier exacto abajo de cada carta (estilo Blitz).
+ * Detector OCR en pantalla para reconocer los 3 aumentos reales ofrecidos en ARAM Caos y Arena (RF-2).
+ * Recorta las bandas de títulos de las 3 cartas centrales, aplica preprocesamiento,
+ * ejecuta OCR con PSM 6 y realiza matching difuso mediante Damerau-Levenshtein (umbral >= 0.70).
  */
 
 import { app, desktopCapturer, screen } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
-import { createWorker } from 'tesseract.js';
+import { createWorker, PSM } from 'tesseract.js';
 import rawAugmentsCatalog from '../../shared/data/augmentsCatalog.json';
-import type { AugmentInfo, DatosModoCampeon, RarityAugment, TierBadge, TipoModo } from '../../shared/types';
+import type { AugmentInfo, DatosModoCampeon, RarityAugment, TierBadge } from '../../shared/types';
 import { registrarLog } from '../lcu/LcuDetector';
 
 export interface CardMatchResult {
@@ -26,7 +26,27 @@ export interface ScreenAugmentsResult {
   detectedAt: number;
 }
 
-function normalizarTexto(txt: string): string {
+export interface CardRoiConfig {
+  index: 1 | 2 | 3;
+  xPercent: number;
+  yPercent: number;
+  widthPercent: number;
+  heightPercent: number;
+}
+
+/**
+ * Coordenadas relativas calibradas empíricamente en Fase 0 sobre resolución 16:9 de League of Legends.
+ * Focalizadas en la banda del título de cada una de las 3 cartas.
+ */
+export const CARD_TITLE_ROIS: CardRoiConfig[] = [
+  { index: 1, xPercent: 0.25, yPercent: 0.33, widthPercent: 0.16, heightPercent: 0.10 },
+  { index: 2, xPercent: 0.42, yPercent: 0.33, widthPercent: 0.16, heightPercent: 0.10 },
+  { index: 3, xPercent: 0.59, yPercent: 0.33, widthPercent: 0.16, heightPercent: 0.10 },
+];
+
+export const UMBRAL_SIMILITUD_MINIMA = 0.70;
+
+export function normalizarTexto(txt: string): string {
   return (txt || '')
     .toLowerCase()
     .normalize('NFD')
@@ -37,59 +57,113 @@ function normalizarTexto(txt: string): string {
 }
 
 /**
- * Empareja el texto extraído por OCR contra la lista de aumentos del campeón.
+ * Calcula la distancia de Damerau-Levenshtein entre dos cadenas de texto.
+ */
+export function calcularDistanciaDamerauLevenshtein(source: string, target: string): number {
+  if (!source) return target ? target.length : 0;
+  if (!target) return source.length;
+
+  const m = source.length;
+  const n = target.length;
+  const d: number[][] = [];
+
+  for (let i = 0; i <= m; i++) {
+    d[i] = [];
+    d[i][0] = i;
+  }
+  for (let j = 0; j <= n; j++) {
+    d[0][j] = j;
+  }
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const cost = source[i - 1] === target[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(
+        d[i - 1][j] + 1,       // Eliminación
+        d[i][j - 1] + 1,       // Inserción
+        d[i - 1][j - 1] + cost // Sustitución
+      );
+
+      // Transposición (Damerau)
+      if (
+        i > 1 &&
+        j > 1 &&
+        source[i - 1] === target[j - 2] &&
+        source[i - 2] === target[j - 1]
+      ) {
+        d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+      }
+    }
+  }
+
+  return d[m][n];
+}
+
+/**
+ * Calcula la similitud normalizada [0..1] mediante Damerau-Levenshtein.
+ */
+export function calcularSimilitudDamerauLevenshtein(s1: string, s2: string): number {
+  const norm1 = normalizarTexto(s1);
+  const norm2 = normalizarTexto(s2);
+  if (!norm1 || !norm2) return 0;
+  if (norm1 === norm2) return 1.0;
+  const dist = calcularDistanciaDamerauLevenshtein(norm1, norm2);
+  return Math.max(0, 1 - dist / Math.max(norm1.length, norm2.length));
+}
+
+/**
+ * Evalúa la similitud normalizada [0..1] entre una lectura OCR y el título del catálogo.
+ * Soporta comparación directa y correspondencia de prefijo para ignorar texto adicional (e.g. subtítulos o tags).
+ */
+export function evaluarSimilitudOcrConTitulo(ocr: string, titulo: string): number {
+  const normOcr = normalizarTexto(ocr);
+  const normTitle = normalizarTexto(titulo);
+  if (!normOcr || !normTitle) return 0;
+  if (normOcr === normTitle || normOcr.includes(normTitle)) return 1.0;
+
+  const wordsTitle = normTitle.split(' ').length;
+  const wordsOcr = normOcr.split(' ');
+  const ocrPrefix = wordsOcr.slice(0, wordsTitle).join(' ');
+
+  const distDirect = calcularDistanciaDamerauLevenshtein(normOcr, normTitle);
+  const simDirect = 1 - distDirect / Math.max(normOcr.length, normTitle.length);
+
+  const distPrefix = calcularDistanciaDamerauLevenshtein(ocrPrefix, normTitle);
+  const simPrefix = 1 - distPrefix / Math.max(ocrPrefix.length, normTitle.length);
+
+  return Math.max(0, Math.max(simDirect, simPrefix));
+}
+
+/**
+ * Empareja el texto extraído por OCR contra la lista de aumentos mediante Damerau-Levenshtein.
+ * Revisa tanto el nombre en inglés (name) como en español (nameEs) y exige umbral >= 0.70.
  */
 export function emparejarAumento(
   ocrText: string,
   augments: AugmentInfo[]
 ): { augment: AugmentInfo | null; score: number } {
   const normOcr = normalizarTexto(ocrText);
-  if (!normOcr || normOcr.length < 3) return { augment: null, score: 0 };
+  if (!normOcr || normOcr.length < 3 || !augments || augments.length === 0) {
+    return { augment: null, score: 0 };
+  }
 
   let mejor: AugmentInfo | null = null;
-  let mejorPuntuacion = 0;
+  let mejorSimilitud = 0;
 
   for (const aug of augments) {
-    const normNombre = normalizarTexto(aug.name);
-    const normNombreEs = normalizarTexto(aug.nameEs);
-    const normDesc = normalizarTexto(aug.desc);
-    let puntos = 0;
+    const simEn = evaluarSimilitudOcrConTitulo(normOcr, aug.name);
+    const simEs = evaluarSimilitudOcrConTitulo(normOcr, aug.nameEs);
+    const simMax = Math.max(simEn, simEs);
 
-    // Coincidencia exacta o contenida del nombre en inglés
-    if (normNombre.length >= 3 && normOcr.includes(normNombre)) {
-      puntos += 250;
-    }
-    // Coincidencia exacta o contenida del nombre en español
-    if (normNombreEs.length >= 3 && normOcr.includes(normNombreEs)) {
-      puntos += 250;
-    }
-
-    // Coincidencia por palabras del título
-    const palabrasNombre = normNombre.split(' ').filter((w) => w.length >= 3);
-    for (const p of palabrasNombre) {
-      if (normOcr.includes(p)) puntos += 35;
-    }
-
-    const palabrasNombreEs = normNombreEs.split(' ').filter((w) => w.length >= 3);
-    for (const p of palabrasNombreEs) {
-      if (normOcr.includes(p)) puntos += 35;
-    }
-
-    // Coincidencia por palabras clave de la descripción
-    const palabrasDesc = normDesc.split(' ').filter((w) => w.length >= 4);
-    for (const p of palabrasDesc) {
-      if (normOcr.includes(p)) puntos += 10;
-    }
-
-    if (puntos > mejorPuntuacion) {
-      mejorPuntuacion = puntos;
+    if (simMax > mejorSimilitud) {
+      mejorSimilitud = simMax;
       mejor = aug;
     }
   }
 
   return {
-    augment: mejorPuntuacion >= 30 ? mejor : null,
-    score: mejorPuntuacion,
+    augment: mejorSimilitud >= UMBRAL_SIMILITUD_MINIMA ? mejor : null,
+    score: Math.round(mejorSimilitud * 100) / 100,
   };
 }
 
@@ -120,7 +194,7 @@ export class ScreenAugmentDetector {
           const langPath = root;
 
           if (!fs.existsSync(workerPath)) {
-            registrarLog(`[ScreenAugmentDetector] Worker OCR no hallado en ${workerPath}. Usando fallback a mejores aumentos.`);
+            registrarLog(`[ScreenAugmentDetector] Worker OCR no hallado en ${workerPath}.`);
             return null;
           }
 
@@ -134,8 +208,14 @@ export class ScreenAugmentDetector {
               registrarLog(`[ScreenAugmentDetector] Notificación worker OCR: ${err?.message || err}`);
             },
           });
+
+          // Configurar PSM 6 (Single uniform block of text) validado en Fase 0
+          await w.setParameters({
+            tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
+          });
+
           this.worker = w;
-          registrarLog('[ScreenAugmentDetector] Worker Tesseract OCR inicializado con éxito.');
+          registrarLog('[ScreenAugmentDetector] Worker Tesseract OCR inicializado con éxito (PSM 6).');
           return w;
         } catch (err: any) {
           registrarLog(`[ScreenAugmentDetector] Advertencia al iniciar worker OCR: ${err?.message || err}`);
@@ -148,23 +228,22 @@ export class ScreenAugmentDetector {
 
   /**
    * Captura la pantalla y analiza las 3 cartas de aumentos.
-   * Utiliza el catálogo del campeón o el catálogo maestro local de 594 aumentos como respaldo.
    */
   public async analizarPantalla(
     datosModo: DatosModoCampeon | null
   ): Promise<ScreenAugmentsResult | null> {
-    const listaAugments: AugmentInfo[] =
+    // Si datosModo no tiene aumentos cargados aún, usamos el catálogo maestro para identificar nombres
+    const catalogoNombres: AugmentInfo[] =
       datosModo && datosModo.augments && datosModo.augments.length > 0
         ? datosModo.augments
-        : (rawAugmentsCatalog as any[]).map((item, idx) => ({
+        : (rawAugmentsCatalog as any[]).map((item) => ({
             id: item.id,
             name: item.name,
             nameEs: item.nameEs || item.name,
             key: item.key,
             rarity: item.rarity as RarityAugment,
-            tier: item.rarity === 'prismatic' ? (idx % 3 === 0 ? 'S+' : 'S') : item.rarity === 'gold' ? 'A' : 'B',
-            pickRate: 8.0,
-            winRate: 52.0,
+            tier: '?' as TierBadge,
+            pickRate: undefined as any,
             iconUrl: item.iconUrl,
             desc: item.desc || item.name,
           }));
@@ -172,12 +251,12 @@ export class ScreenAugmentDetector {
     try {
       const worker = await this.getWorker();
       if (!worker) {
-        // Fallback elegante sin error: el overlay mostrará los mejores aumentos por tier
         return null;
       }
 
       const primaryDisplay = screen.getPrimaryDisplay();
-      const { width, height } = primaryDisplay.bounds;
+      const bounds = primaryDisplay.bounds || { width: 1920, height: 1080 };
+      const { width, height } = bounds;
 
       const sources = await desktopCapturer.getSources({
         types: ['screen'],
@@ -190,68 +269,73 @@ export class ScreenAugmentDetector {
       }
 
       const screenImg = sources[0].thumbnail;
-
-      // En resolución estándar de LoL:
-      // Las 3 cartas están ubicadas en el tercio central verticalmente (y: 26% a 72%)
-      // y distribuidas en 3 columnas horizontales:
-      // Carta 1: 25% a 41%
-      // Carta 2: 42% a 58%
-      // Carta 3: 59% a 75%
-      const crops = [
-        {
-          index: 1 as const,
-          rect: {
-            x: Math.round(width * 0.25),
-            y: Math.round(height * 0.25),
-            width: Math.round(width * 0.17),
-            height: Math.round(height * 0.46),
-          },
-        },
-        {
-          index: 2 as const,
-          rect: {
-            x: Math.round(width * 0.415),
-            y: Math.round(height * 0.25),
-            width: Math.round(width * 0.17),
-            height: Math.round(height * 0.46),
-          },
-        },
-        {
-          index: 3 as const,
-          rect: {
-            x: Math.round(width * 0.58),
-            y: Math.round(height * 0.25),
-            width: Math.round(width * 0.17),
-            height: Math.round(height * 0.46),
-          },
-        },
-      ];
-
       const resultados: CardMatchResult[] = [];
 
-      for (const item of crops) {
-        const cropBmp = screenImg.crop(item.rect);
-        const pngBuf = cropBmp.toPNG();
+      for (const config of CARD_TITLE_ROIS) {
+        const cropRect = {
+          x: Math.round(width * config.xPercent),
+          y: Math.round(height * config.yPercent),
+          width: Math.round(width * config.widthPercent),
+          height: Math.round(height * config.heightPercent),
+        };
 
+        const cropBmp = screenImg.crop(cropRect);
+        
+        // Preprocesamiento: reescalado x2 para estabilizar fuentes doradas de League of Legends
+        const preprocessed = cropBmp.resize({
+          width: cropRect.width * 2,
+          height: cropRect.height * 2,
+          quality: 'better',
+        });
+
+        // Modo debug para auditoría empírica si EAZY_OCR_DEBUG=1
+        if (process.env.EAZY_OCR_DEBUG === '1') {
+          try {
+            const debugDir = path.join(process.cwd(), 'scratch');
+            if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir, { recursive: true });
+            fs.writeFileSync(path.join(debugDir, `debug_card_${config.index}.png`), preprocessed.toPNG());
+          } catch {}
+        }
+
+        const pngBuf = preprocessed.toPNG();
         const ocrRes = await worker.recognize(pngBuf);
         const rawText = ocrRes.data?.text || '';
-        const match = emparejarAumento(rawText, listaAugments);
+        const match = emparejarAumento(rawText, catalogoNombres);
+
+        let finalAugment: AugmentInfo | null = null;
+        if (match.augment) {
+          // Si datosModo real contiene las estadísticas de OP.GG para este augment, usarlas
+          const encontradoEnDatosReales = datosModo?.augments?.find(
+            (a) => a.id === match.augment?.id || a.key === match.augment?.key
+          );
+
+          if (encontradoEnDatosReales) {
+            finalAugment = { ...encontradoEnDatosReales };
+          } else {
+            // NUNCA inventar tiers: si no hay estadísticas de OP.GG, marcar explícitamente sin tier
+            finalAugment = {
+              ...match.augment,
+              tier: '?' as TierBadge,
+              pickRate: undefined as any,
+            };
+          }
+        }
 
         resultados.push({
-          cardIndex: item.index,
-          augment: match.augment,
+          cardIndex: config.index,
+          augment: finalAugment,
           rawText: rawText.replace(/\s+/g, ' ').trim(),
           confidence: match.score,
         });
 
         registrarLog(
-          `[ScreenAugmentDetector] Carta ${item.index}: ${
-            match.augment ? match.augment.name + ' (' + match.augment.tier + ')' : 'No reconocido'
-          } (Score: ${match.score})`
+          `[ScreenAugmentDetector] Carta ${config.index}: ${
+            finalAugment ? finalAugment.name + ' (Tier ' + finalAugment.tier + ')' : 'No reconocido'
+          } (Score: ${match.score}, Raw: "${rawText.replace(/\s+/g, ' ').trim()}")`
         );
       }
 
-      // Determinar cuál de las cartas tiene el mejor tier
+      // Determinar cuál carta tiene el mejor tier legítimo
       const tierRank: Record<string, number> = {
         'S+': 0,
         S: 1,
@@ -265,8 +349,8 @@ export class ScreenAugmentDetector {
       let mejorRango = 99;
 
       for (const r of resultados) {
-        if (r.augment) {
-          const rango = tierRank[r.augment.tier] ?? 99;
+        if (r.augment && r.augment.tier in tierRank) {
+          const rango = tierRank[r.augment.tier];
           if (rango < mejorRango) {
             mejorRango = rango;
             bestCardIndex = r.cardIndex;
@@ -274,7 +358,6 @@ export class ScreenAugmentDetector {
         }
       }
 
-      // Marcar `isBest` en el augment ganador entre los 3
       if (bestCardIndex !== null) {
         resultados.forEach((r) => {
           if (r.augment) {

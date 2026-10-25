@@ -3,7 +3,7 @@
   "productName": "EAsy",
   "artifactName": "${productName} Setup ${version}.${ext}",
   "directories": {
-    "output": "dist-build"
+    "output": "C:/Users/Administrator/AppData/Local/Temp/easy-build"
   },
   "electronDist": "./electron-base",
   "files": [

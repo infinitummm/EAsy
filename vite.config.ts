@@ -17,6 +17,10 @@ export default defineConfig({
       {
         entry: path.join(__dirname, 'src/main/index.ts'),
         vite: {
+          define: {
+            __dirname: 'import.meta.dirname',
+            __filename: 'import.meta.filename'
+          },
           resolve: {
             alias: aliases
           },
@@ -34,6 +38,10 @@ export default defineConfig({
           options.reload();
         },
         vite: {
+          define: {
+            __dirname: 'import.meta.dirname',
+            __filename: 'import.meta.filename'
+          },
           resolve: {
             alias: aliases
           },

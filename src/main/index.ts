@@ -6,6 +6,8 @@ import { LcuAccountService } from './lcu/LcuAccountService';
 import { OpGgClient } from './opgg/OpGgClient';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+(globalThis as any).__dirname = __dirname;
+(globalThis as any).__filename = fileURLToPath(import.meta.url);
 import { registrarLcuIpc } from './ipc/lcuIpc';
 import { registrarSettingsIpc } from './ipc/settingsIpc';
 import { setupChampSelectIpc } from './ipc/champSelectIpc';

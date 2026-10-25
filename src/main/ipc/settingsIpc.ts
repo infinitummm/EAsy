@@ -58,6 +58,10 @@ export function registrarSettingsIpc(
 ): void {
   let memoriaSettings: AppSettings = dbService ? dbService.getSettings() : DEFAULT_APP_SETTINGS;
 
+  // 0. Versión de la Aplicación
+  ipcMain.removeHandler('app:get-version');
+  ipcMain.handle('app:get-version', async () => (app?.getVersion ? app.getVersion() : '1.0.1'));
+
   // 1. Obtener Ajustes
   ipcMain.removeHandler(IPC_CHANNELS.SETTINGS_GET);
   ipcMain.handle(IPC_CHANNELS.SETTINGS_GET, async (): Promise<AppSettings> => {

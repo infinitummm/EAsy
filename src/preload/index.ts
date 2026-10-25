@@ -97,6 +97,8 @@ export const api = {
   },
   setIgnoreMouseEvents: (ignore: boolean, options?: { forward: boolean }) =>
     ipcRenderer.send('overlay:set-ignore-mouse-events', ignore, options?.forward ?? true),
+  reanalyzeScreenAugments: (): Promise<boolean> =>
+    ipcRenderer.invoke('overlay:reanalyze'),
   onOverlayStateChanged: (cb: (state: OverlayState) => void) => {
     const sub = (_: any, data: any) => cb(data);
     ipcRenderer.on(IPC_CHANNELS.OVERLAY_STATE_CHANGED, sub);

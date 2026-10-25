@@ -5,12 +5,13 @@
  * atajos globales (Ctrl+Shift+O, Ctrl+Shift+I) y sincronización con el estado de la partida.
  */
 
-import { BrowserWindow, screen, globalShortcut, app } from 'electron';
+import { BrowserWindow, screen, globalShortcut, app, ipcMain } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { IPC_CHANNELS } from '../../shared/events';
 import type { OverlayState, TipoModo, DatosModoCampeon } from '../../shared/types';
 import { registrarLog } from '../lcu/LcuDetector';
+import { ScreenAugmentDetector } from '../ocr/ScreenAugmentDetector';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -25,7 +26,8 @@ export class OverlayManager {
     data: null,
     activeAugments: [],
   };
-  private ignoreMouse = false;
+  private ignoreMouse = true;
+  private screenDetector: ScreenAugmentDetector = new ScreenAugmentDetector();
 
   constructor(private readonly preloadPath: string) {}
 
@@ -34,19 +36,16 @@ export class OverlayManager {
    */
   public initialize(): void {
     const primaryDisplay = screen.getPrimaryDisplay();
-    const { width } = primaryDisplay.workAreaSize;
+    const bounds = primaryDisplay.bounds || primaryDisplay.workAreaSize || { width: 1920, height: 1080 };
+    const { width, height } = bounds;
 
-    // Dimensiones compactas superiores para no obstruir las cartas de LoL
-    const windowWidth = 860;
-    const windowHeight = 115;
-    const posX = Math.max(0, Math.round((width - windowWidth) / 2));
-    const posY = 8; // Ubicado en el margen superior (cartas de Riot van de y=280 a y=750)
-
+    // Ventana transparente de pantalla completa: permite renderizar los badges directamente
+    // abajo de cada una de las 3 cartas centrales de Riot sin estorbar nada arriba.
     this.window = new BrowserWindow({
-      width: windowWidth,
-      height: windowHeight,
-      x: posX,
-      y: posY,
+      width,
+      height,
+      x: 0,
+      y: 0,
       frame: false,
       transparent: true,
       hasShadow: false,
@@ -83,7 +82,12 @@ export class OverlayManager {
     // Registrar atajos globales
     this.registrarAtajos();
 
-    registrarLog('[OverlayManager] Ventana de overlay compacta inicializada con éxito.');
+    // Escuchar solicitud de re-análisis desde renderer (e.g. al pulsar reroll)
+    ipcMain.handle('overlay:reanalyze', async () => {
+      return this.reanalyze();
+    });
+
+    registrarLog('[OverlayManager] Ventana de overlay transparente inicializada con éxito.');
   }
 
   /**
@@ -146,7 +150,8 @@ export class OverlayManager {
 
   /**
    * Activa automáticamente el overlay en el momento de escoger aumentos.
-   * Abre el overlay si estaba oculto sin robar foco y emite la duración temporal de auto-cierre.
+   * Abre el overlay si estaba oculto sin robar foco, emite la duración de auto-cierre
+   * y lanza el análisis OCR en pantalla para identificar las 3 cartas.
    */
   public triggerAugmentSelection(duracionSegundos = 25): void {
     if (!this.state.visible) {
@@ -160,7 +165,32 @@ export class OverlayManager {
         autoDismissSeconds: duracionSegundos,
       });
       registrarLog(`[OverlayManager] Activación automática de aumentos disparada (${duracionSegundos}s).`);
+
+      // Ejecutar detección en pantalla si disponemos de aumentos cargados
+      this.reanalyze().catch(() => {});
     }
+  }
+
+  /**
+   * Captura la pantalla y envía los aumentos exactos detectados a la interfaz.
+   */
+  public async reanalyze(): Promise<boolean> {
+    if (!this.state.data || !this.window || this.window.isDestroyed()) {
+      return false;
+    }
+
+    try {
+      registrarLog('[OverlayManager] Iniciando escaneo OCR de cartas en pantalla...');
+      const resultado = await this.screenDetector.analizarPantalla(this.state.data);
+      if (resultado && this.window && !this.window.isDestroyed()) {
+        this.window.webContents.send('overlay:screen-augments', resultado);
+        registrarLog('[OverlayManager] Escaneo OCR completado y enviado al overlay.');
+        return true;
+      }
+    } catch (err: any) {
+      registrarLog(`[OverlayManager] Error durante re-análisis OCR: ${err.message}`);
+    }
+    return false;
   }
 
   /**
@@ -224,6 +254,7 @@ export class OverlayManager {
   public destroy(): void {
     globalShortcut.unregister('CommandOrControl+Shift+O');
     globalShortcut.unregister('CommandOrControl+Shift+I');
+    this.screenDetector.destroy().catch(() => {});
     if (this.window && !this.window.isDestroyed()) {
       this.window.close();
       this.window = null;

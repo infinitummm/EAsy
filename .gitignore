@@ -41,3 +41,4 @@ itero-diagnostic-*.json
 .DS_Store
 Thumbs.db
 scratch/
+*.traineddata

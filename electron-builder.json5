@@ -3,7 +3,7 @@
   "productName": "EAsy",
   "artifactName": "${productName} Setup ${version}.${ext}",
   "directories": {
-    "output": "dist-release"
+    "output": "dist-build"
   },
   "electronDist": "./electron-base",
   "files": [

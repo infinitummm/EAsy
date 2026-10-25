@@ -117,34 +117,28 @@ describe('OverlayManager - Control de Ventana Superpuesta', () => {
   });
 
   it('asigna datos de modo completos con setDatosModo', () => {
+    const augmentMock = {
+      id: 101,
+      name: 'Goliath',
+      nameEs: 'Goliat',
+      key: 'Goliath',
+      rarity: 'prismatic' as const,
+      tier: 'S+' as const,
+      pickRate: 15.4,
+      iconUrl: 'https://cdn.example.com/goliath.png',
+      desc: 'Aumenta tamaño y vida',
+    };
+
     const datosMock: DatosModoCampeon = {
       championId: 266,
       championName: 'Aatrox',
       mode: 'arena',
       patch: '16.21',
-      augments: [
-        {
-          id: 101,
-          name: 'Goliath',
-          rarity: 'prismatic',
-          tier: 'S+',
-          pickRate: 15.4,
-          iconUrl: 'https://cdn.example.com/goliath.png',
-        },
-      ],
+      augments: [augmentMock],
       suggestedAugments: {
         silver: [],
         gold: [],
-        prismatic: [
-          {
-            id: 101,
-            name: 'Goliath',
-            rarity: 'prismatic',
-            tier: 'S+',
-            pickRate: 15.4,
-            iconUrl: 'https://cdn.example.com/goliath.png',
-          },
-        ],
+        prismatic: [augmentMock],
       },
       lastUpdated: Date.now(),
     };

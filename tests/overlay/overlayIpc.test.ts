@@ -32,33 +32,29 @@ describe('overlayIpc - Registro y Respuestas IPC', () => {
     setIgnoreMouseEvents: vi.fn(),
   };
 
+  const augmentMock = {
+    id: 101,
+    name: 'Goliath',
+    nameEs: 'Goliat',
+    key: 'Goliath',
+    rarity: 'prismatic' as const,
+    tier: 'S+' as const,
+    pickRate: 14.5,
+    iconUrl: 'https://cdn.example.com/goliath.png',
+    desc: 'Aumenta tamaño y vida',
+  };
+
   const mockModeService: IModeService = {
     getChampionAugments: vi.fn(async (championId, mode, patch) => ({
       championId,
       championName: 'Aatrox',
       mode,
       patch: patch || '16.21',
-      augments: [
-        {
-          id: 101,
-          name: 'Goliath',
-          rarity: 'prismatic',
-          tier: 'S+',
-          pickRate: 14.5,
-        },
-      ],
+      augments: [augmentMock],
       suggestedAugments: {
         silver: [],
         gold: [],
-        prismatic: [
-          {
-            id: 101,
-            name: 'Goliath',
-            rarity: 'prismatic',
-            tier: 'S+',
-            pickRate: 14.5,
-          },
-        ],
+        prismatic: [augmentMock],
       },
       lastUpdated: Date.now(),
     })),

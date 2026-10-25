@@ -1,0 +1,352 @@
+/**
+ * Cliente de la Live Client Data API local (T-8.2).
+ *
+ * La API que expone el juego mientras hay una partida activa escucha en
+ * `https://127.0.0.1:2999` con un certificado autofirmado. Este cliente:
+ *
+ *  - Acepta ese certificado únicamente cuando el destino es local
+ *    (`127.0.0.1`, `localhost` o `::1`), sin desactivar la validación TLS para
+ *    hosts remotos.
+ *  - Consulta `/liveclientdata/activeplayer` y `/liveclientdata/allgamedata`
+ *    con un tiempo máximo configurable y devolviendo `null`/`false` cuando no
+ *    hay partida (la API no responde).
+ *  - Completa el campeón del jugador activo con `allPlayers`, porque
+ *    `/activeplayer` no incluye `championName` en todas las versiones del
+ *    cliente.
+ *  - Detecta el modo de juego a partir de la cola del Gameflow de la LCU:
+ *    cola 2400 → ARAM Caos (`aram_mayhem`) y cola 1700 → Arena.
+ *
+ * No forma parte del contrato de `src/shared/contracts.ts` la detección de
+ * modo, pero el criterio de terminado de T-8.2 la exige; se expone como
+ * funciones puras del módulo para que OverlayManager pueda reutilizarlas.
+ */
+
+import https from 'node:https';
+import type { ILcuClient, ILiveClientDataClient } from '@shared/contracts';
+import type { TipoModo } from '@shared/types';
+import { registrarLog } from './LcuDetector';
+
+/** URL por defecto de la API local del juego. */
+export const URL_BASE_LIVE_CLIENT_DATA = 'https://127.0.0.1:2999';
+
+/** Rutas oficiales de la Live Client Data API. */
+export const RUTA_ACTIVE_PLAYER = '/liveclientdata/activeplayer';
+export const RUTA_ALL_GAME_DATA = '/liveclientdata/allgamedata';
+
+/** Tamaño máximo de respuesta aceptado (la partida completa ronda 2-4 MiB). */
+const TAMANO_MAXIMO_RESPUESTA_BYTES = 16 * 1024 * 1024;
+
+/** Tipo mínimo del cliente LCU necesario para consultar el Gameflow. */
+export type ClienteLcuGameflow = Pick<ILcuClient, 'request'>;
+
+/** Error de comunicación con la Live Client Data API. */
+export class ErrorLiveClientData extends Error {
+  constructor(
+    mensaje: string,
+    readonly codigoEstado?: number,
+    opciones?: ErrorOptions
+  ) {
+    super(mensaje, opciones);
+    this.name = 'ErrorLiveClientData';
+  }
+}
+
+/** Opciones del cliente (pensadas para pruebas y para el cableado de T-8.5). */
+export interface OpcionesLiveClientDataClient {
+  /** Base HTTPS; por defecto `https://127.0.0.1:2999`. */
+  baseUrl?: string;
+  /** Tiempo máximo por petición; por defecto 2500 ms. */
+  tiempoMaximoMs?: number;
+  /** Registro de avisos; por defecto usa el log de la LCU. */
+  registrar?: (mensaje: string) => void;
+}
+
+/** Instantánea combinada útil para el sondeo del overlay. */
+export interface InstantaneaLiveClientData {
+  activo: boolean;
+  jugador: { summonerName: string; championName: string } | null;
+  datos: any | null;
+  modo: TipoModo | null;
+  capturadoEn: number;
+}
+
+/** Respuesta HTTP cruda usada internamente. */
+interface RespuestaHttpCruda {
+  codigoEstado: number;
+  cuerpo: string;
+}
+
+/** Forma parcial (y defensiva) de la sesión de Gameflow de la LCU. */
+interface SesionGameflow {
+  gameData?: {
+    queue?: { id?: number | string } | null;
+    gameMode?: string | null;
+  } | null;
+}
+
+function esObjeto(valor: unknown): valor is Record<string, unknown> {
+  return typeof valor === 'object' && valor !== null && !Array.isArray(valor);
+}
+
+function leerTexto(valor: unknown): string | null {
+  if (typeof valor !== 'string') return null;
+  const texto = valor.trim();
+  return texto.length > 0 ? texto : null;
+}
+
+/** Indica si un host es local (el único caso en el que se acepta el certificado autofirmado). */
+export function esHostLocal(hostname: string): boolean {
+  const host = hostname.trim().toLowerCase().replace(/^\[|\]$/g, '');
+  return host === '127.0.0.1' || host === 'localhost' || host === '::1';
+}
+
+/**
+ * Traduce el ID de cola de la LCU al modo de dominio. Solo se mapean las colas
+ * verificadas en `docs/VERIFICACION_MODOS.md`; el resto devuelve `null` para
+ * no etiquetar modos con datos incorrectos.
+ */
+export function detectarModoPorCola(idCola: number | string | null | undefined): TipoModo | null {
+  const id = Number(idCola);
+  if (!Number.isFinite(id)) return null;
+
+  switch (id) {
+    case 2400:
+      return 'aram_mayhem';
+    case 1700:
+      return 'arena';
+    case 450:
+      return 'aram';
+    case 420:
+    case 440:
+      return 'ranked';
+    default:
+      return null;
+  }
+}
+
+/**
+ * Detecta el modo a partir de una sesión de Gameflow ya consultada. Se prioriza
+ * el ID de cola y, si no está mapeado, se usa `gameMode` como respaldo.
+ */
+export function detectarModoPorSesion(sesion: SesionGameflow | null | undefined): TipoModo | null {
+  const porCola = detectarModoPorCola(sesion?.gameData?.queue?.id);
+  if (porCola) return porCola;
+
+  const modoLcu = leerTexto(sesion?.gameData?.gameMode)?.toUpperCase() ?? null;
+  if (modoLcu === 'CHERRY') return 'arena';
+  if (modoLcu === 'ARAM') return 'aram';
+  if (modoLcu === 'CLASSIC') return 'ranked';
+  return null;
+}
+
+/**
+ * Consulta `/lol-gameflow/v1/session` en la LCU y traduce la cola. Los fallos
+ * son esperables cuando el cliente no está abierto, por lo que se registran y
+ * se devuelve `null` en lugar de propagar la excepción.
+ */
+export async function detectarModoEnLcu(
+  lcu: ClienteLcuGameflow,
+  registrar: (mensaje: string) => void = registrarLog
+): Promise<TipoModo | null> {
+  try {
+    const sesion = await lcu.request<SesionGameflow | null>('GET', '/lol-gameflow/v1/session');
+    return detectarModoPorSesion(sesion);
+  } catch (error) {
+    registrar(
+      `[LiveClientData] No se pudo consultar el Gameflow de la LCU: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+    return null;
+  }
+}
+
+/**
+ * Construye el jugador activo combinando ambos endpoints. `activeplayer` aporta
+ * el nombre del invocador y `allgamedata.allPlayers` el campeón elegido.
+ */
+function construirJugadorActivo(
+  activePlayer: unknown,
+  allGameData: unknown
+): { summonerName: string; championName: string } | null {
+  const activo = esObjeto(activePlayer) ? activePlayer : null;
+  const datos = esObjeto(allGameData) ? allGameData : null;
+  const activoEnDatos = datos && esObjeto(datos.activePlayer) ? datos.activePlayer : null;
+
+  const summonerName =
+    leerTexto(activo?.summonerName) ?? leerTexto(activoEnDatos?.summonerName);
+
+  if (!summonerName) return null;
+
+  let championName = leerTexto(activo?.championName) ?? leerTexto(activoEnDatos?.championName);
+
+  if (!championName && datos && Array.isArray(datos.allPlayers)) {
+    const jugador = datos.allPlayers.find(
+      (candidato) => esObjeto(candidato) && leerTexto(candidato.summonerName) === summonerName
+    );
+    if (esObjeto(jugador)) {
+      championName = leerTexto(jugador.championName) ?? leerTexto(jugador.rawChampionName);
+    }
+  }
+
+  if (!championName) return null;
+  return { summonerName, championName };
+}
+
+/**
+ * Cliente de la API local del juego. Implementa el contrato
+ * `ILiveClientDataClient` y añade `obtenerInstantanea()` para el sondeo
+ * periódico que hará el overlay.
+ */
+export class LiveClientDataClient implements ILiveClientDataClient {
+  private readonly baseUrl: URL;
+  private readonly tiempoMaximoMs: number;
+  private readonly registrar: (mensaje: string) => void;
+
+  constructor(opciones: OpcionesLiveClientDataClient = {}) {
+    const baseUrl = new URL(opciones.baseUrl ?? URL_BASE_LIVE_CLIENT_DATA);
+    if (baseUrl.protocol !== 'https:') {
+      throw new ErrorLiveClientData('La Live Client Data API debe usar HTTPS.');
+    }
+
+    this.baseUrl = new URL(baseUrl.toString().replace(/\/+$/, ''));
+    this.tiempoMaximoMs = Math.max(100, opciones.tiempoMaximoMs ?? 2500);
+    this.registrar = opciones.registrar ?? registrarLog;
+  }
+
+  /** `true` si el endpoint de jugador activo responde HTTP 200 (hay partida). */
+  async isGameActive(): Promise<boolean> {
+    try {
+      const respuesta = await this.solicitar(RUTA_ACTIVE_PLAYER);
+      return respuesta.codigoEstado === 200;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Jugador y campeón activos, o `null` si aún no hay partida. */
+  async getActivePlayer(): Promise<{ summonerName: string; championName: string } | null> {
+    const [activePlayer, allGameData] = await Promise.all([
+      this.obtenerJson(RUTA_ACTIVE_PLAYER),
+      this.obtenerJson(RUTA_ALL_GAME_DATA),
+    ]);
+
+    return construirJugadorActivo(activePlayer, allGameData);
+  }
+
+  /** Payload completo de `/allgamedata`, o `null` si no hay partida. */
+  async getAllGameData(): Promise<any | null> {
+    const datos = await this.obtenerJson(RUTA_ALL_GAME_DATA);
+    return esObjeto(datos) ? datos : null;
+  }
+
+  /**
+   * Sondeo combinado para el overlay: una sola pasada consulta el jugador, los
+   * datos completos y (si se pasa) el modo de la LCU.
+   */
+  async obtenerInstantanea(lcu?: ClienteLcuGameflow): Promise<InstantaneaLiveClientData> {
+    const [activePlayer, allGameData, modo] = await Promise.all([
+      this.obtenerJson(RUTA_ACTIVE_PLAYER),
+      this.obtenerJson(RUTA_ALL_GAME_DATA),
+      lcu ? detectarModoEnLcu(lcu, this.registrar) : Promise.resolve(null),
+    ]);
+
+    const jugador = construirJugadorActivo(activePlayer, allGameData);
+
+    return {
+      activo: jugador !== null || esObjeto(activePlayer) || esObjeto(allGameData),
+      jugador,
+      datos: esObjeto(allGameData) ? allGameData : null,
+      modo,
+      capturadoEn: Date.now(),
+    };
+  }
+
+  /** Realiza una petición GET y valida la respuesta HTTP. */
+  private solicitar(ruta: string): Promise<RespuestaHttpCruda> {
+    const url = new URL(ruta, `${this.baseUrl.toString()}/`);
+
+    return new Promise<RespuestaHttpCruda>((resolve, reject) => {
+      const peticion = https.request(
+        url,
+        {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            'Cache-Control': 'no-store',
+          },
+          // El certificado del juego es autofirmado; solo se relaja la
+          // validación para hosts locales, nunca para un host remoto.
+          rejectUnauthorized: !esHostLocal(url.hostname),
+          agent: false,
+          timeout: this.tiempoMaximoMs,
+        },
+        (respuesta) => {
+          const trozos: Buffer[] = [];
+          let bytes = 0;
+
+          respuesta.on('data', (trozo: Buffer) => {
+            bytes += trozo.length;
+            if (bytes > TAMANO_MAXIMO_RESPUESTA_BYTES) {
+              peticion.destroy(
+                new ErrorLiveClientData('La respuesta de la Live Client Data API es demasiado grande.')
+              );
+              return;
+            }
+            trozos.push(trozo);
+          });
+
+          respuesta.on('error', (error) => {
+            reject(
+              new ErrorLiveClientData('Se interrumpió la respuesta de la Live Client Data API.', undefined, {
+                cause: error,
+              })
+            );
+          });
+
+          respuesta.on('end', () => {
+            resolve({
+              codigoEstado: respuesta.statusCode ?? 0,
+              cuerpo: Buffer.concat(trozos).toString('utf8'),
+            });
+          });
+        }
+      );
+
+      peticion.on('timeout', () => {
+        peticion.destroy(
+          new ErrorLiveClientData(
+            `La Live Client Data API no respondió en ${this.tiempoMaximoMs} ms.`
+          )
+        );
+      });
+
+      peticion.on('error', (error) => {
+        reject(
+          error instanceof ErrorLiveClientData
+            ? error
+            : new ErrorLiveClientData(
+                'No se pudo conectar con la Live Client Data API local.',
+                undefined,
+                { cause: error }
+              )
+        );
+      });
+
+      peticion.end();
+    });
+  }
+
+  /** Petición JSON tolerante a fallos: cualquier error se traduce en `null`. */
+  private async obtenerJson(ruta: string): Promise<unknown | null> {
+    try {
+      const respuesta = await this.solicitar(ruta);
+      if (respuesta.codigoEstado < 200 || respuesta.codigoEstado >= 300) {
+        return null;
+      }
+      return JSON.parse(respuesta.cuerpo) as unknown;
+    } catch {
+      return null;
+    }
+  }
+}

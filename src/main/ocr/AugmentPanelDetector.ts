@@ -124,15 +124,19 @@ export function evaluarVisibilidadPanel(muestras: MuestraRoi[]): boolean {
 
   // 1. Rechazo de pantalla gris de muerte en ARAM (totalmente desaturada)
   let maxSaturacion = 0;
+  let desaturadas = 0;
   for (const m of muestras) {
     const diffRG = Math.abs(m.color.r - m.color.g);
     const diffGB = Math.abs(m.color.g - m.color.b);
     const diffRB = Math.abs(m.color.r - m.color.b);
     const sat = Math.max(diffRG, diffGB, diffRB);
     if (sat > maxSaturacion) maxSaturacion = sat;
+    if (diffRG < 6 && diffGB < 6 && diffRB < 6) {
+      desaturadas++;
+    }
   }
-  // En pantalla de muerte, la saturación cae a casi cero (< 14)
-  if (maxSaturacion < 14) {
+  // En pantalla de muerte, la saturación cae a casi cero (< 14) o >85% son totalmente desaturadas
+  if (maxSaturacion < 14 || desaturadas / muestras.length > 0.85) {
     return false;
   }
 

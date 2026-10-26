@@ -49,6 +49,21 @@ describe('AugmentPanelDetector - Detección Visual del Panel de Aumentos (RF-1)'
     expect(evaluarVisibilidadPanel(muestrasMuerte)).toBe(false);
   });
 
+  it('rechaza y devuelve false si más del 85% de las muestras están desaturadas (|R-G| < 6, |G-B| < 6)', () => {
+    // 6 de 7 muestras son grises de muerte (85.7%), 1 muestra con leve ruido cromático
+    const muestrasMuerteConRuido: MuestraRoi[] = [
+      { tipo: 'reroll', color: { r: 50, g: 50, b: 50 } },
+      { tipo: 'reroll', color: { r: 52, g: 52, b: 50 } },
+      { tipo: 'reroll', color: { r: 48, g: 48, b: 48 } },
+      { tipo: 'fondo', color: { r: 30, g: 30, b: 30 } },
+      { tipo: 'fondo', color: { r: 32, g: 32, b: 32 } },
+      { tipo: 'fondo', color: { r: 28, g: 28, b: 28 } },
+      { tipo: 'reroll', color: { r: 65, g: 50, b: 48 } }, // Leve ruido sat = 17
+    ];
+
+    expect(evaluarVisibilidadPanel(muestrasMuerteConRuido)).toBe(false);
+  });
+
   it('detecta panel NO visible en terreno normal de LoL (hierba, río, grieta)', () => {
     const muestrasTerreno: MuestraRoi[] = [
       { tipo: 'reroll', color: { r: 45, g: 110, b: 60 } }, // Verde hierba

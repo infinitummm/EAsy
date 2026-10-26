@@ -322,7 +322,7 @@ export function OverlayApp() {
       className="w-screen h-screen relative pointer-events-none select-none overflow-hidden bg-transparent"
       style={{ background: 'transparent', backgroundColor: 'transparent' }}
     >
-      {/* 3 INSIGNIAS FLOTANTES DEBAJO DE CADA CARTA CENTRAL (ESTILO BLITZ) */}
+      {/* 3 INSIGNIAS FLOTANTES EN LA CABECERA DE CADA CARTA (ESTILO POROFESSOR / BLITZ, NUNCA TAPAN REROLL) */}
       {cardPositions.map((pos, i) => {
         const card = displayCards[i];
         const slotData = cardSlots[i];
@@ -334,7 +334,7 @@ export function OverlayApp() {
             style={{
               position: 'absolute',
               left: pos.left,
-              top: '68%',
+              top: '14%',
               transform: 'translate(-50%, 0)',
             }}
             onMouseEnter={handleMouseEnter}

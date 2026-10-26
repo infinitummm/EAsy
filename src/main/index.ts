@@ -353,10 +353,6 @@ app.whenReady().then(async () => {
     } catch {}
   };
 
-  let ultimoNivelJugador: number = 0;
-  let estabaMuerto: boolean = false;
-  const aumentosDisparadosPorRonda = new Set<number>();
-
   // Función centralizada para evaluar el modo y el estado del juego y sincronizar el overlay
   const evaluarEstadoPartidaYOverlay = async (faseParam?: GameflowPhase) => {
     const fase = faseParam ?? lcuClient.getGameflowPhase();
@@ -427,7 +423,7 @@ app.whenReady().then(async () => {
             try {
               const instantanea = await liveClientDataClient?.obtenerInstantanea(lcuClient);
               if (instantanea?.activo) {
-                // 1. Refrescar campeón si LiveClientData tiene el nombre
+                // Refrescar campeón si LiveClientData tiene el nombre
                 if (instantanea.jugador?.championName) {
                   const champ = resolverCampeonPorNombre(instantanea.jugador.championName);
                   if (champ) {
@@ -435,51 +431,9 @@ app.whenReady().then(async () => {
                     overlayManager?.setCampeonYModo(champ.id, champ.name, m);
                   }
                 }
-
-                const m = instantanea.modo ?? modo;
-                const sec = Math.floor(instantanea.gameTime ?? 0);
-                const nivel = instantanea.level ?? 0;
-                const estaMuerto = Boolean(instantanea.isDead);
-
-                // 2. Disparador para ARAM Caos (Nivel 3, 7, 11, 15 o muerte con nivel >= 3)
-                if (m === 'aram_mayhem') {
-                  const hitMilestone = [3, 7, 11, 15].includes(nivel) && nivel !== ultimoNivelJugador;
-                  const murioConAumento = estaMuerto && !estabaMuerto && nivel >= 3;
-                  if (hitMilestone || murioConAumento) {
-                    augmentPanelDetector?.resetOferta();
-                    // Respaldo de seguridad si el detector de píxeles no hubiese capturado aún
-                    if (!augmentPanelDetector?.isPanelVisible()) {
-                      overlayManager?.triggerAugmentSelection(45);
-                    }
-                  }
-                  if (!estaMuerto && estabaMuerto) {
-                    overlayManager?.hide();
-                  }
-                  if (nivel > 0) ultimoNivelJugador = nivel;
-                  estabaMuerto = estaMuerto;
-                }
-
-                // 3. Disparador para Arena (Ronda 1: 0-45s, Ronda 4: 210-245s, Ronda 7: 450-485s, Ronda 11: 690-725s)
-                if (m === 'arena' && sec > 0) {
-                  const ventanasRondas = [
-                    { min: 0, max: 45, id: 1 },
-                    { min: 210, max: 245, id: 4 },
-                    { min: 450, max: 485, id: 7 },
-                    { min: 690, max: 725, id: 11 },
-                  ];
-                  for (const ventana of ventanasRondas) {
-                    if (sec >= ventana.min && sec <= ventana.max && !aumentosDisparadosPorRonda.has(ventana.id)) {
-                      aumentosDisparadosPorRonda.add(ventana.id);
-                      augmentPanelDetector?.resetOferta();
-                      if (!augmentPanelDetector?.isPanelVisible()) {
-                        overlayManager?.triggerAugmentSelection(45);
-                      }
-                    }
-                  }
-                }
               }
             } catch {}
-          }, 2000);
+          }, 2500);
         }
       } else {
         // En cualquier otro modo (Ranked, Normal, ARAM estándar) ocultar el overlay y apagar el detector
@@ -492,9 +446,6 @@ app.whenReady().then(async () => {
         clearInterval(inGamePollingInterval);
         inGamePollingInterval = null;
       }
-      aumentosDisparadosPorRonda.clear();
-      ultimoNivelJugador = 0;
-      estabaMuerto = false;
       overlayManager?.hide();
     }
   };

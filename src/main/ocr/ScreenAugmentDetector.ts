@@ -1,10 +1,11 @@
 /**
  * src/main/ocr/ScreenAugmentDetector.ts
  * Detector OCR en pantalla para reconocer los 3 aumentos reales ofrecidos en ARAM Caos y Arena (RF-2).
- * Normaliza las coordenadas a proporción 16:9 centrada (soportando monitores 1080p, 1440p, 4K y ultra-panorámicos 21:9),
- * recorta las bandas de títulos de las 3 cartas centrales, aplica preprocesamiento con empaquetado BMP válido (54 bytes, firma 'BM'),
- * ejecuta OCR con PSM 6 y timeout duro de 2500ms, y realiza matching difuso mediante Damerau-Levenshtein (umbral >= 0.70),
- * apoyado por estimación perceptual de rareza/icono y telemetría visual con miniatura en Base64.
+ * Normaliza las coordenadas a proporción 16:9 centrada a resolución física real (con scaleFactor),
+ * recorta las bandas de títulos de las 3 cartas centrales con doble sub-banda vertical,
+ * aplica binarización invertida (letras NEGRAS sobre fondo BLANCO para Tesseract),
+ * ejecuta OCR con PSM 6 y timeout duro de 2500ms, y realiza matching difuso mediante Damerau-Levenshtein (umbral >= 0.62 / 0.55),
+ * apoyado por estimación perceptual de rareza/icono, telemetría visual y arnés de debugging en disco (scratch/ocr-debug/).
  */
 
 import * as electron from 'electron';
@@ -59,26 +60,57 @@ export interface ImagenPreprocesada {
 }
 
 /**
- * Coordenadas relativas calibradas empíricamente en Fase 0 sobre proporción 16:9 de League of Legends.
- * Focalizadas en la banda del título de cada una de las 3 cartas.
+ * Coordenadas relativas calibradas sobre proporción 16:9 de League of Legends.
+ * Columnas de las 3 cartas con doble sub-banda vertical para cubrir ARAM Caos y Arena.
+ */
+export const CARD_COLUMNS: Array<{ index: 1 | 2 | 3; xPercent: number; widthPercent: number }> = [
+  { index: 1, xPercent: 0.24, widthPercent: 0.17 },
+  { index: 2, xPercent: 0.415, widthPercent: 0.17 },
+  { index: 3, xPercent: 0.59, widthPercent: 0.17 },
+];
+
+/**
+ * Sub-bandas verticales Y evaluadas para el título de la carta:
+ * - Banda superior/central (35% a 46%)
+ * - Banda central/inferior bajo icono (44% a 55%)
+ */
+export const TITLE_Y_BANDS: Array<{ name: string; yPercent: number; heightPercent: number }> = [
+  { name: 'superior', yPercent: 0.35, heightPercent: 0.11 },
+  { name: 'central', yPercent: 0.44, heightPercent: 0.11 },
+];
+
+/**
+ * Coordenadas relativas clásicas para compatibilidad con tests existentes.
  */
 export const CARD_TITLE_ROIS: CardRoiConfig[] = [
-  { index: 1, xPercent: 0.25, yPercent: 0.33, widthPercent: 0.16, heightPercent: 0.10 },
-  { index: 2, xPercent: 0.42, yPercent: 0.33, widthPercent: 0.16, heightPercent: 0.10 },
-  { index: 3, xPercent: 0.59, yPercent: 0.33, widthPercent: 0.16, heightPercent: 0.10 },
+  { index: 1, xPercent: 0.25, yPercent: 0.35, widthPercent: 0.16, heightPercent: 0.12 },
+  { index: 2, xPercent: 0.42, yPercent: 0.35, widthPercent: 0.16, heightPercent: 0.12 },
+  { index: 3, xPercent: 0.59, yPercent: 0.35, widthPercent: 0.16, heightPercent: 0.12 },
 ];
 
 /**
  * Coordenadas relativas para la zona del marco / icono superior de cada una de las 3 cartas.
  */
 export const CARD_ICON_ROIS: CardRoiConfig[] = [
-  { index: 1, xPercent: 0.29, yPercent: 0.18, widthPercent: 0.08, heightPercent: 0.12 },
-  { index: 2, xPercent: 0.46, yPercent: 0.18, widthPercent: 0.08, heightPercent: 0.12 },
-  { index: 3, xPercent: 0.63, yPercent: 0.18, widthPercent: 0.08, heightPercent: 0.12 },
+  { index: 1, xPercent: 0.28, yPercent: 0.18, widthPercent: 0.09, heightPercent: 0.13 },
+  { index: 2, xPercent: 0.455, yPercent: 0.18, widthPercent: 0.09, heightPercent: 0.13 },
+  { index: 3, xPercent: 0.63, yPercent: 0.18, widthPercent: 0.09, heightPercent: 0.13 },
 ];
 
-export const UMBRAL_SIMILITUD_MINIMA = 0.70;
+export const UMBRAL_SIMILITUD_DIRECTA = 0.62;
+export const UMBRAL_SIMILITUD_CON_RAREZA = 0.55;
 export const OCR_TIMEOUT_MS = 2500;
+
+/**
+ * Limpia caracteres de ruido en los extremos que suele meter Tesseract.
+ */
+export function limpiarTextoOcr(txt: string): string {
+  return (txt || '')
+    .replace(/[|_~[\]{}<>]/g, ' ')
+    .replace(/^[0-9\s.,-]+|[0-9\s.,-]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 /**
  * Empaqueta un buffer de píxeles BGRA en un contenedor BMP válido de 54 bytes (32 bpp, top-down) en memoria.
@@ -117,20 +149,34 @@ export function crearContenedorBmp(width: number, height: number, bgraPixels: Bu
 
 /**
  * Preprocesa un recorte de imagen crudo (BGRA) para reconocimiento óptico de caracteres:
- * - Aplica reescalado x2 para estabilizar fuentes doradas de League of Legends
- * - Binariza enfatizando el texto dorado y blanco contra el fondo oscuro de la carta
+ * - Aplica reescalado x3 con muestreo vecino próximo para agrandar fuentes doradas/blancas
+ * - Binarización invertida OBLIGATORIA para Tesseract:
+ *   Letras brillantes (doradas/blancas) -> NEGRO (0, 0, 0)
+ *   Fondo oscuro de la carta -> BLANCO (255, 255, 255)
  * - Empaqueta el resultado en un contenedor BMP válido en memoria (comienza con 'BM')
- * - Genera Data URL en Base64 para telemetría visual inmediata en la UI.
+ * - Genera Data URL en Base64 para telemetría visual.
  */
 export function preprocesarRecorteParaOcr(
   rawBgra: Buffer,
   origW: number,
   origH: number,
-  escala = 2
+  escala = 3
 ): ImagenPreprocesada {
   const newW = Math.max(1, Math.round(origW * escala));
   const newH = Math.max(1, Math.round(origH * escala));
   const dest = Buffer.alloc(newW * newH * 4);
+
+  // Histograma de luminancias para umbral adaptativo
+  const lums: number[] = [];
+  for (let i = 0; i < rawBgra.length; i += 4) {
+    const b = rawBgra[i];
+    const g = rawBgra[i + 1];
+    const r = rawBgra[i + 2];
+    lums.push(0.299 * r + 0.587 * g + 0.114 * b);
+  }
+  lums.sort((a, b) => a - b);
+  const p70 = lums[Math.floor(lums.length * 0.70)] || 110;
+  const umbral = Math.max(90, Math.min(160, p70));
 
   for (let y = 0; y < newH; y++) {
     const srcY = Math.min(origH - 1, Math.floor(y / escala));
@@ -144,20 +190,22 @@ export function preprocesarRecorteParaOcr(
         const g = rawBgra[srcIdx + 1];
         const r = rawBgra[srcIdx + 2];
 
-        // Títulos de LoL: texto dorado (R alto, G medio-alto, R > B + 15) o texto blanco (lum > 115)
+        // Títulos de LoL: texto dorado (R alto, G medio-alto, R > B + 15) o claro (lum >= umbral)
         const lum = 0.299 * r + 0.587 * g + 0.114 * b;
         const esTextoDorado = r >= 130 && g >= 100 && r > b + 15;
-        const esTextoClaro = lum >= 115;
-        const val = esTextoDorado || esTextoClaro ? 255 : 0;
+        const esTextoBrillante = esTextoDorado || lum >= umbral;
 
-        dest[destIdx] = val;     // B
-        dest[destIdx + 1] = val; // G
-        dest[destIdx + 2] = val; // R
-        dest[destIdx + 3] = 255; // A
+        // INVERSIÓN: Tesseract necesita letras NEGRAS (0) sobre fondo BLANCO (255)
+        const pixelVal = esTextoBrillante ? 0 : 255;
+
+        dest[destIdx] = pixelVal;     // B
+        dest[destIdx + 1] = pixelVal; // G
+        dest[destIdx + 2] = pixelVal; // R
+        dest[destIdx + 3] = 255;      // A
       } else {
-        dest[destIdx] = 0;
-        dest[destIdx + 1] = 0;
-        dest[destIdx + 2] = 0;
+        dest[destIdx] = 255;
+        dest[destIdx + 1] = 255;
+        dest[destIdx + 2] = 255;
         dest[destIdx + 3] = 255;
       }
     }
@@ -357,16 +405,16 @@ export function evaluarSimilitudOcrConTitulo(ocr: string, titulo: string): numbe
 
 /**
  * Empareja el texto extraído por OCR contra la lista de aumentos mediante Damerau-Levenshtein.
- * Revisa tanto el nombre en inglés (name) como en español (nameEs) y exige umbral >= 0.70.
- * Si se detectó rareza visual del icono y la similitud del texto es dudosa (0.45 - 0.69),
- * aplica un refuerzo perceptual de +0.15 para confirmar el aumento legítimo.
+ * Revisa tanto el nombre en inglés (name) como en español (nameEs).
+ * Aplica umbral de aceptación directa >= 0.62 (o >= 0.55 cuando la rareza visual coincide).
  */
 export function emparejarAumento(
   ocrText: string,
   augments: AugmentInfo[],
   rarezaVisual?: RarityAugment | null
 ): { augment: AugmentInfo | null; score: number } {
-  const normOcr = normalizarTexto(ocrText);
+  const textoLimpio = limpiarTextoOcr(ocrText);
+  const normOcr = normalizarTexto(textoLimpio);
   if (!normOcr || normOcr.length < 3 || !augments || augments.length === 0) {
     return { augment: null, score: 0 };
   }
@@ -379,8 +427,8 @@ export function emparejarAumento(
     const simEs = evaluarSimilitudOcrConTitulo(normOcr, aug.nameEs);
     let simMax = Math.max(simEn, simEs);
 
-    // Refuerzo perceptual de icono si la similitud de texto es dudosa
-    if (rarezaVisual && aug.rarity === rarezaVisual && simMax >= 0.45 && simMax < UMBRAL_SIMILITUD_MINIMA) {
+    // Refuerzo perceptual de icono si la similitud de texto es cercana y coincide la rareza
+    if (rarezaVisual && aug.rarity === rarezaVisual && simMax >= 0.45 && simMax < UMBRAL_SIMILITUD_DIRECTA) {
       simMax = Math.min(0.85, simMax + 0.15);
     }
 
@@ -390,10 +438,63 @@ export function emparejarAumento(
     }
   }
 
+  const umbralRequerido =
+    rarezaVisual && mejor && mejor.rarity === rarezaVisual
+      ? UMBRAL_SIMILITUD_CON_RAREZA
+      : UMBRAL_SIMILITUD_DIRECTA;
+
   return {
-    augment: mejorSimilitud >= UMBRAL_SIMILITUD_MINIMA ? mejor : null,
+    augment: mejorSimilitud >= umbralRequerido ? mejor : null,
     score: Math.round(mejorSimilitud * 100) / 100,
   };
+}
+
+/**
+ * Arnés de debugging automático: guarda las capturas y resultados en scratch/ocr-debug/
+ */
+export function guardarDebugOcr(datos: {
+  resolucion: { width: number; height: number };
+  caja16a9: RectanguloNormalizado;
+  pantallaCompleta?: Buffer;
+  recortesOriginales: Buffer[];
+  recortesBinarizados: Buffer[];
+  cartas: Array<{
+    slot: number;
+    textoCrudoOcr: string;
+    textoLimpio: string;
+    mejorMatch: string | null;
+    similitud: number;
+    rarezaDetectada: string | null;
+  }>;
+}): void {
+  try {
+    const debugDir = path.join(process.cwd(), 'scratch', 'ocr-debug');
+    if (!fs.existsSync(debugDir)) {
+      fs.mkdirSync(debugDir, { recursive: true });
+    }
+
+    if (datos.pantallaCompleta) {
+      fs.writeFileSync(path.join(debugDir, '00_pantalla_completa.png'), datos.pantallaCompleta);
+    }
+
+    datos.recortesOriginales.forEach((buf, idx) => {
+      fs.writeFileSync(path.join(debugDir, `carta_${idx}_original.png`), buf);
+    });
+
+    datos.recortesBinarizados.forEach((buf, idx) => {
+      fs.writeFileSync(path.join(debugDir, `carta_${idx}_binarizada.bmp`), buf);
+    });
+
+    const info = {
+      timestamp: new Date().toISOString(),
+      resolucionCaptura: datos.resolucion,
+      caja16a9: datos.caja16a9,
+      cartas: datos.cartas,
+    };
+    fs.writeFileSync(path.join(debugDir, 'ultimo_resultado.json'), JSON.stringify(info, null, 2), 'utf-8');
+  } catch (err: any) {
+    registrarLog(`[ScreenAugmentDetector] Advertencia al guardar debug en disco: ${err?.message || err}`);
+  }
 }
 
 export class ScreenAugmentDetector {
@@ -438,7 +539,6 @@ export class ScreenAugmentDetector {
             options.corePath = corePath;
           }
 
-          // Timeout de seguridad de 4000ms al instanciar el worker
           const initWorkerPromise = (async () => {
             const w = await createWorker(['eng', 'spa'], 1, options);
             await w.setParameters({
@@ -483,7 +583,7 @@ export class ScreenAugmentDetector {
   }
 
   /**
-   * Analiza una única carta de aumento (por ejemplo, tras un reroll individual) con timeout de 2500ms.
+   * Analiza una única carta de aumento con doble banda vertical Y y timeout duro.
    */
   public async analizarCartaIndividual(
     cardIndex: 1 | 2 | 3,
@@ -493,9 +593,14 @@ export class ScreenAugmentDetector {
       const worker = await this.getWorker();
       if (!worker) return null;
 
-      const primaryDisplay = electronScreen?.getPrimaryDisplay?.() || { bounds: { width: 1920, height: 1080 } };
-      const bounds = primaryDisplay.bounds || { width: 1920, height: 1080 };
-      const { width, height } = bounds;
+      const primaryDisplay = electronScreen?.getPrimaryDisplay?.() || {
+        bounds: { width: 1920, height: 1080 },
+        size: { width: 1920, height: 1080 },
+        scaleFactor: 1,
+      };
+      const scaleFactor = primaryDisplay.scaleFactor || 1;
+      const width = Math.round((primaryDisplay.size?.width || primaryDisplay.bounds?.width || 1920) * scaleFactor);
+      const height = Math.round((primaryDisplay.size?.height || primaryDisplay.bounds?.height || 1080) * scaleFactor);
 
       if (!electronDesktopCapturer) return null;
       const sources = await electronDesktopCapturer.getSources({
@@ -508,16 +613,8 @@ export class ScreenAugmentDetector {
       const screenImg = sources[0].thumbnail;
       const bmpFull = screenImg.toBitmap();
       const caja16a9 = calcularCajaNormalizada16a9(width, height);
-
-      const titleConfig = CARD_TITLE_ROIS[cardIndex - 1];
+      const colConfig = CARD_COLUMNS[cardIndex - 1];
       const iconConfig = CARD_ICON_ROIS[cardIndex - 1];
-
-      const cropRect = {
-        x: Math.round(caja16a9.x + caja16a9.width * titleConfig.xPercent),
-        y: Math.round(caja16a9.y + caja16a9.height * titleConfig.yPercent),
-        width: Math.round(caja16a9.width * titleConfig.widthPercent),
-        height: Math.round(caja16a9.height * titleConfig.heightPercent),
-      };
 
       const iconRect = {
         x: Math.round(caja16a9.x + caja16a9.width * iconConfig.xPercent),
@@ -527,37 +624,61 @@ export class ScreenAugmentDetector {
       };
 
       const rarezaVisual = estimarRarezaVisual(bmpFull, width, height, iconRect);
-      const cropNative = screenImg.crop(cropRect);
-      const preprocessed = preprocesarRecorteParaOcr(
-        cropNative.toBitmap(),
-        cropRect.width,
-        cropRect.height,
-        2
-      );
-
-      // Timeout duro de 2500ms para la llamada de reconocimiento OCR
-      const ocrTask = worker.recognize(preprocessed.buffer);
-      const timeoutTask = new Promise<any>((_, reject) =>
-        setTimeout(() => reject(new Error(`Timeout OCR de ${OCR_TIMEOUT_MS}ms en carta ${cardIndex}`)), OCR_TIMEOUT_MS)
-      );
-
-      const ocrRes = await Promise.race([ocrTask, timeoutTask]);
-      const rawText = ocrRes?.data?.text || '';
-
       const catalogoNombres = this.obtenerCatalogoNombres(datosModo);
-      const match = emparejarAumento(rawText, catalogoNombres, rarezaVisual);
 
-      let finalAugment: AugmentInfo | null = null;
-      if (match.augment) {
-        const encontradoEnDatosReales = datosModo?.augments?.find(
-          (a) => a.id === match.augment?.id || a.key === match.augment?.key
+      let mejorMatch = { augment: null as AugmentInfo | null, score: 0 };
+      let mejorTexto = '';
+      let mejorPreview = '';
+
+      // Probar las dos sub-bandas verticales Y (superior y central)
+      for (const yBand of TITLE_Y_BANDS) {
+        const cropRect = {
+          x: Math.round(caja16a9.x + caja16a9.width * colConfig.xPercent),
+          y: Math.round(caja16a9.y + caja16a9.height * yBand.yPercent),
+          width: Math.round(caja16a9.width * colConfig.widthPercent),
+          height: Math.round(caja16a9.height * yBand.heightPercent),
+        };
+
+        const cropNative = screenImg.crop(cropRect);
+        const preprocessed = preprocesarRecorteParaOcr(
+          cropNative.toBitmap(),
+          cropRect.width,
+          cropRect.height,
+          3
         );
 
-        if (encontradoEnDatosReales) {
-          finalAugment = { ...encontradoEnDatosReales };
+        if (!mejorPreview) {
+          mejorPreview = preprocessed.base64DataUrl;
+        }
+
+        try {
+          const ocrTask = worker.recognize(preprocessed.buffer);
+          const timeoutTask = new Promise<any>((_, reject) =>
+            setTimeout(() => reject(new Error(`Timeout OCR de ${OCR_TIMEOUT_MS}ms`)), OCR_TIMEOUT_MS)
+          );
+
+          const ocrRes = await Promise.race([ocrTask, timeoutTask]);
+          const rawText = ocrRes?.data?.text || '';
+          const match = emparejarAumento(rawText, catalogoNombres, rarezaVisual);
+
+          if (match.score > mejorMatch.score) {
+            mejorMatch = match;
+            mejorTexto = rawText;
+            mejorPreview = preprocessed.base64DataUrl;
+          }
+        } catch {}
+      }
+
+      let finalAugment: AugmentInfo | null = null;
+      if (mejorMatch.augment) {
+        const encontrado = datosModo?.augments?.find(
+          (a) => a.id === mejorMatch.augment?.id || a.key === mejorMatch.augment?.key
+        );
+        if (encontrado) {
+          finalAugment = { ...encontrado };
         } else {
           finalAugment = {
-            ...match.augment,
+            ...mejorMatch.augment,
             tier: '?' as TierBadge,
             pickRate: undefined as any,
           };
@@ -567,9 +688,9 @@ export class ScreenAugmentDetector {
       return {
         cardIndex,
         augment: finalAugment,
-        rawText: rawText.replace(/\s+/g, ' ').trim(),
-        confidence: match.score,
-        cropPreviewDataUrl: preprocessed.base64DataUrl,
+        rawText: mejorTexto.replace(/\s+/g, ' ').trim(),
+        confidence: mejorMatch.score,
+        cropPreviewDataUrl: mejorPreview,
       };
     } catch (err: any) {
       registrarLog(`[ScreenAugmentDetector] Error al analizar carta individual ${cardIndex}: ${err?.message || err}`);
@@ -579,7 +700,7 @@ export class ScreenAugmentDetector {
 
   /**
    * Captura la pantalla y analiza simultáneamente las 3 cartas de aumentos con normalización 16:9,
-   * empaquetado BMP de 54 bytes y timeout duro de 2500ms.
+   * doble sub-banda vertical Y, binarización invertida para Tesseract y arnés de depuración en disco.
    */
   public async analizarPantalla(
     datosModo: DatosModoCampeon | null,
@@ -594,9 +715,14 @@ export class ScreenAugmentDetector {
         return null;
       }
 
-      const primaryDisplay = electronScreen?.getPrimaryDisplay?.() || { bounds: { width: 1920, height: 1080 } };
-      const bounds = primaryDisplay.bounds || { width: 1920, height: 1080 };
-      const { width, height } = bounds;
+      const primaryDisplay = electronScreen?.getPrimaryDisplay?.() || {
+        bounds: { width: 1920, height: 1080 },
+        size: { width: 1920, height: 1080 },
+        scaleFactor: 1,
+      };
+      const scaleFactor = primaryDisplay.scaleFactor || 1;
+      const width = Math.round((primaryDisplay.size?.width || primaryDisplay.bounds?.width || 1920) * scaleFactor);
+      const height = Math.round((primaryDisplay.size?.height || primaryDisplay.bounds?.height || 1080) * scaleFactor);
 
       if (!electronDesktopCapturer) return null;
       const sources = await electronDesktopCapturer.getSources({
@@ -614,18 +740,15 @@ export class ScreenAugmentDetector {
       const caja16a9 = calcularCajaNormalizada16a9(width, height);
       const resultados: CardMatchResult[] = [];
 
+      const debugOriginales: Buffer[] = [];
+      const debugBinarizados: Buffer[] = [];
+      const debugInfoCartas: any[] = [];
+
       onProgress?.('2/3 Ejecutando OCR en títulos...');
 
       for (let i = 0; i < 3; i++) {
-        const titleConfig = CARD_TITLE_ROIS[i];
+        const colConfig = CARD_COLUMNS[i];
         const iconConfig = CARD_ICON_ROIS[i];
-
-        const cropRect = {
-          x: Math.round(caja16a9.x + caja16a9.width * titleConfig.xPercent),
-          y: Math.round(caja16a9.y + caja16a9.height * titleConfig.yPercent),
-          width: Math.round(caja16a9.width * titleConfig.widthPercent),
-          height: Math.round(caja16a9.height * titleConfig.heightPercent),
-        };
 
         const iconRect = {
           x: Math.round(caja16a9.x + caja16a9.width * iconConfig.xPercent),
@@ -635,46 +758,71 @@ export class ScreenAugmentDetector {
         };
 
         const rarezaVisual = estimarRarezaVisual(bmpFull, width, height, iconRect);
-        const cropNative = screenImg.crop(cropRect);
 
-        // Preprocesar con empaquetado BMP válido (firma 'BM' de 54 bytes)
-        const preprocessed = preprocesarRecorteParaOcr(
-          cropNative.toBitmap(),
-          cropRect.width,
-          cropRect.height,
-          2
-        );
-
-        let rawText = '';
-        let match = { augment: null as AugmentInfo | null, score: 0 };
+        let mejorMatch = { augment: null as AugmentInfo | null, score: 0 };
+        let mejorTexto = '';
+        let mejorPreview = '';
         let cardError: string | undefined = undefined;
 
-        try {
-          // Timeout duro de 2500ms por carta
-          const ocrTask = worker.recognize(preprocessed.buffer);
-          const timeoutTask = new Promise<any>((_, reject) =>
-            setTimeout(() => reject(new Error(`Timeout OCR (${OCR_TIMEOUT_MS}ms)`)), OCR_TIMEOUT_MS)
+        // Evaluar las dos sub-bandas Y para máxima tolerancia posicional
+        for (const yBand of TITLE_Y_BANDS) {
+          const cropRect = {
+            x: Math.round(caja16a9.x + caja16a9.width * colConfig.xPercent),
+            y: Math.round(caja16a9.y + caja16a9.height * yBand.yPercent),
+            width: Math.round(caja16a9.width * colConfig.widthPercent),
+            height: Math.round(caja16a9.height * yBand.heightPercent),
+          };
+
+          const cropNative = screenImg.crop(cropRect);
+          if (debugOriginales.length === i) {
+            debugOriginales.push(cropNative.toPNG());
+          }
+
+          // Preprocesar con letras negras sobre fondo blanco (escala x3)
+          const preprocessed = preprocesarRecorteParaOcr(
+            cropNative.toBitmap(),
+            cropRect.width,
+            cropRect.height,
+            3
           );
 
-          const ocrRes = await Promise.race([ocrTask, timeoutTask]);
-          rawText = ocrRes?.data?.text || '';
-          match = emparejarAumento(rawText, catalogoNombres, rarezaVisual);
-        } catch (err: any) {
-          cardError = err?.message || 'Error en OCR';
-          registrarLog(`[ScreenAugmentDetector] Aviso en carta ${titleConfig.index}: ${cardError}`);
+          if (debugBinarizados.length === i) {
+            debugBinarizados.push(preprocessed.buffer);
+          }
+          if (!mejorPreview) {
+            mejorPreview = preprocessed.base64DataUrl;
+          }
+
+          try {
+            const ocrTask = worker.recognize(preprocessed.buffer);
+            const timeoutTask = new Promise<any>((_, reject) =>
+              setTimeout(() => reject(new Error(`Timeout OCR (${OCR_TIMEOUT_MS}ms)`)), OCR_TIMEOUT_MS)
+            );
+
+            const ocrRes = await Promise.race([ocrTask, timeoutTask]);
+            const rawText = ocrRes?.data?.text || '';
+            const match = emparejarAumento(rawText, catalogoNombres, rarezaVisual);
+
+            if (match.score > mejorMatch.score) {
+              mejorMatch = match;
+              mejorTexto = rawText;
+              mejorPreview = preprocessed.base64DataUrl;
+            }
+          } catch (err: any) {
+            cardError = err?.message || 'Error en OCR';
+          }
         }
 
         let finalAugment: AugmentInfo | null = null;
-        if (match.augment) {
-          const encontradoEnDatosReales = datosModo?.augments?.find(
-            (a) => a.id === match.augment?.id || a.key === match.augment?.key
+        if (mejorMatch.augment) {
+          const encontrado = datosModo?.augments?.find(
+            (a) => a.id === mejorMatch.augment?.id || a.key === mejorMatch.augment?.key
           );
-
-          if (encontradoEnDatosReales) {
-            finalAugment = { ...encontradoEnDatosReales };
+          if (encontrado) {
+            finalAugment = { ...encontrado };
           } else {
             finalAugment = {
-              ...match.augment,
+              ...mejorMatch.augment,
               tier: '?' as TierBadge,
               pickRate: undefined as any,
             };
@@ -682,20 +830,39 @@ export class ScreenAugmentDetector {
         }
 
         resultados.push({
-          cardIndex: titleConfig.index,
+          cardIndex: colConfig.index,
           augment: finalAugment,
-          rawText: rawText.replace(/\s+/g, ' ').trim(),
-          confidence: match.score,
-          cropPreviewDataUrl: preprocessed.base64DataUrl,
+          rawText: mejorTexto.replace(/\s+/g, ' ').trim(),
+          confidence: mejorMatch.score,
+          cropPreviewDataUrl: mejorPreview,
           error: cardError,
         });
 
+        debugInfoCartas.push({
+          slot: colConfig.index,
+          textoCrudoOcr: mejorTexto,
+          textoLimpio: limpiarTextoOcr(mejorTexto),
+          mejorMatch: finalAugment?.name || null,
+          similitud: mejorMatch.score,
+          rarezaDetectada: rarezaVisual || null,
+        });
+
         registrarLog(
-          `[ScreenAugmentDetector] Carta ${titleConfig.index}: ${
+          `[ScreenAugmentDetector] Carta ${colConfig.index}: ${
             finalAugment ? finalAugment.name + ' (Tier ' + finalAugment.tier + ')' : 'No reconocido'
-          } (Score: ${match.score}, Raw: "${rawText.replace(/\s+/g, ' ').trim()}", Rareza: ${rarezaVisual || 'n/a'})`
+          } (Score: ${mejorMatch.score}, Raw: "${mejorTexto.replace(/\s+/g, ' ').trim()}", Rareza: ${rarezaVisual || 'n/a'})`
         );
       }
+
+      // Guardar volcado automático en disco para depuración empírica
+      guardarDebugOcr({
+        resolucion: { width, height },
+        caja16a9,
+        pantallaCompleta: screenImg.toPNG(),
+        recortesOriginales: debugOriginales,
+        recortesBinarizados: debugBinarizados,
+        cartas: debugInfoCartas,
+      });
 
       onProgress?.('3/3 Lectura finalizada');
 

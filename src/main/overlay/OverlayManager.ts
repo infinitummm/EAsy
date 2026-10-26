@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { IPC_CHANNELS } from '../../shared/events';
 import type { OverlayState, TipoModo, DatosModoCampeon } from '../../shared/types';
 import { registrarLog } from '../lcu/LcuDetector';
-import { ScreenAugmentDetector } from '../ocr/ScreenAugmentDetector';
+import { ScreenAugmentDetector, type CardMatchResult } from '../ocr/ScreenAugmentDetector';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -29,6 +29,12 @@ export class OverlayManager {
   private ignoreMouse = true;
   private screenDetector: ScreenAugmentDetector = new ScreenAugmentDetector();
   private autoDismissTimer: NodeJS.Timeout | null = null;
+  private currentCards: [CardMatchResult | null, CardMatchResult | null, CardMatchResult | null] = [
+    null,
+    null,
+    null,
+  ];
+  private bestCardIndex: 1 | 2 | 3 | null = null;
 
   constructor(private readonly preloadPath: string) {}
 
@@ -197,7 +203,80 @@ export class OverlayManager {
    * Notificado por AugmentPanelDetector cuando el usuario elige augment y las cartas desaparecen.
    */
   public onPanelCerrado(): void {
+    this.currentCards = [null, null, null];
+    this.bestCardIndex = null;
     this.hide();
+  }
+
+  /**
+   * Notificado automáticamente cuando se detecta un reroll visual en una carta.
+   */
+  public async onCardReroll(cardIndex: 1 | 2 | 3): Promise<void> {
+    if (!this.state.visible || !this.window || this.window.isDestroyed()) {
+      return;
+    }
+    registrarLog(`[OverlayManager] Reroll detectado en carta ${cardIndex}. Re-analizando slot...`);
+    await this.reanalyzeSlot(cardIndex);
+  }
+
+  /**
+   * Re-analiza únicamente una carta específica tras un reroll y actualiza el overlay.
+   */
+  public async reanalyzeSlot(cardIndex: 1 | 2 | 3): Promise<boolean> {
+    if (!this.window || this.window.isDestroyed()) {
+      return false;
+    }
+
+    try {
+      const cardRes = await this.screenDetector.analizarCartaIndividual(cardIndex, this.state.data);
+      if (cardRes) {
+        this.currentCards[cardIndex - 1] = cardRes;
+
+        const tierRank: Record<string, number> = {
+          'S+': 0,
+          S: 1,
+          A: 2,
+          B: 3,
+          C: 4,
+          D: 5,
+        };
+
+        let bestIdx: 1 | 2 | 3 | null = null;
+        let mejorRango = 99;
+
+        for (const r of this.currentCards) {
+          if (r?.augment && r.augment.tier in tierRank) {
+            const rango = tierRank[r.augment.tier];
+            if (rango < mejorRango) {
+              mejorRango = rango;
+              bestIdx = r.cardIndex;
+            }
+          }
+        }
+
+        this.bestCardIndex = bestIdx;
+        this.currentCards.forEach((r) => {
+          if (r?.augment) {
+            r.augment = {
+              ...r.augment,
+              isBest: r.cardIndex === bestIdx,
+            };
+          }
+        });
+
+        this.window.webContents.send('overlay:screen-augments', {
+          cards: this.currentCards,
+          bestCardIndex: this.bestCardIndex,
+          detectedAt: Date.now(),
+        });
+        registrarLog(`[OverlayManager] Carta ${cardIndex} re-analizada y enviada con éxito.`);
+        return true;
+      }
+    } catch (err: any) {
+      registrarLog(`[OverlayManager] Error re-analizando carta ${cardIndex}: ${err?.message || err}`);
+    }
+
+    return false;
   }
 
   /**
@@ -213,6 +292,8 @@ export class OverlayManager {
       registrarLog('[OverlayManager] Iniciando escaneo OCR de cartas en pantalla...');
       const resultado = await this.screenDetector.analizarPantalla(this.state.data);
       if (resultado && this.window && !this.window.isDestroyed()) {
+        this.currentCards = [resultado.cards[0], resultado.cards[1], resultado.cards[2]];
+        this.bestCardIndex = resultado.bestCardIndex;
         this.window.webContents.send('overlay:screen-augments', resultado);
         registrarLog('[OverlayManager] Escaneo OCR completado y enviado al overlay.');
         return true;

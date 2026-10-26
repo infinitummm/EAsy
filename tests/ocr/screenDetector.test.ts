@@ -4,6 +4,8 @@ import {
   calcularDistanciaDamerauLevenshtein,
   calcularSimilitudDamerauLevenshtein,
   evaluarSimilitudOcrConTitulo,
+  calcularCajaNormalizada16a9,
+  estimarRarezaVisual,
 } from '../../src/main/ocr/ScreenAugmentDetector';
 import type { AugmentInfo } from '../../src/shared/types';
 
@@ -38,7 +40,7 @@ describe('ScreenAugmentDetector - Emparejamiento Difuso de Aumentos por OCR (RF-
       name: 'Apex Inventor',
       nameEs: 'Inventor supremo',
       key: 'ApexInventor',
-      rarity: 'silver',
+      rarity: 'gold',
       tier: 'A',
       pickRate: 8.5,
       winRate: 54.2,
@@ -58,6 +60,76 @@ describe('ScreenAugmentDetector - Emparejamiento Difuso de Aumentos por OCR (RF-
       desc: 'Replace a Summoner Spell with Brass Blast Knocking Back and dealing magic damage',
     },
   ];
+
+  it('normaliza la caja a proporción 16:9 centrada para diversas resoluciones', () => {
+    // 1080p nativo (16:9)
+    const box1080 = calcularCajaNormalizada16a9(1920, 1080);
+    expect(box1080).toEqual({ x: 0, y: 0, width: 1920, height: 1080 });
+
+    // 1440p nativo (16:9)
+    const box1440 = calcularCajaNormalizada16a9(2560, 1440);
+    expect(box1440).toEqual({ x: 0, y: 0, width: 2560, height: 1440 });
+
+    // 21:9 Ultra-panorámico (2560x1080) -> caja centrada de 1920x1080 con bandas a los lados
+    const boxUltrawide = calcularCajaNormalizada16a9(2560, 1080);
+    expect(boxUltrawide.width).toBe(1920);
+    expect(boxUltrawide.height).toBe(1080);
+    expect(boxUltrawide.x).toBe(320);
+    expect(boxUltrawide.y).toBe(0);
+
+    // 16:10 (1920x1200) -> caja centrada de 1920x1080 con bandas arriba y abajo
+    const box16a10 = calcularCajaNormalizada16a9(1920, 1200);
+    expect(box16a10.width).toBe(1920);
+    expect(box16a10.height).toBe(1080);
+    expect(box16a10.x).toBe(0);
+    expect(box16a10.y).toBe(60);
+  });
+
+  it('estima la rareza visual a partir del marco/icono en el bitmap', () => {
+    const w = 50;
+    const h = 50;
+
+    // Bitmap Oro: R alto, G medio, B bajo
+    const bmpOro = Buffer.alloc(w * h * 4);
+    for (let i = 0; i < w * h * 4; i += 4) {
+      bmpOro[i] = 40;     // B
+      bmpOro[i + 1] = 160; // G
+      bmpOro[i + 2] = 220; // R
+      bmpOro[i + 3] = 255;
+    }
+    expect(estimarRarezaVisual(bmpOro, w, h, { x: 0, y: 0, width: w, height: h })).toBe('gold');
+
+    // Bitmap Prismático: R alto, B alto, G menor
+    const bmpPrism = Buffer.alloc(w * h * 4);
+    for (let i = 0; i < w * h * 4; i += 4) {
+      bmpPrism[i] = 200;   // B
+      bmpPrism[i + 1] = 80; // G
+      bmpPrism[i + 2] = 180; // R
+      bmpPrism[i + 3] = 255;
+    }
+    expect(estimarRarezaVisual(bmpPrism, w, h, { x: 0, y: 0, width: w, height: h })).toBe('prismatic');
+
+    // Bitmap Plata: gris equilibrado
+    const bmpPlata = Buffer.alloc(w * h * 4);
+    for (let i = 0; i < w * h * 4; i += 4) {
+      bmpPlata[i] = 150;   // B
+      bmpPlata[i + 1] = 150; // G
+      bmpPlata[i + 2] = 150; // R
+      bmpPlata[i + 3] = 255;
+    }
+    expect(estimarRarezaVisual(bmpPlata, w, h, { x: 0, y: 0, width: w, height: h })).toBe('silver');
+  });
+
+  it('aplica refuerzo perceptual de rareza ante lectura OCR dudosa (0.45 - 0.69)', () => {
+    // "Apex Inven" tiene similitud ~0.60 respecto a "Apex Inventor"
+    const resSinRareza = emparejarAumento('Apex Inven', mockAugments);
+    // Sin rareza, puede quedar al límite o por debajo del 0.70
+    // Si proporcionamos rareza visual 'gold' que coincide con Apex Inventor, el match se confirma
+    const resConRareza = emparejarAumento('Apex Inven', mockAugments, 'gold');
+    expect(resConRareza.augment).not.toBeNull();
+    expect(resConRareza.augment?.name).toBe('Apex Inventor');
+    expect(resConRareza.score).toBeGreaterThanOrEqual(0.70);
+  });
 
   it('calcula distancia y similitud Damerau-Levenshtein correctamente', () => {
     // 1 sustitución

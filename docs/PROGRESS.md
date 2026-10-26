@@ -14,6 +14,7 @@ Este documento registra las tareas completadas por **OpenCode** a lo largo de la
 - **Fase 6 (Personalización + Perfil + Dashboard):** COMPLETADA (OpenCode & Antigravity) — T-6.1 a T-6.3 integradas — 260/260 tests pasando
 - **Fase 7 (Pulido, Verificación E2E y Empaquetado):** COMPLETADA (Antigravity) — Suite completa de 260 tests en verde, build de producción validado y configuración de instalador Windows (`electron-builder.json5`).
 - **Fase 8 (In-Game Overlay ARAM Caos y Arena):** COMPLETADA (Antigravity & OpenCode) — Suite completa de 464 tests en verde, integración Live Client Data API, servicio OP.GG/Community Dragon, detector Borderless, ventana Overlay transparente estilo P3R/Blitz y atajos globales.
+- **Fase 10 (Visor Ligero In-Game V2.5 y Optimización de Rendimiento):** COMPLETADA (Antigravity & OpenCode) — 485/485 tests en verde, sondeo visual liviano (~0% CPU en juego) con rechazo de Tienda/Tab, detección automática de reroll por dHash 8x8, normalización 16:9 centrada para monitores ultra-panorámicos, refuerzo perceptual de icono, suspensión de WMI en juego y 100% de datos honestos (Ley 1).
 
 ---
 

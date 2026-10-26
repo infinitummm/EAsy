@@ -2,6 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   evaluarVisibilidadPanel,
   AugmentPanelDetector,
+  calcularDHash8x8,
+  calcularDistanciaHamming,
   type MuestraRoi,
 } from '../../src/main/ocr/AugmentPanelDetector';
 
@@ -14,9 +16,23 @@ describe('AugmentPanelDetector - Detección Visual del Panel de Aumentos (RF-1)'
       { tipo: 'fondo', color: { r: 40, g: 45, b: 50 } },     // Oscuro
       { tipo: 'fondo', color: { r: 50, g: 55, b: 60 } },     // Oscuro
       { tipo: 'fondo', color: { r: 45, g: 50, b: 55 } },     // Oscuro
+      { tipo: 'fondo_entorno', color: { r: 20, g: 25, b: 30 } }, // Viñeteado oscuro del modal
+      { tipo: 'fondo_entorno', color: { r: 25, g: 30, b: 35 } },
     ];
 
     expect(evaluarVisibilidadPanel(muestras)).toBe(true);
+  });
+
+  it('rechaza y devuelve false cuando la pantalla de la Tienda o Tab está abierta (entorno muy iluminado)', () => {
+    const muestrasTienda: MuestraRoi[] = [
+      { tipo: 'reroll', color: { r: 245, g: 220, b: 150 } }, // Elementos dorados en la tienda
+      { tipo: 'reroll', color: { r: 240, g: 215, b: 145 } },
+      { tipo: 'fondo', color: { r: 40, g: 45, b: 50 } },
+      { tipo: 'fondo_entorno', color: { r: 160, g: 155, b: 140 } }, // Tienda iluminada / fondo claro
+      { tipo: 'fondo_entorno', color: { r: 140, g: 145, b: 150 } },
+    ];
+
+    expect(evaluarVisibilidadPanel(muestrasTienda)).toBe(false);
   });
 
   it('detecta panel NO visible en terreno normal de LoL (hierba, río, grieta)', () => {
@@ -49,6 +65,86 @@ describe('AugmentPanelDetector - Detección Visual del Panel de Aumentos (RF-1)'
   it('devuelve false ante muestras vacías o nulas', () => {
     expect(evaluarVisibilidadPanel([])).toBe(false);
     expect(evaluarVisibilidadPanel(null as any)).toBe(false);
+  });
+
+  it('calcula dHash 8x8 y distancia de Hamming correctamente', () => {
+    // Generar un bitmap sintético BGRA de 100x100
+    const width = 100;
+    const height = 100;
+    const bmp = Buffer.alloc(width * height * 4);
+
+    // Rellenar con un degradado horizontal
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const idx = (y * width + x) * 4;
+        const val = Math.min(255, x * 2);
+        bmp[idx] = val;     // B
+        bmp[idx + 1] = val; // G
+        bmp[idx + 2] = val; // R
+        bmp[idx + 3] = 255; // A
+      }
+    }
+
+    const hash1 = calcularDHash8x8(bmp, width, height, { rx: 0.1, ry: 0.1, rw: 0.5, rh: 0.5 });
+    expect(hash1).toBeDefined();
+    expect(hash1.length).toBe(16);
+
+    // Mismo contenido -> distancia Hamming 0
+    expect(calcularDistanciaHamming(hash1, hash1)).toBe(0);
+
+    // Hashes idénticos o con diferente longitud
+    expect(calcularDistanciaHamming('0000000000000000', 'ffffffffffffffff')).toBe(64);
+    expect(calcularDistanciaHamming('0000000000000000', '000000000000000f')).toBe(4);
+  });
+
+  it('detecta reroll automático cuando cambia el hash de una carta en pantalla', async () => {
+    const detector = new AugmentPanelDetector();
+    const onAbrir = vi.fn();
+    const onCerrar = vi.fn();
+    const onReroll = vi.fn();
+
+    const muestrasPositivas: MuestraRoi[] = [
+      { tipo: 'reroll', color: { r: 245, g: 220, b: 150 } },
+      { tipo: 'reroll', color: { r: 240, g: 215, b: 145 } },
+      { tipo: 'fondo', color: { r: 40, g: 45, b: 50 } },
+      { tipo: 'fondo', color: { r: 45, g: 50, b: 55 } },
+    ];
+
+    vi.spyOn(detector, 'capturarMuestras').mockImplementation(async () => muestrasPositivas);
+
+    let hashesActuales: [string, string, string] = [
+      '1111111111111111',
+      '2222222222222222',
+      '3333333333333333',
+    ];
+
+    vi.spyOn(detector, 'capturarHashesCartas').mockImplementation(async () => hashesActuales);
+
+    detector.start(onAbrir, onCerrar, onReroll);
+
+    // Tick 1: Panel se abre
+    await detector.ejecutarTick();
+    expect(detector.isPanelVisible()).toBe(true);
+    expect(onAbrir).toHaveBeenCalledTimes(1);
+    expect(onReroll).not.toHaveBeenCalled();
+
+    // Tick 2: Sin cambios en las cartas
+    await detector.ejecutarTick();
+    expect(onReroll).not.toHaveBeenCalled();
+
+    // El usuario tira reroll en la carta 2 (cambio drástico de hash)
+    hashesActuales = [
+      '1111111111111111',
+      'ffffffffffffffff', // Reroll en slot 2
+      '3333333333333333',
+    ];
+
+    // Tick 3: Se detecta el reroll en el slot 2
+    await detector.ejecutarTick();
+    expect(onReroll).toHaveBeenCalledTimes(1);
+    expect(onReroll).toHaveBeenCalledWith(2);
+
+    detector.stop();
   });
 
   it('gestiona la máquina de estados con debounce y oferta consumida', async () => {

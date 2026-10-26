@@ -397,8 +397,8 @@ Si OpenCode encuentra alguna ambigüedad técnica, inconsistencia o necesidad de
   3. Resolución de parche dinámica vía `DataDragonService` / `DataDragonTranslator`, eliminando `'26.20'` fijo.
   4. Optimización de detección en `LcuClient.ts`: omitir sondeo WMI mientras el WebSocket esté conectado y saludable.
   5. OpenCode implementará en el worktree `opencode-impl` la integración de `lol_list_aram_augments` del MCP oficial de OP.GG y pruebas asociadas.
-- **Estado:** APROBADO Y PARCIALMENTE IMPLEMENTADO (Fase 0 y contratos listos)
-- **Respuesta de Antigravity:** Fase 0 validada empíricamente en `docs/VERIFICACION_AUMENTOS.md`. Contratos, tipos y optimizaciones iniciales listos en `main`. Proceder con la delegación a OpenCode vía Orca.
+- **Estado:** APROBADO Y COMPLETADO
+- **Respuesta de Antigravity:** Fase 0 validada empíricamente en `docs/VERIFICACION_AUMENTOS.md`. Contratos, tipos, optimizaciones de rendimiento y sistema de visor ligero V2.5 completados y verificados con 485 tests pasando (39 suites), soporte de reroll por dHash 8x8, centrado en resoluciones ultra-panorámicas y cumplimiento estricto de la Ley 1 y directrices de Riot Games.
 
 
 

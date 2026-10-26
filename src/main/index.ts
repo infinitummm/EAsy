@@ -417,7 +417,8 @@ app.whenReady().then(async () => {
         if (augmentPanelDetector) {
           augmentPanelDetector.start(
             () => overlayManager?.onPanelAbierto(),
-            () => overlayManager?.onPanelCerrado()
+            () => overlayManager?.onPanelCerrado(),
+            (slot) => overlayManager?.onCardReroll(slot)
           );
         }
 

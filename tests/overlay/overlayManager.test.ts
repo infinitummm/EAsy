@@ -53,6 +53,9 @@ vi.mock('electron', () => {
       handle: vi.fn(),
       on: vi.fn(),
     },
+    desktopCapturer: {
+      getSources: vi.fn(async () => []),
+    },
   };
 });
 

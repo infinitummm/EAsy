@@ -2,7 +2,8 @@
  * src/main/ocr/AugmentPanelDetector.ts
  * Detector visual liviano para determinar la presencia del panel de selección de aumentos
  * en pantalla en League of Legends (ARAM Caos y Arena) mediante muestreo de píxeles (RF-1).
- * Incluye verificación de viñeteado (rechazo de Tienda y Tab) y detección de reroll por dHash 8x8.
+ * Incluye verificación de contraste inter-cartas, rechazo de pantalla gris de muerte de ARAM,
+ * viñeteado modal (rechazo de Tienda y Tab) y detección de reroll por dHash 8x8.
  */
 
 import { desktopCapturer, screen } from 'electron';
@@ -15,7 +16,7 @@ export interface MuestraColor {
 }
 
 export interface MuestraRoi {
-  tipo: 'reroll' | 'fondo' | 'fondo_entorno';
+  tipo: 'reroll' | 'fondo' | 'fondo_entorno' | 'hueco_inter_carta';
   color: MuestraColor;
   slot?: 1 | 2 | 3;
 }
@@ -112,26 +113,43 @@ export function calcularDistanciaHamming(hashA: string, hashB: string): number {
 
 /**
  * Función pura que evalúa si las muestras de color tomadas corresponden al panel de aumentos.
- * Detecta la presencia del botón de reroll dorado hextech y los fondos oscuros de las cartas,
- * y rechaza pantallas iluminadas no relacionadas (Tienda o Tab).
+ * Exige:
+ * 1. Rechazo de pantalla gris de muerte (ARAM) por saturación cromática.
+ * 2. Rechazo de pantalla brillante (Tienda o Tab).
+ * 3. Presencia de botones de reroll dorados hextech y fondos oscuros de cartas en posiciones simétricas.
+ * 4. Contraste estructural inter-cartas.
  */
 export function evaluarVisibilidadPanel(muestras: MuestraRoi[]): boolean {
   if (!muestras || muestras.length === 0) return false;
 
-  // 1. Verificación de viñeteado / rechazo de pantallas brillantes (Tienda, Tab, etc.)
+  // 1. Rechazo de pantalla gris de muerte en ARAM (totalmente desaturada)
+  let maxSaturacion = 0;
+  for (const m of muestras) {
+    const diffRG = Math.abs(m.color.r - m.color.g);
+    const diffGB = Math.abs(m.color.g - m.color.b);
+    const diffRB = Math.abs(m.color.r - m.color.b);
+    const sat = Math.max(diffRG, diffGB, diffRB);
+    if (sat > maxSaturacion) maxSaturacion = sat;
+  }
+  // En pantalla de muerte, la saturación cae a casi cero (< 14)
+  if (maxSaturacion < 14) {
+    return false;
+  }
+
+  // 2. Verificación de viñeteado / rechazo de pantallas brillantes (Tienda, Tab, etc.)
   const entornos = muestras.filter((m) => m.tipo === 'fondo_entorno');
   if (entornos.length > 0) {
     const lumMediaEntorno =
       entornos.reduce((acc, m) => acc + calcularLuminancia(m.color), 0) / entornos.length;
-    // Si el entorno está demasiado iluminado (e.g. Tienda abierta o pantalla de puntuaciones clara)
     if (lumMediaEntorno > 85) {
       return false;
     }
   }
 
-  // 2. Muestras de botones de reroll y fondos de cartas
+  // 3. Muestras de botones de reroll y fondos de cartas
   const rerolls = muestras.filter((m) => m.tipo === 'reroll');
   const fondos = muestras.filter((m) => m.tipo === 'fondo');
+  const huecos = muestras.filter((m) => m.tipo === 'hueco_inter_carta');
 
   let rerollsCoincidentes = 0;
   for (const m of rerolls) {
@@ -148,6 +166,18 @@ export function evaluarVisibilidadPanel(muestras: MuestraRoi[]): boolean {
     // Fondo de las cartas: muy oscuro respecto al entorno
     if (lum <= 100) {
       fondosOscuros++;
+    }
+  }
+
+  // 4. Contraste inter-cartas si los huecos están presentes
+  if (huecos.length > 0 && fondos.length >= 2) {
+    const lumMediaFondos =
+      fondos.reduce((acc, f) => acc + calcularLuminancia(f.color), 0) / fondos.length;
+    const lumMediaHuecos =
+      huecos.reduce((acc, h) => acc + calcularLuminancia(h.color), 0) / huecos.length;
+    // Si la pantalla es un color 100% plano y uniforme (sin estructura entre cartas y huecos)
+    if (Math.abs(lumMediaFondos - lumMediaHuecos) < 2 && rerollsCoincidentes === 0) {
+      return false;
     }
   }
 
@@ -262,7 +292,6 @@ export class AugmentPanelDetector {
           if (hashesActuales && this.lastCardHashes) {
             for (let i = 0; i < 3; i++) {
               const dist = calcularDistanciaHamming(this.lastCardHashes[i], hashesActuales[i]);
-              // Un cambio significativo en el arte o texto de la carta supera distancia 12
               if (dist >= 12) {
                 const cardIndex = (i + 1) as 1 | 2 | 3;
                 registrarLog(
@@ -352,6 +381,9 @@ export class AugmentPanelDetector {
       { tipo: 'fondo', color: getPixel(0.33, 0.40), slot: 1 },
       { tipo: 'fondo', color: getPixel(0.50, 0.40), slot: 2 },
       { tipo: 'fondo', color: getPixel(0.67, 0.40), slot: 3 },
+      // 2 huecos de separación entre cartas (y: 40%)
+      { tipo: 'hueco_inter_carta', color: getPixel(0.415, 0.40) },
+      { tipo: 'hueco_inter_carta', color: getPixel(0.585, 0.40) },
       // 4 esquinas/bordes exteriores para verificar viñeteado oscuro del modal (rechazo de Tienda/Tab)
       { tipo: 'fondo_entorno', color: getPixel(0.08, 0.12) },
       { tipo: 'fondo_entorno', color: getPixel(0.92, 0.12) },

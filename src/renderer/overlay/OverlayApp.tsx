@@ -111,8 +111,10 @@ export function OverlayApp() {
     null,
     null,
   ]);
+  const [cardSlots, setCardSlots] = useState<any[]>([null, null, null]);
   const [bestCardIndex, setBestCardIndex] = useState<1 | 2 | 3 | null>(null);
   const [isScanning, setIsScanning] = useState<boolean>(false);
+  const [scanStatus, setScanStatus] = useState<string>('Escaneando...');
   const [collapsed, setCollapsed] = useState<boolean>(true);
 
   // Temporizador de auto-cierre
@@ -158,6 +160,21 @@ export function OverlayApp() {
     }
   }, []);
 
+  // Escuchar estado de telemetría de escaneo en vivo
+  useEffect(() => {
+    const api = getApi();
+    if (api?.on) {
+      const unsub = api.on('overlay:scan-status', (payload: any) => {
+        if (payload?.status) {
+          setScanStatus(payload.status);
+        }
+      });
+      return () => {
+        unsub?.();
+      };
+    }
+  }, []);
+
   // Escuchar evento automático de inicio de elección de aumentos
   useEffect(() => {
     const api = getApi();
@@ -166,6 +183,7 @@ export function OverlayApp() {
         setCollapsed(false);
         setCountdown(data?.autoDismissSeconds ?? 25);
         setIsScanning(true);
+        setScanStatus('1/3 Capturando pantalla...');
         if (data?.championId > 0) {
           setState((prev) => ({
             ...prev,
@@ -188,6 +206,7 @@ export function OverlayApp() {
       const unsub = api.on('overlay:screen-augments', (payload: any) => {
         setIsScanning(false);
         if (payload?.cards && Array.isArray(payload.cards)) {
+          setCardSlots(payload.cards);
           const c1 = payload.cards[0]?.augment || null;
           const c2 = payload.cards[1]?.augment || null;
           const c3 = payload.cards[2]?.augment || null;
@@ -278,6 +297,7 @@ export function OverlayApp() {
   const handleReanalyze = async () => {
     const api = getApi();
     setIsScanning(true);
+    setScanStatus('1/3 Capturando pantalla...');
     try {
       await api?.reanalyzeScreenAugments?.();
     } catch {
@@ -305,6 +325,7 @@ export function OverlayApp() {
       {/* 3 INSIGNIAS FLOTANTES DEBAJO DE CADA CARTA CENTRAL (ESTILO BLITZ) */}
       {cardPositions.map((pos, i) => {
         const card = displayCards[i];
+        const slotData = cardSlots[i];
         const isBest = Boolean(card?.isBest || (bestCardIndex === pos.index && card));
 
         return (
@@ -378,15 +399,36 @@ export function OverlayApp() {
                   </div>
                 </div>
               ) : (
-                <div className="mt-1 w-full text-center">
+                <div className="mt-1 w-full text-center flex flex-col items-center">
                   {isScanning ? (
                     <div className="text-[10px] text-cyan-400 font-mono animate-pulse">
-                      Escaneando...
+                      {scanStatus}
                     </div>
                   ) : (
-                    <div className="text-[10px] text-amber-300 font-mono">
-                      No reconocido
-                    </div>
+                    <>
+                      <div className="text-[10px] text-amber-300 font-mono font-bold">
+                        No reconocido
+                      </div>
+                      {slotData?.rawText && (
+                        <div
+                          className="text-[8px] text-gray-400 truncate max-w-[130px] font-mono mt-0.5"
+                          title={`Texto leído: "${slotData.rawText}" (${Math.round(slotData.confidence * 100)}%)`}
+                        >
+                          "{slotData.rawText}" ({Math.round(slotData.confidence * 100)}%)
+                        </div>
+                      )}
+                      {slotData?.cropPreviewDataUrl && (
+                        <div className="mt-1 flex flex-col items-center">
+                          <img
+                            src={slotData.cropPreviewDataUrl}
+                            alt="Recorte OCR"
+                            className="w-24 h-6 object-contain rounded border border-cyan-800/80 bg-black/90 shadow-sm"
+                            title="Vista previa del recorte analizado por OCR"
+                          />
+                          <span className="text-[7px] text-gray-400 font-mono">Recorte OCR</span>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               )}

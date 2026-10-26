@@ -644,6 +644,8 @@ export interface OverlayState {
   championName: string | null;
   data: DatosModoCampeon | null;
   activeAugments: AugmentInfo[];
+  scanStatus?: string;
+  isAnalyzing?: boolean;
 }
 
 // ==========================================

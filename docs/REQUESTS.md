@@ -400,5 +400,24 @@ Si OpenCode encuentra alguna ambigüedad técnica, inconsistencia o necesidad de
 - **Estado:** APROBADO Y COMPLETADO
 - **Respuesta de Antigravity:** Fase 0 validada empíricamente en `docs/VERIFICACION_AUMENTOS.md`. Contratos, tipos, optimizaciones de rendimiento y sistema de visor ligero V2.5 completados y verificados con 485 tests pasando (39 suites), soporte de reroll por dHash 8x8, centrado en resoluciones ultra-panorámicas y cumplimiento estricto de la Ley 1 y directrices de Riot Games.
 
+---
+
+### [REQ-025] Hotfix: Descongelamiento de Overlay, Contenedor BMP de 54 Bytes y Telemetría Visual
+- **Fecha:** 2026-10-25
+- **Tarea asociada:** T-10.6 Hotfix
+- **Módulos afectados:** `src/main/ocr/ScreenAugmentDetector.ts`, `src/main/ocr/AugmentPanelDetector.ts`, `src/main/overlay/OverlayManager.ts`, `src/renderer/overlay/OverlayApp.tsx`, `src/shared/types.ts`
+- **Problema encontrado:**
+  1. El overlay se quedaba congelado infinitamente en el estado `"Analizando..."` debido a buffers de píxeles sin cabecera y falta de timeout duro en llamadas OCR.
+  2. Ausencia de telemetría visual (caja negra) para el usuario sobre qué texto o recorte estaba recibiendo el motor.
+  3. Falsos positivos potenciales en ARAM con la pantalla gris de muerte.
+- **Propuesta de solución / Firma requerida:**
+  1. `crearContenedorBmp()`: empaqueta el buffer en un contenedor BMP válido de 54 bytes con firma mágica `'BM'` (0x42, 0x4D), 32 bpp top-down, decodificado instantáneamente por Leptonica/Tesseract en RAM.
+  2. Timeout duro de 2500ms con `Promise.race` y bloque `try / catch / finally` inquebrantable en `OverlayManager.ts` que SIEMPRE emite `isAnalyzing: false`.
+  3. Telemetría en vivo vía `scanStatus` ("1/3 Capturando pantalla...", "2/3 Ejecutando OCR en títulos...", "3/3 Lectura finalizada") y miniatura en Base64 (`cropPreviewDataUrl`) visible en tarjetas no reconocidas.
+  4. Endurecimiento de `AugmentPanelDetector.ts` con rechazo de saturación monocromática (< 14) contra pantalla de muerte de ARAM y contraste inter-cartas.
+- **Estado:** APROBADO Y COMPLETADO
+- **Respuesta de Antigravity:** Implementado y verificado con 488 tests pasando al 100% (39 suites) y script de prueba E2E en tiempo real ejecutando OCR en 111 ms sin cuelgues.
+
+
 
 

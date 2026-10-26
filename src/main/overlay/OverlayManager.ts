@@ -220,97 +220,144 @@ export class OverlayManager {
   }
 
   /**
-   * Re-analiza únicamente una carta específica tras un reroll y actualiza el overlay.
+   * Emite el estado de escaneo en vivo (telemetría visual) hacia el renderer.
+   */
+  public emitScanStatus(status: string): void {
+    this.state.scanStatus = status;
+    if (this.window && !this.window.isDestroyed()) {
+      this.window.webContents.send('overlay:scan-status', { status });
+    }
+  }
+
+  /**
+   * Re-analiza únicamente una carta específica tras un reroll y actualiza el overlay
+   * con timeout estricto de 2500ms y bloque finally garantizado.
    */
   public async reanalyzeSlot(cardIndex: 1 | 2 | 3): Promise<boolean> {
     if (!this.window || this.window.isDestroyed()) {
       return false;
     }
 
+    this.emitScanStatus(`Re-escaneando carta ${cardIndex}...`);
+
+    let cardRes: CardMatchResult | null = null;
+    const timeoutSlot = new Promise<null>((_, reject) =>
+      setTimeout(() => reject(new Error('Timeout de 2500ms en carta')), 2500)
+    );
+
     try {
-      const cardRes = await this.screenDetector.analizarCartaIndividual(cardIndex, this.state.data);
+      cardRes = await Promise.race([
+        this.screenDetector.analizarCartaIndividual(cardIndex, this.state.data),
+        timeoutSlot,
+      ]);
+    } catch (err: any) {
+      registrarLog(`[OverlayManager] Error re-analizando carta ${cardIndex}: ${err?.message || err}`);
+    } finally {
       if (cardRes) {
         this.currentCards[cardIndex - 1] = cardRes;
+      }
 
-        const tierRank: Record<string, number> = {
-          'S+': 0,
-          S: 1,
-          A: 2,
-          B: 3,
-          C: 4,
-          D: 5,
-        };
+      const tierRank: Record<string, number> = {
+        'S+': 0,
+        S: 1,
+        A: 2,
+        B: 3,
+        C: 4,
+        D: 5,
+      };
 
-        let bestIdx: 1 | 2 | 3 | null = null;
-        let mejorRango = 99;
+      let bestIdx: 1 | 2 | 3 | null = null;
+      let mejorRango = 99;
 
-        for (const r of this.currentCards) {
-          if (r?.augment && r.augment.tier in tierRank) {
-            const rango = tierRank[r.augment.tier];
-            if (rango < mejorRango) {
-              mejorRango = rango;
-              bestIdx = r.cardIndex;
-            }
+      for (const r of this.currentCards) {
+        if (r?.augment && r.augment.tier in tierRank) {
+          const rango = tierRank[r.augment.tier];
+          if (rango < mejorRango) {
+            mejorRango = rango;
+            bestIdx = r.cardIndex;
           }
         }
+      }
 
-        this.bestCardIndex = bestIdx;
-        this.currentCards.forEach((r) => {
-          if (r?.augment) {
-            r.augment = {
-              ...r.augment,
-              isBest: r.cardIndex === bestIdx,
-            };
-          }
-        });
+      this.bestCardIndex = bestIdx;
+      this.currentCards.forEach((r) => {
+        if (r?.augment) {
+          r.augment = {
+            ...r.augment,
+            isBest: r.cardIndex === bestIdx,
+          };
+        }
+      });
 
+      if (this.window && !this.window.isDestroyed()) {
         this.window.webContents.send('overlay:screen-augments', {
           cards: this.currentCards,
           bestCardIndex: this.bestCardIndex,
           detectedAt: Date.now(),
+          isAnalyzing: false,
         });
-        registrarLog(`[OverlayManager] Carta ${cardIndex} re-analizada y enviada con éxito.`);
-        return true;
+        registrarLog(`[OverlayManager] Carta ${cardIndex} actualizada tras reroll (isAnalyzing: false).`);
       }
-    } catch (err: any) {
-      registrarLog(`[OverlayManager] Error re-analizando carta ${cardIndex}: ${err?.message || err}`);
     }
 
-    return false;
+    return Boolean(cardRes);
   }
 
   /**
    * Captura la pantalla y envía los aumentos exactos detectados a la interfaz.
-   * Si la detección no arroja resultado o falla, notifica al renderer para desactivar el spinner.
+   * Envuelve la lectura en un timeout duro de 2500ms con try/catch/finally inquebrantable
+   * que GARANTIZA que el renderer jamás se quede colgado en 'Analizando...'.
    */
   public async reanalyze(): Promise<boolean> {
     if (!this.window || this.window.isDestroyed()) {
       return false;
     }
 
+    this.emitScanStatus('1/3 Capturando pantalla...');
+    let resultado: any = null;
+
+    const timeoutTotal = new Promise<null>((_, reject) =>
+      setTimeout(() => reject(new Error('Timeout general OCR de 2500ms excedido')), 2500)
+    );
+
     try {
-      registrarLog('[OverlayManager] Iniciando escaneo OCR de cartas en pantalla...');
-      const resultado = await this.screenDetector.analizarPantalla(this.state.data);
-      if (resultado && this.window && !this.window.isDestroyed()) {
+      registrarLog('[OverlayManager] Iniciando escaneo OCR con timeout de 2500ms...');
+      resultado = await Promise.race([
+        this.screenDetector.analizarPantalla(this.state.data, (paso) => this.emitScanStatus(paso)),
+        timeoutTotal,
+      ]);
+    } catch (err: any) {
+      registrarLog(`[OverlayManager] Fallo o timeout durante re-análisis OCR: ${err?.message || err}`);
+      this.emitScanStatus(`Error: ${err?.message || 'Error en análisis'}`);
+    } finally {
+      if (resultado && Array.isArray(resultado.cards)) {
         this.currentCards = [resultado.cards[0], resultado.cards[1], resultado.cards[2]];
         this.bestCardIndex = resultado.bestCardIndex;
-        this.window.webContents.send('overlay:screen-augments', resultado);
-        registrarLog('[OverlayManager] Escaneo OCR completado y enviado al overlay.');
-        return true;
+        registrarLog('[OverlayManager] Escaneo OCR exitoso procesado.');
+      } else {
+        // Fallback honesto: si falló o no reconoció, asegurar que las 3 cartas existan como 'No reconocido'
+        if (!this.currentCards || this.currentCards.every((c) => c === null)) {
+          this.currentCards = [
+            { cardIndex: 1, augment: null, rawText: '', confidence: 0, error: 'Tiempo agotado o no detectado' },
+            { cardIndex: 2, augment: null, rawText: '', confidence: 0, error: 'Tiempo agotado o no detectado' },
+            { cardIndex: 3, augment: null, rawText: '', confidence: 0, error: 'Tiempo agotado o no detectado' },
+          ];
+        }
       }
-    } catch (err: any) {
-      registrarLog(`[OverlayManager] Error durante re-análisis OCR: ${err.message}`);
+
+      // INQUEBRANTABLE: Notificar SIEMPRE al renderer para apagar el estado 'Escaneando...'
+      if (this.window && !this.window.isDestroyed()) {
+        this.window.webContents.send('overlay:screen-augments', {
+          cards: this.currentCards,
+          bestCardIndex: this.bestCardIndex,
+          detectedAt: Date.now(),
+          isAnalyzing: false,
+        });
+        registrarLog('[OverlayManager] Notificación de finalización enviada al renderer (isAnalyzing: false).');
+      }
     }
 
-    // Notificar al renderer para cancelar el estado 'Escaneando...'
-    if (this.window && !this.window.isDestroyed()) {
-      this.window.webContents.send('overlay:screen-augments', {
-        cards: [null, null, null],
-        bestCardIndex: null,
-        detectedAt: Date.now(),
-      });
-    }
-    return false;
+    return Boolean(resultado);
   }
 
   /**

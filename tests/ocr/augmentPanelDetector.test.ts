@@ -35,6 +35,20 @@ describe('AugmentPanelDetector - Detección Visual del Panel de Aumentos (RF-1)'
     expect(evaluarVisibilidadPanel(muestrasTienda)).toBe(false);
   });
 
+  it('rechaza y devuelve false en la pantalla gris de muerte de ARAM (monocromática desaturada)', () => {
+    const muestrasMuerte: MuestraRoi[] = [
+      { tipo: 'reroll', color: { r: 50, g: 50, b: 50 } },
+      { tipo: 'reroll', color: { r: 52, g: 51, b: 50 } },
+      { tipo: 'reroll', color: { r: 48, g: 49, b: 48 } },
+      { tipo: 'fondo', color: { r: 30, g: 30, b: 30 } },
+      { tipo: 'fondo', color: { r: 32, g: 31, b: 32 } },
+      { tipo: 'fondo', color: { r: 28, g: 28, b: 29 } },
+      { tipo: 'fondo_entorno', color: { r: 25, g: 25, b: 25 } },
+    ];
+
+    expect(evaluarVisibilidadPanel(muestrasMuerte)).toBe(false);
+  });
+
   it('detecta panel NO visible en terreno normal de LoL (hierba, río, grieta)', () => {
     const muestrasTerreno: MuestraRoi[] = [
       { tipo: 'reroll', color: { r: 45, g: 110, b: 60 } }, // Verde hierba

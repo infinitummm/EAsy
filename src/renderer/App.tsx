@@ -10,6 +10,7 @@ import { SettingsView } from './views/SettingsView';
 import { ChampSelectView } from './views/ChampSelectView';
 import { MatchupView } from './views/MatchupView';
 import { ProfileView } from './views/ProfileView';
+import logoUrl from './assets/logo.png';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'champSelect' | 'matchups' | 'profile' | 'settings'>('dashboard');
@@ -210,13 +211,18 @@ export default function App() {
           {/* Logo / Header EAsy */}
           <div className="relative mb-6 pb-4 border-b-2 border-[#16335F]">
             <div className="flex items-center space-x-3 px-1 pt-1">
-              <div className="w-10 h-10 bg-[#0066FF] flex items-center justify-center font-black text-white transform -skew-x-8 p3r-shadow-blue border-l-2 border-white">
-                <span className="transform skew-x-8 tracking-wider font-p3r text-base">EA</span>
-              </div>
+              <img
+                src={logoUrl}
+                alt="EAsy Logo"
+                className="w-10 h-10 object-contain rounded-lg p3r-shadow-blue border border-[#00E5FF]/40"
+              />
               <div>
                 <h1 className="font-black text-white text-2xl tracking-wider flex items-center font-p3r leading-none">
                   <span>EAsy</span>
                 </h1>
+                <span className="text-[10px] text-[#00E5FF] font-mono font-bold tracking-widest uppercase block mt-0.5">
+                  LoL Assistant
+                </span>
               </div>
             </div>
           </div>

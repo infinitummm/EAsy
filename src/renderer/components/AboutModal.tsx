@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, ShieldCheck } from 'lucide-react';
 import { APP_NAME } from '../../shared/constants';
+import logoUrl from '../assets/logo.png';
 
 interface AboutModalProps {
   isOpen: boolean;
@@ -27,7 +28,11 @@ export const AboutModal: React.FC<AboutModalProps> = ({
         {/* Cabecera */}
         <div className="flex items-center justify-between pb-3 border-b-2 border-[#16335F]">
           <div className="flex items-center space-x-3">
-            <span className="w-3 h-3 bg-[#0066FF] transform rotate-45"></span>
+            <img
+              src={logoUrl}
+              alt="EAsy"
+              className="w-8 h-8 object-contain rounded-md border border-[#00E5FF]/40 shadow-sm"
+            />
             <h3 className="text-xl font-bold tracking-wider uppercase text-white font-p3r">
               Acerca de {APP_NAME}
             </h3>

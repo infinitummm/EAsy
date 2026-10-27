@@ -4,6 +4,7 @@ import { Shield, Sparkles, ChevronRight, Gamepad2, Database } from 'lucide-react
 import { APP_NAME } from '../../shared/constants';
 import { P3rButton } from './p3r/P3rButton';
 import { P3rBadge } from './p3r/P3rBadge';
+import logoUrl from '../assets/logo.png';
 
 interface OnboardingModalProps {
   settings: AppSettings;
@@ -36,8 +37,12 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
       <div className="bg-[#050E20] border-2 border-[#16335F] max-w-lg w-full p-6 p3r-shadow-hard-lg space-y-5 text-white relative p3r-bevel">
         {/* Cabecera */}
         <div className="text-center space-y-2 border-b-2 border-[#16335F] pb-4">
-          <div className="inline-flex p-3 bg-[#0066FF] text-white transform -skew-x-8 p3r-shadow-blue border-l-2 border-white mb-1">
-            <Gamepad2 className="w-8 h-8 transform skew-x-8" />
+          <div className="flex justify-center mb-1">
+            <img
+              src={logoUrl}
+              alt="EAsy Logo"
+              className="w-16 h-16 object-contain rounded-xl p3r-shadow-blue border-2 border-[#00E5FF]/40 shadow-xl"
+            />
           </div>
           <h2 className="text-2xl font-black tracking-wider text-white uppercase font-p3r">
             Bienvenido a {APP_NAME}

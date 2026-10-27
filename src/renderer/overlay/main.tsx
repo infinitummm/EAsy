@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import '../services/puenteNativo';
 import { OverlayApp } from './OverlayApp';
 import '../styles/index.css';
 

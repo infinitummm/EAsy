@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import './services/puenteNativo';
 import App from './App';
 import './styles/index.css';
 

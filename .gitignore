@@ -11,6 +11,8 @@ out/
 release/
 electron-base/
 .electron-dist/
+target/
+src-tauri/target/
 
 # Logs y cachés
 *.log

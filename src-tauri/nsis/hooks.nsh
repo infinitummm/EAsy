@@ -39,3 +39,8 @@
   ${EndIf}
   Delete "$DESKTOP\EAsy.lnk"
 !macroend
+
+!macro NSIS_HOOK_POSTINSTALL
+  ; Crear acceso directo obligatorio en el Escritorio
+  CreateShortcut "$DESKTOP\EAsy.lnk" "$INSTDIR\EAsy.exe" "" "$INSTDIR\EAsy.exe" 0
+!macroend

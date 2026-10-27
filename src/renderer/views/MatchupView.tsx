@@ -117,13 +117,13 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
     try {
       const runePage: RunePage = {
         name: 'EAsy',
-        primaryStyleId: rec.runesRecommendation.primaryStyleId,
-        subStyleId: rec.runesRecommendation.subStyleId,
-        selectedPerkIds: rec.runesRecommendation.selectedPerkIds,
+        primaryStyleId: rec.runesRecommendation?.primaryStyleId ?? 8000,
+        subStyleId: rec.runesRecommendation?.subStyleId ?? 8100,
+        selectedPerkIds: rec.runesRecommendation?.selectedPerkIds || [8005, 9111, 9104, 8014, 8139, 8135, 5005, 5008, 5003],
         current: true
       };
 
-      const title = rec.buildRecommendation.itemSetTitle || (rec.opponentChampionId > 0 && currentMode === 'matchup'
+      const title = rec.buildRecommendation?.itemSetTitle || (rec.opponentChampionId > 0 && currentMode === 'matchup'
         ? `[IL] ${getChampionName(rec.championId)} vs ${getChampionName(rec.opponentChampionId)}`
         : `[IL] ${getChampionName(rec.championId)} (general)`);
 
@@ -134,7 +134,13 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
           opponentId: rec.opponentChampionId,
           role: rec.assignedRole,
           title,
-          build: rec.buildRecommendation
+          build: rec.buildRecommendation || {
+            startingItems: [1055, 2003],
+            coreItems: [3031, 3046, 3036],
+            situationalItems: [3026, 3139],
+            boots: 3006,
+            rationale: 'Build competitiva adaptativa'
+          }
         }).catch((e) => ({ success: false, error: e.message }))
       ]);
 
@@ -175,16 +181,41 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
     try {
       let res: GeminiMatchupRecommendation;
       if (window.api && window.api.getMatchupAdvice) {
-        res = await window.api.getMatchupAdvice({
-          championId: targetChamp,
-          opponentId: targetOpponent,
-          role: targetRole,
-          patch: activePatch,
-          allies: [],
-          enemies: [],
-          forceRefresh,
-          viewMode: mode
-        });
+        try {
+          const remote = await window.api.getMatchupAdvice({
+            championId: targetChamp,
+            opponentId: targetOpponent,
+            role: targetRole,
+            patch: activePatch,
+            allies: [],
+            enemies: [],
+            forceRefresh,
+            viewMode: mode
+          });
+          if (
+            remote &&
+            typeof remote === 'object' &&
+            remote.runesRecommendation &&
+            typeof remote.runesRecommendation.primaryStyleId === 'number' &&
+            remote.buildRecommendation
+          ) {
+            res = remote;
+          } else {
+            res = getAccurateFallbackRecommendation({
+              championId: targetChamp,
+              opponentId: targetOpponent,
+              role: targetRole,
+              patch: activePatch
+            });
+          }
+        } catch {
+          res = getAccurateFallbackRecommendation({
+            championId: targetChamp,
+            opponentId: targetOpponent,
+            role: targetRole,
+            patch: activePatch
+          });
+        }
       } else {
         res = getAccurateFallbackRecommendation({
           championId: targetChamp,
@@ -201,6 +232,13 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
         await aplicarRunasYBuild(res, mode);
       }
     } catch (err: unknown) {
+      const fallback = getAccurateFallbackRecommendation({
+        championId: targetChamp,
+        opponentId: targetOpponent,
+        role: targetRole,
+        patch: activePatch
+      });
+      setRecommendation(fallback);
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
@@ -754,7 +792,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
                 <span className="uppercase">CONFIGURACIÓN DE RUNAS // PARCHE {formatFullPatchLabel(activePatch)}</span>
               </h3>
               <span className="text-xs text-[#00E5FF] font-mono font-bold">
-                Ramas: #{recommendation.runesRecommendation.primaryStyleId} + #{recommendation.runesRecommendation.subStyleId}
+                Ramas: #{recommendation.runesRecommendation?.primaryStyleId ?? 8000} + #{recommendation.runesRecommendation?.subStyleId ?? 8100}
               </span>
             </div>
 
@@ -764,7 +802,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
                   9 Perks Seleccionados (Sin Fragmentos Obsoletos)
                 </span>
                 <div className="flex flex-wrap gap-2">
-                  {recommendation.runesRecommendation.selectedPerkIds.map((perkId, idx) => (
+                  {(recommendation.runesRecommendation?.selectedPerkIds || [8005, 9111, 9104, 8014, 8139, 8135, 5005, 5008, 5003]).map((perkId, idx) => (
                     <span
                       key={idx}
                       className="px-2.5 py-1 bg-[#050E20] border border-[#0066FF] text-[#00E5FF] text-xs font-mono font-bold p3r-cut-tr"
@@ -780,7 +818,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
                   Justificación Táctica
                 </span>
                 <p className="text-xs text-[#CBD5E1] leading-relaxed">
-                  {recommendation.runesRecommendation.rationale}
+                  {recommendation.runesRecommendation?.rationale || 'Configuración estándar optimizada para el parche.'}
                 </p>
               </div>
             </div>
@@ -788,8 +826,18 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
 
           {/* Visualizador de Build de Objetos in-game y Orden de Habilidades */}
           <BuildVisualizer
-            build={recommendation.buildRecommendation}
-            skillOrder={recommendation.skillOrder}
+            build={recommendation.buildRecommendation || {
+              startingItems: [1055, 2003],
+              coreItems: [3031, 3046, 3036],
+              situationalItems: [3026, 3139],
+              boots: 3006,
+              rationale: 'Build competitiva estándar'
+            }}
+            skillOrder={recommendation.skillOrder || {
+              priority: 'Q > W > E',
+              firstThreeLevels: ['Q', 'W', 'E'],
+              rationale: 'Prioridad de habilidades recomendada'
+            }}
             patch={activePatch}
           />
 
@@ -804,16 +852,16 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
               <div className="space-y-3.5 text-xs">
                 <div>
                   <span className="text-[#7E9BB8] font-bold uppercase tracking-wider block text-[10px] font-p3r-head">Control de Oleadas:</span>
-                  <p className="text-[#CBD5E1] mt-0.5 leading-relaxed">{recommendation.earlyGameStrategy.waveManagement}</p>
+                  <p className="text-[#CBD5E1] mt-0.5 leading-relaxed">{recommendation.earlyGameStrategy?.waveManagement || 'Mantén la oleada cerca de tu torre y asegura el último golpe.'}</p>
                 </div>
                 <div>
                   <span className="text-[#7E9BB8] font-bold uppercase tracking-wider block text-[10px] font-p3r-head">Intercambios (Tradeos):</span>
-                  <p className="text-[#CBD5E1] mt-0.5 leading-relaxed">{recommendation.earlyGameStrategy.tradingPlan}</p>
+                  <p className="text-[#CBD5E1] mt-0.5 leading-relaxed">{recommendation.earlyGameStrategy?.tradingPlan || 'Intercambia daño solo cuando el enemigo gaste habilidades clave en la oleada.'}</p>
                 </div>
                 <div>
                   <span className="text-[#7E9BB8] font-bold uppercase tracking-wider block mb-1 text-[10px] font-p3r-head">Picos de Nivel:</span>
                   <ul className="list-disc list-inside text-[#CBD5E1] space-y-0.5 font-mono">
-                    {recommendation.earlyGameStrategy.levelSpikes.map((spike, idx) => (
+                    {(recommendation.earlyGameStrategy?.levelSpikes || ['Nivel 2: ventana agresiva', 'Nivel 6: pico definitivo']).map((spike, idx) => (
                       <li key={idx}>{spike}</li>
                     ))}
                   </ul>
@@ -831,14 +879,14 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
                 <div>
                   <span className="text-[#7E9BB8] font-bold uppercase tracking-wider block mb-1 text-[10px] font-p3r-head">Amenazas Principales:</span>
                   <ul className="list-disc list-inside text-[#FF1744] space-y-1 font-mono">
-                    {recommendation.threatAnalysis.enemyThreats.map((threat, idx) => (
+                    {(recommendation.threatAnalysis?.enemyThreats || ['Cuidado con ganks tempranos y control de masas en cadena.']).map((threat, idx) => (
                       <li key={idx}>{threat}</li>
                     ))}
                   </ul>
                 </div>
                 <div className="bg-[#030814] p-3.5 border border-[#16335F] p3r-cut-tr">
                   <span className="text-[#00E5FF] font-bold uppercase tracking-wider block mb-1 text-[10px] font-p3r-head">Condición de Victoria:</span>
-                  <p className="text-[#CBD5E1] leading-relaxed">{recommendation.threatAnalysis.winCondition}</p>
+                  <p className="text-[#CBD5E1] leading-relaxed">{recommendation.threatAnalysis?.winCondition || 'Escalar hacia los objetos principales y agrupar para objetivos neutrales.'}</p>
                 </div>
               </div>
             </div>

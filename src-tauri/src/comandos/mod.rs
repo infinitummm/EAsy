@@ -415,7 +415,7 @@ pub fn opgg_get_matchup(payload: Option<serde_json::Value>) -> Result<serde_json
 #[tauri::command]
 pub fn ai_get_matchup_advice(payload: Option<serde_json::Value>) -> Result<serde_json::Value, String> {
     let _ = payload;
-    Ok(serde_json::json!({ "success": true }))
+    Err("IA nativa no configurada; usando catálogo local determinista".to_string())
 }
 
 #[tauri::command]

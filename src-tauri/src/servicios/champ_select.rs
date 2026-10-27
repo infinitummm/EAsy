@@ -383,10 +383,13 @@ impl ChampSelectService {
             match accion {
                 AccionChampSelect::Ban { action_id, champion_id: _, completada } => {
                     let mut ban_exitoso = false;
+                    let mut ya_aplicada_previamente = false;
+
                     for cand_id in plan.candidatos_ban.iter().take(4) {
                         let clave = format!("{}:{}:{}", action_id, cand_id, if completada { 1 } else { 0 });
                         if *self.clave_ban.lock().await == Some(clave.clone()) {
-                            continue;
+                            ya_aplicada_previamente = true;
+                            break;
                         }
 
                         registrar_automatizacion(&format!(
@@ -402,7 +405,21 @@ impl ChampSelectService {
 
                         tokio::time::sleep(Duration::from_millis(150)).await;
 
-                        // 2. Bloquear (lock-in) con completed: true
+                        // 2. Ejecutar POST /complete oficial de Riot LCU para bloquear la acción
+                        if completada {
+                            let res_complete = self.cliente_lcu.post_vacio::<serde_json::Value>(
+                                &format!("/lol-champ-select/v1/session/actions/{}/complete", action_id),
+                                None
+                            ).await;
+                            if let Err(ref e) = res_complete {
+                                registrar_automatizacion(&format!(
+                                    "[AutoChampSelect][Ban] POST /complete en acción {} retornó: {}. Probando PATCH completed: true...",
+                                    action_id, e
+                                ));
+                            }
+                        }
+
+                        // 3. Respaldo por PATCH con completed: true
                         let body = serde_json::json!({
                             "championId": cand_id,
                             "completed": completada
@@ -432,7 +449,7 @@ impl ChampSelectService {
                             }
                         }
                     }
-                    if !ban_exitoso && !plan.candidatos_ban.is_empty() {
+                    if !ban_exitoso && !ya_aplicada_previamente && !plan.candidatos_ban.is_empty() {
                         registrar_automatizacion("[AutoChampSelect][Ban ERROR] No se pudo confirmar ninguno de los candidatos de ban disponibles.");
                     }
                 }
@@ -453,13 +470,25 @@ impl ChampSelectService {
                             tokio::time::sleep(Duration::from_millis(delay_ms)).await;
                         }
 
-                        // 1. Hover previo antes de confirmar pick
+                        // 1. Asignar campeón (hover) antes de confirmar pick
                         let _ = self.cliente_lcu.patch_vacio(
                             &format!("/lol-champ-select/v1/session/actions/{}", action_id),
                             &serde_json::json!({ "championId": champion_id, "completed": false })
                         ).await;
 
                         tokio::time::sleep(Duration::from_millis(150)).await;
+
+                        // 2. Ejecutar POST /complete oficial de Riot LCU para bloquear la acción
+                        let res_complete = self.cliente_lcu.post_vacio::<serde_json::Value>(
+                            &format!("/lol-champ-select/v1/session/actions/{}/complete", action_id),
+                            None
+                        ).await;
+                        if let Err(ref e) = res_complete {
+                            registrar_automatizacion(&format!(
+                                "[AutoChampSelect][Pick] POST /complete en acción {} retornó: {}. Probando PATCH completed: true...",
+                                action_id, e
+                            ));
+                        }
 
                         registrar_automatizacion(&format!(
                             "[AutoChampSelect][Pick] Bloqueando (lock-in) campeón ID {} en acción {}...",

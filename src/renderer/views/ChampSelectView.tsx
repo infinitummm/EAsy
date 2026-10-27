@@ -255,8 +255,36 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
     }
   };
 
-  const alliedBans = session?.bans?.myTeamBans?.filter((id) => id > 0) || [];
-  const enemyBans = session?.bans?.theirTeamBans?.filter((id) => id > 0) || [];
+  // Consolidar baneos de ambos equipos tanto de session.bans como de session.actions completados
+  const alliedTeamCellIds = new Set(session?.myTeam?.map((p) => p.cellId) || []);
+  const enemyTeamCellIds = new Set(session?.theirTeam?.map((p) => p.cellId) || []);
+
+  const actionAlliedBans: number[] = [];
+  const actionEnemyBans: number[] = [];
+
+  if (session?.actions) {
+    for (const round of session.actions) {
+      if (Array.isArray(round)) {
+        for (const act of round) {
+          if (act.type === 'ban' && act.completed && act.championId > 0) {
+            if (alliedTeamCellIds.has(act.actorCellId)) {
+              actionAlliedBans.push(act.championId);
+            } else if (enemyTeamCellIds.has(act.actorCellId)) {
+              actionEnemyBans.push(act.championId);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  const alliedBans = Array.from(
+    new Set([...(session?.bans?.myTeamBans || []), ...actionAlliedBans])
+  ).filter((id) => typeof id === 'number' && id > 0);
+
+  const enemyBans = Array.from(
+    new Set([...(session?.bans?.theirTeamBans || []), ...actionEnemyBans])
+  ).filter((id) => typeof id === 'number' && id > 0);
 
   return (
     <div className="space-y-6">

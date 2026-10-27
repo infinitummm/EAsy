@@ -4,7 +4,10 @@
  */
 
 use crate::bd::AlmacenamientoBd;
-use crate::lcu::{detectar_lockfile, ClienteLcu, ClientePartidaVivo, InfoLockfile};
+use crate::lcu::{
+    ejecutar_deteccion_lcu, ClienteLcu, ClientePartidaVivo, InfoLockfile,
+    LcuDetectionReport,
+};
 use crate::modos::{
     aplicar_sin_bordes, verificar_sin_bordes, DatosModoCampeon, ReporteSinBordes,
     ResultadoAplicarSinBordes, ServicioAumentosModo,
@@ -111,42 +114,25 @@ pub fn modes_apply_borderless(
 
 #[tauri::command]
 pub async fn lcu_get_state(estado: State<'_, EstadoApp>) -> Result<serde_json::Value, String> {
-    let conectado = estado.lcu_cliente.esta_conectado().await;
-    let fase = if conectado {
-        estado
-            .lcu_cliente
-            .obtener_fase_partida()
-            .await
-            .unwrap_or_else(|_| "None".to_string())
-    } else {
-        "None".to_string()
-    };
-
-    Ok(serde_json::json!({
-        "connected": conectado,
-        "phase": fase,
-        "gameMode": null
-    }))
+    Ok(estado.lcu_cliente.obtener_estado_info().await)
 }
 
 #[tauri::command]
-pub fn lcu_test_detection(
+pub async fn lcu_test_detection(
     payload: Option<String>,
-    _estado: State<'_, EstadoApp>,
-) -> Result<ReporteDeteccionLcu, String> {
-    let lockfile = detectar_lockfile(payload.as_deref());
-    let conectado = lockfile.is_some();
-    let mensaje = if conectado {
-        "Lockfile detectado con éxito.".to_string()
-    } else {
-        "No se detectó League of Legends en ejecución.".to_string()
-    };
-
-    Ok(ReporteDeteccionLcu {
-        conectado,
-        lockfile,
-        mensaje,
-    })
+    estado: State<'_, EstadoApp>,
+) -> Result<LcuDetectionReport, String> {
+    let reporte = ejecutar_deteccion_lcu(payload.as_deref());
+    if reporte.success {
+        if let Some(ref creds) = reporte.credentials {
+            estado.lcu_cliente.actualizar_credenciales(Some(creds.clone())).await;
+            let _ = estado.lcu_cliente.validar_conexion().await;
+        }
+    }
+    if reporte.is_permission_error {
+        estado.lcu_cliente.set_error_permisos(true).await;
+    }
+    Ok(reporte)
 }
 
 #[tauri::command]

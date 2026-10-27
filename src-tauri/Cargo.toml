@@ -16,11 +16,15 @@ path = "src/main.rs"
 tauri = { version = "2", features = ["tray-icon", "image-ico", "image-png"] }
 tauri-plugin-global-shortcut = "2"
 tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+native-tls = "0.2"
 reqwest = { version = "0.12", features = ["json", "native-tls"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 xcap = "0.9"
 image = "0.25"
 strsim = "0.11"
+regex = "1.10"
+futures-util = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 windows = { version = "0.58", features = [
@@ -31,7 +35,8 @@ windows = { version = "0.58", features = [
     "Storage_Streams",
     "Win32_Foundation",
     "Win32_UI_WindowsAndMessaging",
-    "Win32_Graphics_Gdi"
+    "Win32_Graphics_Gdi",
+    "Win32_Storage_FileSystem"
 ] }
 base64 = "0.22"
 

@@ -7,14 +7,16 @@ pub mod comandos;
 
 use bd::AlmacenamientoBd;
 use comandos::*;
-use lcu::{detectar_lockfile, ClienteLcu, ClientePartidaVivo};
+use lcu::{
+    ejecutar_deteccion_lcu, iniciar_tarea_websocket_lcu, ClienteLcu, ClientePartidaVivo,
+};
 use modos::ServicioAumentosModo;
 use ocr::detector_panel_aumentos::{
     calcular_caja_16_a_9, evaluar_visibilidad_panel, ColorRgb, MuestraRoi, TipoMuestra,
 };
 use overlay::GestorOverlay;
 use std::time::Duration;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -45,6 +47,9 @@ pub fn run() {
 
             app.manage(estado_app);
 
+            // Iniciar tarea de WebSocket en segundo plano para LCU
+            iniciar_tarea_websocket_lcu(handle.clone(), lcu_cliente.clone());
+
             // Configurar click-through y transparencia inicial del overlay
             if let Some(overlay_w) = app.get_webview_window("overlay") {
                 let _ = overlay_w.set_ignore_cursor_events(true);
@@ -54,19 +59,33 @@ pub fn run() {
             let lcu_c = lcu_cliente.clone();
             let vivo_c = partida_vivo.clone();
             let gestor_o = gestor_overlay.clone();
+            let handle_c = handle.clone();
 
             tauri::async_runtime::spawn(async move {
+                let mut ticks: u64 = 0;
                 let mut ticks_negativos = 0;
                 let mut en_partida;
 
                 loop {
                     tokio::time::sleep(Duration::from_millis(750)).await;
+                    ticks += 1;
 
-                    // 1. Detección periódica de LCU si no está conectado
+                    // 1. Detección y validación periódica de LCU
                     if !lcu_c.esta_conectado().await {
-                        if let Some(info) = detectar_lockfile(None) {
-                            lcu_c.actualizar_lockfile(Some(info)).await;
+                        let reporte = ejecutar_deteccion_lcu(None);
+                        if reporte.success {
+                            if let Some(creds) = reporte.credentials {
+                                lcu_c.actualizar_credenciales(Some(creds)).await;
+                                let _ = lcu_c.validar_conexion().await;
+                            }
                         }
+                        if reporte.is_permission_error {
+                            lcu_c.set_error_permisos(true).await;
+                            let _ = handle_c.emit("lcu:permission-error", true);
+                        }
+                    } else if ticks.is_multiple_of(3) {
+                        // Conexión activa: validar periódicamente cada ~2.25s
+                        let _ = lcu_c.validar_conexion().await;
                     }
 
                     // 2. Consulta LiveClientData API (127.0.0.1:2999)

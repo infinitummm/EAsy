@@ -63,6 +63,7 @@ impl GestorOverlay {
         st.mode = mode.to_string();
         let clon = st.clone();
         drop(st);
+        let _ = self.app_handle.emit("overlay:state-changed", &clon);
         let _ = self.app_handle.emit("overlay:state-update", clon);
     }
 
@@ -74,6 +75,7 @@ impl GestorOverlay {
         let clon = st.clone();
         drop(st);
         let _ = self.app_handle.emit("overlay:screen-augments", &clon);
+        let _ = self.app_handle.emit("overlay:state-changed", &clon);
         let _ = self.app_handle.emit("overlay:state-update", clon);
     }
 
@@ -82,6 +84,7 @@ impl GestorOverlay {
         st.is_analyzing = analizando;
         let clon = st.clone();
         drop(st);
+        let _ = self.app_handle.emit("overlay:state-changed", &clon);
         let _ = self.app_handle.emit("overlay:state-update", clon);
     }
 
@@ -97,6 +100,7 @@ impl GestorOverlay {
         }
 
         let st_clon = self.obtener_estado();
+        let _ = self.app_handle.emit("overlay:state-changed", &st_clon);
         let _ = self.app_handle.emit("overlay:state-update", st_clon);
     }
 
@@ -111,6 +115,7 @@ impl GestorOverlay {
         }
 
         let st_clon = self.obtener_estado();
+        let _ = self.app_handle.emit("overlay:state-changed", &st_clon);
         let _ = self.app_handle.emit("overlay:state-update", st_clon);
     }
 

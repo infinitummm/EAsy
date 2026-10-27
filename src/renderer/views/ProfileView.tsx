@@ -22,7 +22,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showAdvancedRiotApi, setShowAdvancedRiotApi] = useState(false);
 
-  // Formulario de sincronización
+  // Formulario de sincronizaciÃ³n
   const [gameName, setGameName] = useState(settings.activeAccount?.gameName || 'Invocador');
   const [tagLine, setTagLine] = useState(settings.activeAccount?.tagLine || 'LAN');
   const [platform, setPlatform] = useState<PlatformRouting>(settings.activeAccount?.platform || 'la1');
@@ -56,7 +56,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         } else {
           setSyncMessage({
             type: 'error',
-            text: res.error || 'Asegúrate de que League of Legends esté abierto con tu sesión iniciada.'
+            text: res.error || 'AsegÃºrate de que League of Legends estÃ© abierto con tu sesiÃ³n iniciada.'
           });
         }
       }
@@ -76,8 +76,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       if (window.api && window.api.getProfile) {
         const puuid = settings.activeAccount?.puuid || '';
         const res = await window.api.getProfile(puuid);
-        setAccount(res.account);
-        setMatches(res.matches);
+        setAccount(res?.account || null);
+        setMatches(Array.isArray(res?.matches) ? res.matches : []);
       } else {
         // Fallback para preview
         setAccount({
@@ -200,7 +200,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         });
 
         if (res.success) {
-          setSyncMessage({ type: 'success', text: `¡Cuenta ${cleanName}#${cleanTag} sincronizada exitosamente!` });
+          setSyncMessage({ type: 'success', text: `Â¡Cuenta ${cleanName}#${cleanTag} sincronizada exitosamente!` });
           onSaveSettings({
             activeAccount: {
               puuid: account?.puuid || '',
@@ -214,7 +214,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         } else {
           setSyncMessage({
             type: 'error',
-            text: res.error || 'No se pudo sincronizar la cuenta. Verifica que tu Riot API Key esté vigente.'
+            text: res.error || 'No se pudo sincronizar la cuenta. Verifica que tu Riot API Key estÃ© vigente.'
           });
         }
       } else {
@@ -230,7 +230,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     }
   };
 
-  // Cálculos estadísticos
+  // CÃ¡lculos estadÃ­sticos
   const totalMatches = matches.length;
   const wins = matches.filter((m) => m.win).length;
   const winrate = totalMatches > 0 ? Math.round((wins / totalMatches) * 100) : 0;
@@ -307,7 +307,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             </div>
             <div>
               <span className="text-[10px] text-[#7E9BB8] uppercase font-black tracking-wider block font-p3r-head">
-                Clasificatoria Solo / Dúo
+                Clasificatoria Solo / DÃºo
               </span>
               <div className="text-base font-black text-white flex items-center space-x-1.5 font-p3r uppercase tracking-wider">
                 <span className="text-[#00E5FF]">{account?.tier || 'UNRANKED'}</span>
@@ -322,7 +322,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           </div>
         </div>
 
-        {/* Estadísticas Clave */}
+        {/* EstadÃ­sticas Clave */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-5 border-t-2 border-[#16335F] font-mono">
           <div className="bg-[#030814] p-3.5 border border-[#16335F] p3r-cut-tr">
             <span className="text-[10px] text-[#7E9BB8] uppercase font-black block font-p3r-head">Partidas Registradas</span>
@@ -342,13 +342,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           </div>
 
           <div className="bg-[#030814] p-3.5 border border-[#16335F] p3r-cut-tr">
-            <span className="text-[10px] text-[#7E9BB8] uppercase font-black block font-p3r-head">Súbditos / Min</span>
+            <span className="text-[10px] text-[#7E9BB8] uppercase font-black block font-p3r-head">SÃºbditos / Min</span>
             <span className="text-xl font-black text-[#00E5FF] mt-0.5 block">{avgCsMin}</span>
           </div>
         </div>
       </div>
 
-      {/* Sincronización Avanzada con Riot API (Opcional) */}
+      {/* SincronizaciÃ³n Avanzada con Riot API (Opcional) */}
       <div className="bg-[#050E20] border-2 border-[#16335F] p-5 p3r-bevel p3r-shadow-hard">
         <button
           type="button"
@@ -358,14 +358,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           <div>
             <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center space-x-2 font-p3r">
               <span className="w-2.5 h-2.5 bg-[#0066FF] transform rotate-45"></span>
-              <span>Avanzado: Búsqueda Remota con Riot Games API (Opcional)</span>
+              <span>Avanzado: BÃºsqueda Remota con Riot Games API (Opcional)</span>
             </h3>
             <p className="text-xs text-[#7E9BB8] mt-0.5">
               Solo requerido para buscar cuentas remotas sin tener el cliente de LoL abierto.
             </p>
           </div>
           <span className="text-xs text-[#00E5FF] font-black px-3 py-1 bg-[#030814] border border-[#16335F] transform -skew-x-8 uppercase font-p3r-head">
-            <span className="transform skew-x-8 inline-block">{showAdvancedRiotApi ? 'Ocultar ▲' : 'Configurar ▼'}</span>
+            <span className="transform skew-x-8 inline-block">{showAdvancedRiotApi ? 'Ocultar â–²' : 'Configurar â–¼'}</span>
           </span>
         </button>
 
@@ -376,7 +376,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               <span>Sincronizar Datos con Riot Games</span>
             </h3>
             <p className="text-xs text-[#7E9BB8] mb-4">
-              Descarga automáticamente tus estadísticas clasificatorias, maestría de campeones e historial reciente usando tu API Key oficial.
+              Descarga automÃ¡ticamente tus estadÃ­sticas clasificatorias, maestrÃ­a de campeones e historial reciente usando tu API Key oficial.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-4 font-mono">
@@ -424,13 +424,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   }}
                   className="w-full bg-[#030814] border border-[#16335F] focus:border-[#00E5FF] px-3 py-2 text-xs text-white focus:outline-none"
                 >
-                  <option value="la1">LAN (la1) → Americas</option>
-                  <option value="la2">LAS (la2) → Americas</option>
-                  <option value="na1">NA (na1) → Americas</option>
-                  <option value="br1">BR (br1) → Americas</option>
-                  <option value="euw1">EUW (euw1) → Europe</option>
-                  <option value="eun1">EUN (eun1) → Europe</option>
-                  <option value="kr">KR (kr) → Asia</option>
+                  <option value="la1">LAN (la1) â†’ Americas</option>
+                  <option value="la2">LAS (la2) â†’ Americas</option>
+                  <option value="na1">NA (na1) â†’ Americas</option>
+                  <option value="br1">BR (br1) â†’ Americas</option>
+                  <option value="euw1">EUW (euw1) â†’ Europe</option>
+                  <option value="eun1">EUN (eun1) â†’ Europe</option>
+                  <option value="kr">KR (kr) â†’ Asia</option>
                 </select>
               </div>
 
@@ -505,7 +505,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                     <span className="text-[11px] text-[#7E9BB8] font-mono">
                       <strong className={m.win ? 'text-[#00E676]' : 'text-[#FF1744]'}>
                         {m.win ? 'VICTORIA' : 'DERROTA'}
-                      </strong> • {Math.floor(m.gameDuration / 60)} min
+                      </strong> â€¢ {Math.floor(m.gameDuration / 60)} min
                     </span>
                   </div>
                 </div>
@@ -537,7 +537,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           </div>
         ) : (
           <p className="text-xs text-[#7E9BB8] text-center py-8 font-mono bg-[#030814] border border-[#16335F] p3r-cut-tr">
-            No hay partidas registradas aún. Pulsa sincronizar para cargar tu historial.
+            No hay partidas registradas aÃºn. Pulsa sincronizar para cargar tu historial.
           </p>
         )}
       </div>

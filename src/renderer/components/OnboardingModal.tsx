@@ -26,7 +26,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
       opggTier: selectedElo as any,
       preferredLocale: locale,
       autoChampSelect: {
-        ...settings.autoChampSelect,
+        ...(settings?.autoChampSelect || {}),
         autoPick: false,
       },
     });
@@ -48,7 +48,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
             Bienvenido a {APP_NAME}
           </h2>
           <p className="text-xs text-[#7E9BB8] max-w-md mx-auto">
-            Configuración inicial para tus partidas.
+            ConfiguraciÃ³n inicial para tus partidas.
           </p>
         </div>
 
@@ -70,10 +70,10 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
             <Shield className="w-4 h-4 text-[#00E676] mt-0.5 shrink-0" />
             <div>
               <strong className="text-white block font-p3r-head uppercase text-[11px] tracking-wider">
-                Selección de Campeón
+                SelecciÃ³n de CampeÃ³n
               </strong>
               <span className="text-[#7E9BB8] leading-relaxed block mt-0.5">
-                El bloqueo automático está desactivado por defecto. Puedes activarlo en Ajustes.
+                El bloqueo automÃ¡tico estÃ¡ desactivado por defecto. Puedes activarlo en Ajustes.
               </span>
             </div>
           </div>
@@ -82,7 +82,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
             <Sparkles className="w-4 h-4 text-[#FFE277] mt-0.5 shrink-0" />
             <div>
               <strong className="text-white block font-p3r-head uppercase text-[11px] tracking-wider">
-                Estadísticas de OP.GG
+                EstadÃ­sticas de OP.GG
               </strong>
               <span className="text-[#7E9BB8] leading-relaxed block mt-0.5">
                 Runas, objetos y enfrentamientos basados en datos competitivos de OP.GG.
@@ -102,7 +102,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
           />
         </div>
 
-        {/* Preferencias Iniciales Rápidas */}
+        {/* Preferencias Iniciales RÃ¡pidas */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="text-[10px] font-black text-[#7E9BB8] block mb-1 uppercase tracking-wider font-p3r-head">
@@ -115,7 +115,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
             >
               <option value="emerald_plus">Esmeralda +</option>
               <option value="diamond_plus">Diamante +</option>
-              <option value="master_plus">Máster +</option>
+              <option value="master_plus">MÃ¡ster +</option>
               <option value="all">Todos los rangos</option>
             </select>
           </div>
@@ -129,14 +129,14 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
               onChange={(e) => setLocale(e.target.value)}
               className="w-full bg-[#030814] border border-[#16335F] focus:border-[#00E5FF] px-3 py-2 text-xs text-white focus:outline-none font-mono"
             >
-              <option value="es_MX">Español (Latinoamérica)</option>
-              <option value="es_ES">Español (España)</option>
+              <option value="es_MX">EspaÃ±ol (LatinoamÃ©rica)</option>
+              <option value="es_ES">EspaÃ±ol (EspaÃ±a)</option>
               <option value="en_US">English</option>
             </select>
           </div>
         </div>
 
-        {/* Botón Comenzar */}
+        {/* BotÃ³n Comenzar */}
         <div className="pt-2">
           <P3rButton
             variant="cyan"

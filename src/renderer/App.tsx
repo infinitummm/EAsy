@@ -10,7 +10,32 @@ import { SettingsView } from './views/SettingsView';
 import { ChampSelectView } from './views/ChampSelectView';
 import { MatchupView } from './views/MatchupView';
 import { ProfileView } from './views/ProfileView';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import logoUrl from './assets/logo.png';
+
+export const mergeSettings = (loaded: any): AppSettings => {
+  if (!loaded || typeof loaded !== 'object') return DEFAULT_APP_SETTINGS;
+  return {
+    ...DEFAULT_APP_SETTINGS,
+    ...loaded,
+    autoAccept: {
+      ...DEFAULT_APP_SETTINGS.autoAccept,
+      ...(loaded.autoAccept || {}),
+    },
+    autoChampSelect: {
+      ...DEFAULT_APP_SETTINGS.autoChampSelect,
+      ...(loaded.autoChampSelect || {}),
+      rolePreferences: {
+        ...DEFAULT_APP_SETTINGS.autoChampSelect.rolePreferences,
+        ...(loaded.autoChampSelect?.rolePreferences || {}),
+      },
+    },
+    apiKeys: {
+      ...DEFAULT_APP_SETTINGS.apiKeys,
+      ...(loaded.apiKeys || {}),
+    },
+  };
+};
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'champSelect' | 'matchups' | 'profile' | 'settings'>('dashboard');
@@ -104,16 +129,17 @@ export default function App() {
     if (window.api) {
       window.api.getSettings().then((loaded) => {
         if (loaded) {
-          setSettings(loaded);
-          setAutoAcceptEnabled(loaded.autoAccept.enabled);
-          setAutoAcceptDelay(loaded.autoAccept.delaySeconds);
+          const merged = mergeSettings(loaded);
+          setSettings(merged);
+          setAutoAcceptEnabled(merged.autoAccept.enabled);
+          setAutoAcceptDelay(merged.autoAccept.delaySeconds);
         }
       }).catch(console.error);
 
       // Consulta de estado inmediata
       refrescarEstadoLcu();
 
-      // Sincronización periódica cada 2.5s para autorreparar cualquier pérdida de eventos IPC
+      // SincronizaciÃ³n periÃ³dica cada 2.5s para autorreparar cualquier pÃ©rdida de eventos IPC
       const syncInterval = setInterval(refrescarEstadoLcu, 2500);
 
       const unsubLcu = window.api.on('lcu:state-changed', (state: LcuConnectionState) => {
@@ -127,7 +153,7 @@ export default function App() {
         setGameflow(phase);
         setLastIpcTimestamp(new Date().toLocaleTimeString());
         setLastIpcEvent(`lcu:gameflow-changed -> ${phase}`);
-        // Si el cliente entra a selección de campeón, auto-cambiar a la pestaña Champ Select
+        // Si el cliente entra a selecciÃ³n de campeÃ³n, auto-cambiar a la pestaÃ±a Champ Select
         if (phase === 'ChampSelect') {
           setActiveTab('champSelect');
         }
@@ -194,18 +220,20 @@ export default function App() {
   };
 
   const handleSaveSettings = async (newSettings: Partial<AppSettings>) => {
+    const fusionado = mergeSettings({ ...settings, ...newSettings });
+    setSettings(fusionado);
     if (window.api) {
-      await window.api.saveSettings(newSettings);
-      const updated = await window.api.getSettings();
+      await window.api.saveSettings(fusionado).catch(console.error);
+      const updated = await window.api.getSettings().catch(() => null);
       if (updated) {
-        setSettings(updated);
+        setSettings(mergeSettings(updated));
       }
     }
   };
 
   return (
     <div className="flex h-screen w-screen bg-[#030814] text-[#E2E8F0] select-none p3r-bg-darkhour overflow-hidden">
-      {/* Barra Lateral de Navegación Persona 3 Reload */}
+      {/* Barra Lateral de NavegaciÃ³n Persona 3 Reload */}
       <aside className="w-68 bg-[#040A17] border-r-2 border-[#16335F] flex flex-col justify-between p-4 shadow-2xl z-20 shrink-0">
         <div>
           {/* Logo / Header EAsy */}
@@ -227,11 +255,11 @@ export default function App() {
             </div>
           </div>
 
-          {/* Menú de Navegación con Selección Dinámica */}
+          {/* MenÃº de NavegaciÃ³n con SelecciÃ³n DinÃ¡mica */}
           <nav className="space-y-2">
             {[
               { id: 'dashboard', label: 'INICIO', code: '01', icon: Shield },
-              { id: 'champSelect', label: 'SELECCIÓN', code: '02', icon: Play },
+              { id: 'champSelect', label: 'SELECCIÃ“N', code: '02', icon: Play },
               { id: 'matchups', label: 'ENFRENTAMIENTOS', code: '03', icon: Swords },
               { id: 'profile', label: 'PERFIL', code: '04', icon: User },
               { id: 'settings', label: 'AJUSTES', code: '05', icon: Settings },
@@ -259,7 +287,7 @@ export default function App() {
 
                   <div className="transform skew-x-8 flex items-center space-x-1.5 font-mono text-[10px]">
                     {isActive ? (
-                      <span className="text-[#030814] font-black">▶</span>
+                      <span className="text-[#030814] font-black">â–¶</span>
                     ) : (
                       <span className="text-[#4A627E] group-hover:text-[#00E5FF]">{tab.code}</span>
                     )}
@@ -270,13 +298,13 @@ export default function App() {
           </nav>
         </div>
 
-        {/* Notificación visual de actualización */}
+        {/* NotificaciÃ³n visual de actualizaciÃ³n */}
         {updateInfo && (
           <div className="mb-3 p-3 bg-[#031A12] border-2 border-[#00E676] text-xs space-y-2 p3r-cut-tr p3r-shadow-hard animate-p3r-slide">
             <div className="flex items-center space-x-2 text-[#00E676] font-bold font-p3r-head">
               <RefreshCw className={`w-3.5 h-3.5 ${!updateInfo.downloaded ? 'animate-spin' : ''}`} />
               <span className="truncate">
-                {updateInfo.downloaded ? `¡v${updateInfo.version} Lista!` : `Descargando v${updateInfo.version}...`}
+                {updateInfo.downloaded ? `Â¡v${updateInfo.version} Lista!` : `Descargando v${updateInfo.version}...`}
               </span>
             </div>
             {updateInfo.downloaded ? (
@@ -294,7 +322,7 @@ export default function App() {
         )}
 
         <div>
-          {/* Botón Acerca de */}
+          {/* BotÃ³n Acerca de */}
           <button
             type="button"
             onClick={() => setShowAbout(true)}
@@ -352,11 +380,11 @@ export default function App() {
       <main className="flex-1 overflow-y-auto p-8 bg-[#030814] p3r-bg-darkhour">
         {isPermissionError && (
           <div className="mb-6 p-4 bg-[#211503] border-2 border-[#FFE277] flex items-start space-x-3.5 text-[#FFE277] text-xs p3r-bevel p3r-shadow-hard">
-            <span className="text-xl shrink-0">⚠️</span>
+            <span className="text-xl shrink-0">âš ï¸</span>
             <div className="flex-1">
               <h4 className="font-bold text-white uppercase tracking-wider font-p3r-head">Aviso de permisos de Windows</h4>
               <p className="mt-1 text-xs text-[#CBD5E1] leading-relaxed">
-                Se detectó League of Legends en ejecución, pero Windows bloqueó la lectura del proceso por permisos. Ejecuta {APP_NAME} con el mismo nivel de permisos que League of Legends o configura la ruta en <strong>Ajustes</strong>.
+                Se detectÃ³ League of Legends en ejecuciÃ³n, pero Windows bloqueÃ³ la lectura del proceso por permisos. Ejecuta {APP_NAME} con el mismo nivel de permisos que League of Legends o configura la ruta en <strong>Ajustes</strong>.
               </p>
             </div>
             <button
@@ -368,59 +396,64 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === 'dashboard' && (
-          <DashboardView
-            lcuState={lcuState}
-            mainLcuState={mainLcuState}
-            gameflow={gameflow}
-            gameMode={gameMode}
-            readyCheck={readyCheck}
-            autoAcceptEnabled={autoAcceptEnabled}
-            autoAcceptDelay={autoAcceptDelay}
-            autoAcceptLastAction={autoAcceptStatus.lastAction}
-            autoAcceptLastTimestamp={autoAcceptStatus.lastActionTimestamp}
-            autoAcceptPollingActive={autoAcceptStatus.pollingActivo}
-            lastConnectionError={lastConnectionError}
-            lcuPort={lcuPort}
-            lastIpcTimestamp={lastIpcTimestamp}
-            lastIpcEvent={lastIpcEvent}
-            onToggleAutoAccept={handleToggleAutoAccept}
-            onChangeDelay={handleChangeDelay}
-            onRefreshLcu={refrescarEstadoLcu}
-          />
-        )}
+        <ErrorBoundary
+          fallbackTitle={`Error al cargar la sección ${activeTab}`}
+          onReset={() => setActiveTab('dashboard')}
+        >
+          {activeTab === 'dashboard' && (
+            <DashboardView
+              lcuState={lcuState}
+              mainLcuState={mainLcuState}
+              gameflow={gameflow}
+              gameMode={gameMode}
+              readyCheck={readyCheck}
+              autoAcceptEnabled={autoAcceptEnabled}
+              autoAcceptDelay={autoAcceptDelay}
+              autoAcceptLastAction={autoAcceptStatus.lastAction}
+              autoAcceptLastTimestamp={autoAcceptStatus.lastActionTimestamp}
+              autoAcceptPollingActive={autoAcceptStatus.pollingActivo}
+              lastConnectionError={lastConnectionError}
+              lcuPort={lcuPort}
+              lastIpcTimestamp={lastIpcTimestamp}
+              lastIpcEvent={lastIpcEvent}
+              onToggleAutoAccept={handleToggleAutoAccept}
+              onChangeDelay={handleChangeDelay}
+              onRefreshLcu={refrescarEstadoLcu}
+            />
+          )}
 
-        {activeTab === 'champSelect' && (
-          <ChampSelectView
-            settings={settings}
-            onSaveSettings={handleSaveSettings}
-          />
-        )}
+          {activeTab === 'champSelect' && (
+            <ChampSelectView
+              settings={settings}
+              onSaveSettings={handleSaveSettings}
+            />
+          )}
 
-        {activeTab === 'matchups' && (
-          <MatchupView />
-        )}
+          {activeTab === 'matchups' && (
+            <MatchupView />
+          )}
 
-        {activeTab === 'profile' && (
-          <ProfileView
-            settings={settings}
-            onSaveSettings={handleSaveSettings}
-          />
-        )}
+          {activeTab === 'profile' && (
+            <ProfileView
+              settings={settings}
+              onSaveSettings={handleSaveSettings}
+            />
+          )}
 
-        {activeTab === 'settings' && (
-          <SettingsView
-            settings={settings}
-            onSaveSettings={handleSaveSettings}
-            mainLcuState={mainLcuState}
-            lcuState={lcuState}
-            lcuPort={lcuPort}
-            lastIpcTimestamp={lastIpcTimestamp}
-            lastIpcEvent={lastIpcEvent}
-            lastConnectionError={lastConnectionError}
-            onRefreshLcu={refrescarEstadoLcu}
-          />
-        )}
+          {activeTab === 'settings' && (
+            <SettingsView
+              settings={settings}
+              onSaveSettings={handleSaveSettings}
+              mainLcuState={mainLcuState}
+              lcuState={lcuState}
+              lcuPort={lcuPort}
+              lastIpcTimestamp={lastIpcTimestamp}
+              lastIpcEvent={lastIpcEvent}
+              lastConnectionError={lastConnectionError}
+              onRefreshLcu={refrescarEstadoLcu}
+            />
+          )}
+        </ErrorBoundary>
       </main>
 
       {/* Modal Acerca de y Disclaimer Legal Riot */}

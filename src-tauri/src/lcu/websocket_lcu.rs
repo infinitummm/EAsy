@@ -4,13 +4,19 @@
  *
  * Se conecta a `wss://127.0.0.1:{puerto}/` con Basic Auth y certificado local autofirmado,
  * se suscribe a `[5, "OnJsonApiEvent"]` y retransmite eventos en vivo hacia el frontend React
- * a través de `app_handle.emit()`.
+ * a través de `app_handle.emit()`, además de coordinar las acciones con los servicios Rust
+ * (AutoAcceptService, ChampSelectService y detección de modo).
  */
 
 use super::cliente_lcu::ClienteLcu;
 use super::detector_lcu::registrar_log;
+use super::modo_lcu::{detectar_modo_en_lcu, detectar_modo_por_sesion};
+use crate::overlay::GestorOverlay;
+use crate::servicios::auto_accept::AutoAcceptService;
+use crate::servicios::champ_select::ChampSelectService;
 use futures_util::{SinkExt, StreamExt};
 use native_tls::TlsConnector;
+use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use tokio_tungstenite::tungstenite::http::Request;
@@ -19,7 +25,13 @@ use tokio_tungstenite::Connector;
 
 pub const EVENTO_GLOBAL_LCU: &str = "OnJsonApiEvent";
 
-pub fn iniciar_tarea_websocket_lcu(app_handle: AppHandle, cliente_lcu: ClienteLcu) {
+pub fn iniciar_tarea_websocket_lcu(
+    app_handle: AppHandle,
+    cliente_lcu: ClienteLcu,
+    gestor_overlay: GestorOverlay,
+    auto_accept: Arc<AutoAcceptService>,
+    champ_select: Arc<ChampSelectService>,
+) {
     tauri::async_runtime::spawn(async move {
         registrar_log("[WebSocket LCU] Iniciando ciclo de supervisión de eventos...");
         let mut intentos = 0;
@@ -85,6 +97,18 @@ pub fn iniciar_tarea_websocket_lcu(app_handle: AppHandle, cliente_lcu: ClienteLc
                     cliente_lcu.set_ws_conectado(true).await;
                     let _ = app_handle.emit("lcu:state-changed", "connected");
 
+                    // Refrescar el modo de juego inmediatamente tras conectar
+                    let cl_init = cliente_lcu.clone();
+                    let go_init = gestor_overlay.clone();
+                    let h_init = app_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Some(m) = detectar_modo_en_lcu(&cl_init).await {
+                            cl_init.actualizar_modo(Some(m.clone())).await;
+                            go_init.set_modo(&m);
+                            let _ = h_init.emit("lcu:game-mode-changed", &m);
+                        }
+                    });
+
                     // Enviar suscripción a OnJsonApiEvent: [5, "OnJsonApiEvent"]
                     let sub = serde_json::json!([5, EVENTO_GLOBAL_LCU]).to_string();
                     if let Err(e) = ws_stream.send(Message::Text(sub)).await {
@@ -97,7 +121,15 @@ pub fn iniciar_tarea_websocket_lcu(app_handle: AppHandle, cliente_lcu: ClienteLc
                     while let Some(msg_res) = ws_stream.next().await {
                         match msg_res {
                             Ok(Message::Text(txt)) => {
-                                procesar_frame_wamp(&txt, &app_handle, &cliente_lcu).await;
+                                procesar_frame_wamp(
+                                    &txt,
+                                    &app_handle,
+                                    &cliente_lcu,
+                                    &gestor_overlay,
+                                    &auto_accept,
+                                    &champ_select,
+                                )
+                                .await;
                             }
                             Ok(Message::Close(frame)) => {
                                 registrar_log(&format!("[WebSocket LCU CLOSE] Cierre recibido: {:?}", frame));
@@ -129,7 +161,14 @@ pub fn iniciar_tarea_websocket_lcu(app_handle: AppHandle, cliente_lcu: ClienteLc
     });
 }
 
-async fn procesar_frame_wamp(texto: &str, app_handle: &AppHandle, cliente_lcu: &ClienteLcu) {
+async fn procesar_frame_wamp(
+    texto: &str,
+    app_handle: &AppHandle,
+    cliente_lcu: &ClienteLcu,
+    gestor_overlay: &GestorOverlay,
+    auto_accept: &Arc<AutoAcceptService>,
+    champ_select: &Arc<ChampSelectService>,
+) {
     let valor: serde_json::Value = match serde_json::from_str(texto) {
         Ok(v) => v,
         Err(_) => return,
@@ -160,15 +199,44 @@ async fn procesar_frame_wamp(texto: &str, app_handle: &AppHandle, cliente_lcu: &
             if let Some(fase) = data.as_str() {
                 cliente_lcu.actualizar_fase(fase).await;
                 let _ = app_handle.emit("lcu:gameflow-changed", fase);
+
+                // Refrescar modo de juego al entrar en Lobby, ChampSelect o InProgress
+                if matches!(fase, "Lobby" | "Matchmaking" | "ReadyCheck" | "ChampSelect" | "InProgress") {
+                    let cl = cliente_lcu.clone();
+                    let go = gestor_overlay.clone();
+                    let h = app_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Some(m) = detectar_modo_en_lcu(&cl).await {
+                            cl.actualizar_modo(Some(m.clone())).await;
+                            go.set_modo(&m);
+                            let _ = h.emit("lcu:game-mode-changed", &m);
+                        }
+                    });
+                }
+
+                if fase == "None" || fase == "Lobby" {
+                    auto_accept.reiniciar_ciclo().await;
+                    champ_select.reiniciar_estado().await;
+                }
             }
         }
         "/lol-gameflow/v1/session" => {
-            let _ = app_handle.emit("lcu:game-mode-changed", data);
+            if let Some(modo) = detectar_modo_por_sesion(data) {
+                cliente_lcu.actualizar_modo(Some(modo.clone())).await;
+                gestor_overlay.set_modo(&modo);
+                let _ = app_handle.emit("lcu:game-mode-changed", &modo);
+            }
         }
         "/lol-matchmaking/v1/ready-check" => {
+            auto_accept.procesar_ready_check(Some(data)).await;
             let _ = app_handle.emit("lcu:ready-check", data);
         }
         "/lol-champ-select/v1/session" => {
+            if data.is_null() {
+                champ_select.encolar_sesion(None).await;
+            } else {
+                champ_select.encolar_sesion(Some(data.clone())).await;
+            }
             let _ = app_handle.emit("lcu:champ-select-session", data);
         }
         _ => {}

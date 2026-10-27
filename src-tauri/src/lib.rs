@@ -4,6 +4,7 @@ pub mod modos;
 pub mod ocr;
 pub mod overlay;
 pub mod comandos;
+pub mod servicios;
 
 use bd::AlmacenamientoBd;
 use comandos::*;
@@ -15,6 +16,8 @@ use ocr::detector_panel_aumentos::{
     calcular_caja_16_a_9, evaluar_visibilidad_panel, ColorRgb, MuestraRoi, TipoMuestra,
 };
 use overlay::GestorOverlay;
+use servicios::{AutoAcceptService, ChampSelectService, GestorAjustes};
+use std::sync::Arc;
 use std::time::Duration;
 use tauri::{Emitter, Manager};
 
@@ -37,18 +40,41 @@ pub fn run() {
             let handle = app.handle().clone();
             let gestor_overlay = GestorOverlay::nuevo(handle.clone());
 
+            let gestor_ajustes = Arc::new(GestorAjustes::nuevo(bd.clone()));
+            let auto_accept = Arc::new(AutoAcceptService::nuevo(
+                gestor_ajustes.clone(),
+                lcu_cliente.clone(),
+                handle.clone(),
+            ));
+            auto_accept.iniciar_tarea_sondeo();
+
+            let champ_select = Arc::new(ChampSelectService::nuevo(
+                gestor_ajustes.clone(),
+                lcu_cliente.clone(),
+                handle.clone(),
+            ));
+
             let estado_app = EstadoApp {
                 bd: bd.clone(),
                 lcu_cliente: lcu_cliente.clone(),
                 partida_vivo: partida_vivo.clone(),
                 servicio_modos: servicio_modos.clone(),
                 gestor_overlay: gestor_overlay.clone(),
+                gestor_ajustes: gestor_ajustes.clone(),
+                auto_accept: auto_accept.clone(),
+                champ_select: champ_select.clone(),
             };
 
             app.manage(estado_app);
 
             // Iniciar tarea de WebSocket en segundo plano para LCU
-            iniciar_tarea_websocket_lcu(handle.clone(), lcu_cliente.clone());
+            iniciar_tarea_websocket_lcu(
+                handle.clone(),
+                lcu_cliente.clone(),
+                gestor_overlay.clone(),
+                auto_accept.clone(),
+                champ_select.clone(),
+            );
 
             // Configurar click-through y transparencia inicial del overlay
             if let Some(overlay_w) = app.get_webview_window("overlay") {
@@ -86,6 +112,13 @@ pub fn run() {
                     } else if ticks.is_multiple_of(3) {
                         // Conexión activa: validar periódicamente cada ~2.25s
                         let _ = lcu_c.validar_conexion().await;
+                        if lcu_c.obtener_modo_actual().await.is_none() {
+                            if let Some(m) = lcu::detectar_modo_en_lcu(&lcu_c).await {
+                                lcu_c.actualizar_modo(Some(m.clone())).await;
+                                gestor_o.set_modo(&m);
+                                let _ = handle_c.emit("lcu:game-mode-changed", &m);
+                            }
+                        }
                     }
 
                     // 2. Consulta LiveClientData API (127.0.0.1:2999)

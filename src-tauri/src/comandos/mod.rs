@@ -5,7 +5,7 @@
 
 use crate::bd::AlmacenamientoBd;
 use crate::lcu::{
-    ejecutar_deteccion_lcu, ClienteLcu, ClientePartidaVivo, InfoLockfile,
+    detectar_modo_en_lcu, ejecutar_deteccion_lcu, ClienteLcu, ClientePartidaVivo, InfoLockfile,
     LcuDetectionReport,
 };
 use crate::modos::{
@@ -13,7 +13,12 @@ use crate::modos::{
     ResultadoAplicarSinBordes, ServicioAumentosModo,
 };
 use crate::overlay::{GestorOverlay, OverlayState};
+use crate::servicios::{
+    aplicar_build, aplicar_pagina_runas, limpiar_activos_app, AutoAcceptService, ChampSelectService,
+    GestorAjustes, RunePage,
+};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use tauri::State;
 
 pub struct EstadoApp {
@@ -22,6 +27,9 @@ pub struct EstadoApp {
     pub partida_vivo: ClientePartidaVivo,
     pub servicio_modos: ServicioAumentosModo,
     pub gestor_overlay: GestorOverlay,
+    pub gestor_ajustes: Arc<GestorAjustes>,
+    pub auto_accept: Arc<AutoAcceptService>,
+    pub champ_select: Arc<ChampSelectService>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -68,8 +76,11 @@ pub fn overlay_get_state(estado: State<'_, EstadoApp>) -> Result<OverlayState, S
 
 #[tauri::command]
 pub async fn overlay_reanalyze(estado: State<'_, EstadoApp>) -> Result<bool, String> {
+    let st = estado.gestor_overlay.obtener_estado();
+    if !st.visible || st.mode.is_empty() {
+        return Ok(false);
+    }
     estado.gestor_overlay.set_analizando(true);
-    // Disparar ciclo inmediato
     Ok(true)
 }
 
@@ -80,7 +91,7 @@ pub async fn modes_get_champion_augments(
 ) -> Result<DatosModoCampeon, String> {
     let p = payload.unwrap_or(ParametrosAumentosModo {
         champion_id: 0,
-        mode: "aram_mayhem".to_string(),
+        mode: "".to_string(),
         patch: None,
     });
 
@@ -93,10 +104,34 @@ pub async fn modes_get_champion_augments(
 }
 
 #[tauri::command]
-pub fn modes_check_borderless(
+pub async fn modes_get_champion_data(
+    payload: Option<ParametrosAumentosModo>,
+    estado: State<'_, EstadoApp>,
+) -> Result<Option<DatosModoCampeon>, String> {
+    let p = payload.ok_or_else(|| "Faltan parámetros de modo y campeón".to_string())?;
+    let res = estado
+        .servicio_modos
+        .obtener_aumentos_campeon(p.champion_id, "Desconocido", &p.mode, p.patch.as_deref())
+        .await;
+    Ok(Some(res))
+}
+
+#[tauri::command]
+pub fn modes_get_cached_mode_data(
     payload: Option<String>,
-    _estado: State<'_, EstadoApp>,
-) -> Result<ReporteSinBordes, String> {
+    estado: State<'_, EstadoApp>,
+) -> Result<Option<serde_json::Value>, String> {
+    let modo = payload.ok_or_else(|| "Falta especificar el modo".to_string())?;
+    if let Ok(Some(json_str)) = estado.bd.obtener_cache_modo(&modo, 86400) {
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&json_str) {
+            return Ok(Some(val));
+        }
+    }
+    Ok(None)
+}
+
+#[tauri::command]
+pub fn modes_check_borderless(payload: Option<String>) -> Result<ReporteSinBordes, String> {
     Ok(verificar_sin_bordes(payload.as_deref()))
 }
 
@@ -137,42 +172,116 @@ pub async fn lcu_test_detection(
 
 #[tauri::command]
 pub fn lcu_select_folder() -> Result<Option<String>, String> {
-    // Retornar None o diálogo de carpeta
     Ok(None)
 }
 
 #[tauri::command]
-pub fn lcu_get_game_mode(estado: State<'_, EstadoApp>) -> Result<Option<String>, String> {
+pub async fn lcu_get_game_mode(estado: State<'_, EstadoApp>) -> Result<Option<String>, String> {
+    if let Some(modo) = estado.lcu_cliente.obtener_modo_actual().await {
+        return Ok(Some(modo));
+    }
+    if let Some(modo) = detectar_modo_en_lcu(&estado.lcu_cliente).await {
+        estado.lcu_cliente.actualizar_modo(Some(modo.clone())).await;
+        estado.gestor_overlay.set_modo(&modo);
+        return Ok(Some(modo));
+    }
     let st = estado.gestor_overlay.obtener_estado();
-    Ok(Some(st.mode))
+    if !st.mode.is_empty() {
+        Ok(Some(st.mode))
+    } else {
+        Ok(None)
+    }
 }
 
 #[tauri::command]
-pub fn lcu_get_pickable_champions() -> Result<Vec<i64>, String> {
-    Ok(vec![])
+pub async fn lcu_get_pickable_champions(estado: State<'_, EstadoApp>) -> Result<Vec<i64>, String> {
+    estado
+        .lcu_cliente
+        .get_json::<Vec<i64>>("/lol-champ-select/v1/pickable-champion-ids")
+        .await
+        .or_else(|_| Ok(vec![]))
 }
 
 #[tauri::command]
-pub fn lcu_hover_champion(payload: Option<i64>) -> Result<serde_json::Value, String> {
-    let _ = payload;
-    Ok(serde_json::json!({ "success": true }))
+pub async fn lcu_hover_champion(
+    payload: Option<i64>,
+    estado: State<'_, EstadoApp>,
+) -> Result<serde_json::Value, String> {
+    let champ_id = payload.ok_or_else(|| "Se requiere el identificador del campeón".to_string())?;
+
+    let sesion = estado
+        .lcu_cliente
+        .get_json::<serde_json::Value>("/lol-champ-select/v1/session")
+        .await
+        .map_err(|e| format!("No hay sesión activa de selección de campeón: {}", e))?;
+
+    let celda_local = sesion
+        .get("localPlayerCellId")
+        .and_then(|v| v.as_i64())
+        .ok_or_else(|| "No se encontró localPlayerCellId en la sesión".to_string())?;
+
+    let mut action_id_opt = None;
+    if let Some(actions) = sesion.get("actions").and_then(|v| v.as_array()) {
+        for fila in actions {
+            if let Some(arr) = fila.as_array() {
+                for act in arr {
+                    if act.get("actorCellId").and_then(|v| v.as_i64()) == Some(celda_local)
+                        && act.get("type").and_then(|v| v.as_str()) == Some("pick")
+                        && act.get("isInProgress").and_then(|v| v.as_bool()) == Some(true)
+                        && act.get("completed").and_then(|v| v.as_bool()) != Some(true)
+                    {
+                        action_id_opt = act.get("id").and_then(|v| v.as_i64());
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    let action_id = action_id_opt
+        .ok_or_else(|| "No hay acción de pick en progreso para el jugador local".to_string())?;
+
+    estado
+        .lcu_cliente
+        .patch_vacio(
+            &format!("/lol-champ-select/v1/session/actions/{}", action_id),
+            &serde_json::json!({
+                "championId": champ_id,
+                "completed": false
+            }),
+        )
+        .await?;
+
+    Ok(serde_json::json!({ "success": true, "actionId": action_id, "championId": champ_id }))
 }
 
 #[tauri::command]
-pub fn lcu_apply_runes(payload: Option<serde_json::Value>) -> Result<serde_json::Value, String> {
-    let _ = payload;
-    Ok(serde_json::json!({ "success": true }))
+pub async fn lcu_apply_runes(
+    payload: Option<serde_json::Value>,
+    estado: State<'_, EstadoApp>,
+) -> Result<serde_json::Value, String> {
+    let raw = payload.ok_or_else(|| "Página de runas requerida".to_string())?;
+    let rune_page: RunePage = serde_json::from_value(raw)
+        .map_err(|e| format!("Formato de página de runas inválido: {}", e))?;
+    aplicar_pagina_runas(&estado.lcu_cliente, rune_page).await
 }
 
 #[tauri::command]
-pub fn lcu_apply_build(payload: Option<serde_json::Value>) -> Result<serde_json::Value, String> {
-    let _ = payload;
-    Ok(serde_json::json!({ "success": true }))
+pub async fn lcu_apply_build(
+    payload: Option<serde_json::Value>,
+    estado: State<'_, EstadoApp>,
+) -> Result<serde_json::Value, String> {
+    let raw = payload.ok_or_else(|| "Parámetros de build requeridos".to_string())?;
+    let ajustes = estado.gestor_ajustes.obtener().await;
+    let install_path = ajustes.league_installation_path.as_deref();
+    aplicar_build(&estado.lcu_cliente, install_path, &raw).await
 }
 
 #[tauri::command]
-pub fn lcu_clean_app_assets() -> Result<serde_json::Value, String> {
-    Ok(serde_json::json!({ "deletedItemSets": 0, "deletedRunePages": 0, "success": true }))
+pub async fn lcu_clean_app_assets(estado: State<'_, EstadoApp>) -> Result<serde_json::Value, String> {
+    let ajustes = estado.gestor_ajustes.obtener().await;
+    let install_path = ajustes.league_installation_path.as_deref();
+    limpiar_activos_app(&estado.lcu_cliente, install_path).await
 }
 
 #[tauri::command]
@@ -186,89 +295,53 @@ pub fn lcu_get_client_version() -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-pub fn lcu_sync_local_account() -> Result<serde_json::Value, String> {
+pub async fn lcu_sync_local_account(estado: State<'_, EstadoApp>) -> Result<serde_json::Value, String> {
+    if estado.lcu_cliente.esta_conectado().await {
+        if let Ok(summoner) = estado.lcu_cliente.get_json::<serde_json::Value>("/lol-summoner/v1/current-summoner").await {
+            return Ok(serde_json::json!({ "success": true, "summoner": summoner }));
+        }
+    }
     Ok(serde_json::json!({ "success": true }))
 }
 
 #[tauri::command]
-pub fn lcu_set_auto_accept(payload: Option<serde_json::Value>) -> Result<serde_json::Value, String> {
-    let _ = payload;
+pub async fn lcu_set_auto_accept(
+    payload: Option<serde_json::Value>,
+    estado: State<'_, EstadoApp>,
+) -> Result<serde_json::Value, String> {
+    if let Some(val) = payload {
+        let mut cur = estado.gestor_ajustes.obtener_json().await;
+        if let Some(obj) = cur.as_object_mut() {
+            obj.insert("autoAccept".to_string(), val);
+        }
+        estado.gestor_ajustes.guardar(cur).await?;
+        estado.auto_accept.emitir_estado().await;
+    }
     Ok(serde_json::json!({ "success": true }))
 }
 
 #[tauri::command]
-pub fn lcu_get_auto_accept_status() -> Result<serde_json::Value, String> {
-    Ok(serde_json::json!({
-        "enabled": true,
-        "delaySeconds": 2,
-        "humanVariance": true,
-        "lastAction": "ninguna"
-    }))
+pub async fn lcu_get_auto_accept_status(estado: State<'_, EstadoApp>) -> Result<serde_json::Value, String> {
+    Ok(estado.auto_accept.obtener_estado().await)
 }
 
 // ==========================================
 // Comandos de Configuración y Data Dragon
 // ==========================================
 
-fn get_default_settings() -> serde_json::Value {
-    serde_json::json!({
-        "opggTier": "emerald_plus",
-        "minMatchupSampleThreshold": 200,
-        "allowAiChoiceTop3": false,
-        "autoAccept": {
-            "enabled": true,
-            "delaySeconds": 2,
-            "humanVariance": true
-        },
-        "autoChampSelect": {
-            "autoHover": true,
-            "autoPick": false,
-            "autoBan": false,
-            "autoSpells": true,
-            "pickDelaySeconds": 1,
-            "rolePreferences": {
-                "TOP": { "preferredChampions": [], "fallbackChampions": [], "banChampions": [], "spells": [4, 12] },
-                "JUNGLE": { "preferredChampions": [], "fallbackChampions": [], "banChampions": [], "spells": [4, 11] },
-                "MIDDLE": { "preferredChampions": [], "fallbackChampions": [], "banChampions": [], "spells": [4, 14] },
-                "BOTTOM": { "preferredChampions": [], "fallbackChampions": [], "banChampions": [], "spells": [4, 7] },
-                "UTILITY": { "preferredChampions": [], "fallbackChampions": [], "banChampions": [], "spells": [4, 3] },
-                "FILL": { "preferredChampions": [], "fallbackChampions": [], "banChampions": [], "spells": [4, 14] }
-            }
-        },
-        "apiKeys": {
-            "riotApiKeyEncrypted": "",
-            "geminiApiKeyEncrypted": ""
-        },
-        "activeAccount": null,
-        "leagueInstallationPath": "",
-        "onboardingCompleted": true,
-        "preferredLocale": "es_MX",
-        "overlayEnabled": true
-    })
+#[tauri::command]
+pub async fn settings_get(estado: State<'_, EstadoApp>) -> Result<serde_json::Value, String> {
+    Ok(estado.gestor_ajustes.obtener_json().await)
 }
 
 #[tauri::command]
-pub fn settings_get(estado: State<'_, EstadoApp>) -> Result<serde_json::Value, String> {
-    let mut defaults = get_default_settings();
-    if let Ok(Some(s)) = estado.bd.obtener_ajuste("app_settings") {
-        if let Ok(serde_json::Value::Object(saved_obj)) = serde_json::from_str::<serde_json::Value>(&s) {
-            if let serde_json::Value::Object(ref mut def_obj) = defaults {
-                for (k, v) in saved_obj {
-                    def_obj.insert(k, v);
-                }
-            }
-        }
-    }
-
-    Ok(defaults)
-}
-
-#[tauri::command]
-pub fn settings_save(payload: Option<serde_json::Value>, estado: State<'_, EstadoApp>) -> Result<serde_json::Value, String> {
+pub async fn settings_save(
+    payload: Option<serde_json::Value>,
+    estado: State<'_, EstadoApp>,
+) -> Result<serde_json::Value, String> {
     if let Some(val) = payload {
-        if let Ok(s) = serde_json::to_string(&val) {
-            let _ = estado.bd.guardar_ajuste("app_settings", &s);
-        }
+        estado.gestor_ajustes.guardar(val).await?;
+        estado.auto_accept.emitir_estado().await;
     }
     Ok(serde_json::json!({ "success": true }))
 }

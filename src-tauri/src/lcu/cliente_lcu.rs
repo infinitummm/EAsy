@@ -2,11 +2,12 @@
  * src-tauri/src/lcu/cliente_lcu.rs
  * Cliente HTTP y gestor de estado de conexión con la LCU API de League of Legends.
  *
- * Utiliza certificados locales tolerantes para 127.0.0.1 y maneja la máquina de estados:
- * Desconectado -> Detectando -> Conectado -> Reconectando.
+ * Soporta métodos GET, POST, PATCH, PUT y DELETE nativos, tolerando respuestas 204 No Content
+ * y cuerpos vacíos sin lanzar errores de deserialización.
  */
 
 use super::detector_lcu::{registrar_log, LcuCredentials};
+use super::registro::registrar_automatizacion;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
 use reqwest::Client;
 use std::sync::Arc;
@@ -21,6 +22,7 @@ pub struct ClienteLcu {
     fallos_consecutivos: Arc<RwLock<u32>>,
     error_permisos: Arc<RwLock<bool>>,
     ultimo_error: Arc<RwLock<Option<String>>>,
+    modo_actual: Arc<RwLock<Option<String>>>,
 }
 
 impl ClienteLcu {
@@ -38,6 +40,7 @@ impl ClienteLcu {
             fallos_consecutivos: Arc::new(RwLock::new(0)),
             error_permisos: Arc::new(RwLock::new(false)),
             ultimo_error: Arc::new(RwLock::new(None)),
+            modo_actual: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -47,6 +50,7 @@ impl ClienteLcu {
         if lock.is_none() {
             *self.ws_conectado.write().await = false;
             *self.fase_actual.write().await = "None".to_string();
+            *self.modo_actual.write().await = None;
         } else {
             *self.fallos_consecutivos.write().await = 0;
             *self.error_permisos.write().await = false;
@@ -91,6 +95,14 @@ impl ClienteLcu {
         self.fase_actual.read().await.clone()
     }
 
+    pub async fn actualizar_modo(&self, modo: Option<String>) {
+        *self.modo_actual.write().await = modo;
+    }
+
+    pub async fn obtener_modo_actual(&self) -> Option<String> {
+        self.modo_actual.read().await.clone()
+    }
+
     /// Valida la conexión activa realizando un GET a `/lol-gameflow/v1/gameflow-phase`.
     /// Si falla 3 veces consecutivas, invalida automáticamente las credenciales.
     pub async fn validar_conexion(&self) -> Result<String, String> {
@@ -130,6 +142,7 @@ impl ClienteLcu {
         let port = self.obtener_credenciales().await.map(|c| c.port);
         let error_permisos = *self.error_permisos.read().await;
         let ultimo_err = self.ultimo_error.read().await.clone();
+        let modo = self.modo_actual.read().await.clone();
 
         serde_json::json!({
             "state": if conectado { "connected" } else { "disconnected" },
@@ -139,11 +152,17 @@ impl ClienteLcu {
             "lastError": ultimo_err,
             "connected": conectado,
             "phase": fase,
-            "gameMode": null
+            "gameMode": modo
         })
     }
 
-    pub async fn get_json<T: serde::de::DeserializeOwned>(&self, endpoint: &str) -> Result<T, String> {
+    /// Ejecuta una petición HTTP genérica capturando código de estado y cuerpo de error
+    pub async fn request_raw(
+        &self,
+        metodo: reqwest::Method,
+        endpoint: &str,
+        cuerpo: Option<&serde_json::Value>,
+    ) -> Result<reqwest::Response, String> {
         let creds = self
             .credenciales
             .read()
@@ -164,63 +183,137 @@ impl ClienteLcu {
             HeaderValue::from_str(&auth_val).map_err(|e| e.to_string())?,
         );
 
-        let res = self
-            .cliente_http
-            .get(&url)
-            .headers(headers)
-            .send()
-            .await
-            .map_err(|e| format!("Fallo HTTP LCU GET: {}", e))?;
-
-        if !res.status().is_success() {
-            return Err(format!("LCU HTTP Error {}: {}", res.status(), url));
+        let mut builder = self.cliente_http.request(metodo.clone(), &url).headers(headers);
+        if let Some(c) = cuerpo {
+            builder = builder.json(c);
         }
 
-        res.json::<T>()
-            .await
-            .map_err(|e| format!("Fallo al deserializar respuesta LCU: {}", e))
+        let res = builder.send().await.map_err(|e| {
+            let msg = format!("Fallo de red LCU {} {}: {}", metodo, endpoint, e);
+            registrar_automatizacion(&msg);
+            msg
+        })?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let error_body = res.text().await.unwrap_or_default();
+            let msg = format!(
+                "LCU HTTP Error {} en {} {}: {}",
+                status, metodo, endpoint, error_body
+            );
+            registrar_automatizacion(&msg);
+            return Err(msg);
+        }
+
+        Ok(res)
     }
 
+    /// Ejecuta una petición que puede retornar 204 No Content o un cuerpo vacío
+    pub async fn request_vacio(
+        &self,
+        metodo: reqwest::Method,
+        endpoint: &str,
+        cuerpo: Option<&serde_json::Value>,
+    ) -> Result<(), String> {
+        let _ = self.request_raw(metodo, endpoint, cuerpo).await?;
+        Ok(())
+    }
+
+    /// GET esperando deserialización JSON
+    pub async fn get_json<T: serde::de::DeserializeOwned>(&self, endpoint: &str) -> Result<T, String> {
+        let res = self.request_raw(reqwest::Method::GET, endpoint, None).await?;
+        res.json::<T>()
+            .await
+            .map_err(|e| format!("Fallo al deserializar respuesta LCU {}: {}", endpoint, e))
+    }
+
+    /// POST esperando deserialización JSON
     pub async fn post_json<B: serde::Serialize, T: serde::de::DeserializeOwned>(
         &self,
         endpoint: &str,
         cuerpo: &B,
     ) -> Result<T, String> {
-        let creds = self
-            .credenciales
-            .read()
-            .await
-            .clone()
-            .ok_or_else(|| "LCU no conectado (sin credenciales activas)".to_string())?;
-
-        let url = format!("https://127.0.0.1:{}{}", creds.port, endpoint);
-        let auth_val = if creds.token_base64.starts_with("Basic ") {
-            creds.token_base64.clone()
-        } else {
-            format!("Basic {}", creds.token_base64)
-        };
-
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            AUTHORIZATION,
-            HeaderValue::from_str(&auth_val).map_err(|e| e.to_string())?,
-        );
-
-        let res = self
-            .cliente_http
-            .post(&url)
-            .headers(headers)
-            .json(cuerpo)
-            .send()
-            .await
-            .map_err(|e| format!("Fallo HTTP LCU POST: {}", e))?;
-
-        if !res.status().is_success() {
-            return Err(format!("LCU HTTP Error {}: {}", res.status(), url));
-        }
-
+        let val = serde_json::to_value(cuerpo).map_err(|e| e.to_string())?;
+        let res = self.request_raw(reqwest::Method::POST, endpoint, Some(&val)).await?;
         res.json::<T>()
             .await
-            .map_err(|e| format!("Fallo al deserializar respuesta LCU: {}", e))
+            .map_err(|e| format!("Fallo al deserializar respuesta LCU {}: {}", endpoint, e))
+    }
+
+    /// POST tolerando 204 No Content o cuerpo vacío
+    pub async fn post_vacio<B: serde::Serialize>(
+        &self,
+        endpoint: &str,
+        cuerpo: Option<&B>,
+    ) -> Result<(), String> {
+        let val = match cuerpo {
+            Some(c) => Some(serde_json::to_value(c).map_err(|e| e.to_string())?),
+            None => None,
+        };
+        self.request_vacio(reqwest::Method::POST, endpoint, val.as_ref()).await
+    }
+
+    /// PATCH tolerando 204 No Content o cuerpo vacío
+    pub async fn patch_vacio<B: serde::Serialize>(
+        &self,
+        endpoint: &str,
+        cuerpo: &B,
+    ) -> Result<(), String> {
+        let val = serde_json::to_value(cuerpo).map_err(|e| e.to_string())?;
+        self.request_vacio(reqwest::Method::PATCH, endpoint, Some(&val)).await
+    }
+
+    /// PUT tolerando 204 No Content o cuerpo vacío
+    pub async fn put_vacio<B: serde::Serialize>(
+        &self,
+        endpoint: &str,
+        cuerpo: &B,
+    ) -> Result<(), String> {
+        let val = serde_json::to_value(cuerpo).map_err(|e| e.to_string())?;
+        self.request_vacio(reqwest::Method::PUT, endpoint, Some(&val)).await
+    }
+
+    /// PUT esperando deserialización JSON
+    pub async fn put_json<B: serde::Serialize, T: serde::de::DeserializeOwned>(
+        &self,
+        endpoint: &str,
+        cuerpo: &B,
+    ) -> Result<T, String> {
+        let val = serde_json::to_value(cuerpo).map_err(|e| e.to_string())?;
+        let res = self.request_raw(reqwest::Method::PUT, endpoint, Some(&val)).await?;
+        res.json::<T>()
+            .await
+            .map_err(|e| format!("Fallo al deserializar respuesta LCU {}: {}", endpoint, e))
+    }
+
+    /// DELETE tolerando 204 No Content o cuerpo vacío
+    pub async fn delete_vacio(&self, endpoint: &str) -> Result<(), String> {
+        self.request_vacio(reqwest::Method::DELETE, endpoint, None).await
+    }
+
+    /// GET con reintentos para 404 transitorios (e.g. cambios de fase rápidos)
+    pub async fn get_con_reintento_404<T: serde::de::DeserializeOwned>(
+        &self,
+        endpoint: &str,
+        max_reintentos: u32,
+        espera_ms: u64,
+    ) -> Result<Option<T>, String> {
+        for i in 0..max_reintentos {
+            match self.get_json::<T>(endpoint).await {
+                Ok(v) => return Ok(Some(v)),
+                Err(e) => {
+                    if e.contains("404") {
+                        if i + 1 < max_reintentos {
+                            tokio::time::sleep(std::time::Duration::from_millis(espera_ms)).await;
+                            continue;
+                        } else {
+                            return Ok(None);
+                        }
+                    }
+                    return Err(e);
+                }
+            }
+        }
+        Ok(None)
     }
 }

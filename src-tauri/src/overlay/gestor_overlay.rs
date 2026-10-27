@@ -30,7 +30,7 @@ impl Default for OverlayState {
             visible: false,
             champion_id: 0,
             champion_name: "Desconocido".to_string(),
-            mode: "aram_mayhem".to_string(),
+            mode: "".to_string(),
             cards: vec![],
             best_card_index: None,
             is_analyzing: false,
@@ -60,6 +60,15 @@ impl GestorOverlay {
         let mut st = self.estado.lock().unwrap();
         st.champion_id = champion_id;
         st.champion_name = champion_name.to_string();
+        st.mode = mode.to_string();
+        let clon = st.clone();
+        drop(st);
+        let _ = self.app_handle.emit("overlay:state-changed", &clon);
+        let _ = self.app_handle.emit("overlay:state-update", clon);
+    }
+
+    pub fn set_modo(&self, mode: &str) {
+        let mut st = self.estado.lock().unwrap();
         st.mode = mode.to_string();
         let clon = st.clone();
         drop(st);

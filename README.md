@@ -20,7 +20,7 @@
 
 ---
 
-## ⚡ Nueva Arquitectura Nativa: Tauri v2 + Rust
+##  Nueva Arquitectura Nativa: Tauri v2 + Rust
 
 En su versión **v1.0.1**, **EAsy** ha sido completamente migrado de Electron a **Tauri v2 con backend en Rust**:
 * **Consumo de memoria ultra bajo:** Reducción de ~350 MB a solo **~50 MB de RAM** en ejecución.
@@ -60,7 +60,7 @@ La interfaz está inspirada en la estética **Dark Hour** de *Persona 3 Reload* 
 
 ## Características Principales
 
-### 🎯 1. Overlay Ligero de Aumentos en Tiempo Real (ARAM Caos & Arena)
+###  1. Overlay Ligero de Aumentos en Tiempo Real (ARAM Caos & Arena)
 En los modos **ARAM Caos (Mayhem)** y **Arena**, cuando el juego te presenta los 3 aumentos (Plata, Oro, Prismático), EAsy despliega un visor flotante ultra discreto en la cabecera superior:
 - **Tiers Reales OP.GG**: Clasificación precisa (S+, S, A, B, C, D) y Pick Rate calculados para tu campeón y parche actual. **Cero datos inventados.**
 - **Recomendación Inteligente**: Destaca de forma clara cuál es la mejor opción estadística.
@@ -69,22 +69,22 @@ En los modos **ARAM Caos (Mayhem)** y **Arena**, cuando el juego te presenta los
 - **Detección Automática de Reroll**: Hash perceptual de 64-bits (`dHash`) que re-escanea al instante cuando tiras dados.
 - **Ventana Click-Through**: `setIgnoreMouseEvents(true)`, nunca roba clics ni foco al juego. Atajo global: `Ctrl+Shift+O`.
 
-### ⚡ 2. Auto-Accept con retardo configurable
+###  2. Auto-Accept con retardo configurable
 ¿Fuiste a servirte agua o al baño mientras buscabas partida y sonó la cola? EAsy acepta la partida por ti. Puedes configurar un retardo de 1 a 4 segundos para que la aceptación sea natural.
 
-### 🛡️ 3. Cero registros y cero claves obligatorias
+###  3. Cero registros y cero claves obligatorias
 No necesitas crearte cuentas en ninguna web, ni pagar nada, ni conseguir claves de desarrollador para jugar. Abres League of Legends, abres EAsy y listo: detecta tu cuenta, nivel, rango de ranked y partidas directamente desde tu propio cliente en tu PC.
 
-### 🔍 4. Detección automática en Selección de Campeón
+###  4. Detección automática en Selección de Campeón
 En cuanto entras a la sala de selección, EAsy detecta:
 - En qué línea juegas (Superior, Jungla, Medio, Tirador o Soporte).
 - El campeón que tienes seleccionado o en hover.
 - Quién es tu rival directo en línea.
 
-### 📜 5. Runas óptimas a un solo clic
+###  5. Runas óptimas a un solo clic
 Con un solo botón, inyecta la página de runas completa y validada directo al cliente oficial. En tu lista de páginas aparecerá como **EAsy**, y cada vez que importes una nueva, limpia automáticamente las anteriores para que no se te acumule basura.
 
-### 🎒 6. Conjuntos de objetos (Item Sets) en la tienda in-game
+###  6. Conjuntos de objetos (Item Sets) en la tienda in-game
 Te arma la build completa directamente en la tienda del juego:
 - **Objetos iniciales** (incluyendo soporte como Atlas Mundial).
 - **Botas recomendadas**.

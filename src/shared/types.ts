@@ -645,6 +645,8 @@ export interface OverlayState {
   championName: string | null;
   data: DatosModoCampeon | null;
   activeAugments: AugmentInfo[];
+  cards?: any[];
+  bestCardIndex?: number | null;
   scanStatus?: string;
   isAnalyzing?: boolean;
 }

@@ -120,7 +120,7 @@ pub fn aplicar_sin_bordes(ruta_manual: Option<&str>) -> ResultadoAplicarSinBorde
             if let Some(val) = linea.split('=').nth(1) {
                 previous_mode = val.trim().parse::<i32>().unwrap_or(0);
             }
-            nuevas_lineas.push("WindowMode=1".to_string());
+            nuevas_lineas.push("WindowMode=2".to_string());
         } else {
             nuevas_lineas.push(linea.to_string());
         }
@@ -128,7 +128,7 @@ pub fn aplicar_sin_bordes(ruta_manual: Option<&str>) -> ResultadoAplicarSinBorde
 
     if !found {
         nuevas_lineas.push("\n[General]".to_string());
-        nuevas_lineas.push("WindowMode=1".to_string());
+        nuevas_lineas.push("WindowMode=2".to_string());
     }
 
     let nuevo_contenido = nuevas_lineas.join("\r\n");

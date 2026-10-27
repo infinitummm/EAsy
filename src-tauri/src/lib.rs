@@ -40,6 +40,23 @@ fn asegurar_instancia_unica() {
         .output();
 }
 
+#[cfg(windows)]
+fn existe_ventana_juego_lol() -> bool {
+    use windows::core::w;
+    use windows::Win32::UI::WindowsAndMessaging::FindWindowW;
+    unsafe {
+        match FindWindowW(None, w!("League of Legends (TM) Client")) {
+            Ok(hwnd) => hwnd.0 != std::ptr::null_mut(),
+            Err(_) => false,
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn existe_ventana_juego_lol() -> bool {
+    false
+}
+
 pub fn run() {
     #[cfg(target_os = "windows")]
     asegurar_instancia_unica();
@@ -141,8 +158,10 @@ pub fn run() {
                         }
                     }
 
-                    // 2. Consulta LiveClientData API (127.0.0.1:2999)
+                    // 2. Detección multi-nivel de partida en vivo
                     let snap = vivo_c.obtener_instantanea().await;
+                    let ventana_lol_activa = existe_ventana_juego_lol();
+
                     if snap.activo {
                         en_partida = true;
                         if let (Some(j), Some(m)) = (&snap.jugador, &snap.modo) {
@@ -159,6 +178,13 @@ pub fn run() {
                                 });
                             }
                         }
+                    } else if ventana_lol_activa {
+                        en_partida = true;
+                        // Si la API local 2999 tarda en iniciar, garantizar modo por defecto ARAM Caos
+                        let st = gestor_o.obtener_estado();
+                        if st.mode.is_empty() {
+                            gestor_o.set_modo("aram_mayhem");
+                        }
                     } else {
                         en_partida = false;
                     }
@@ -166,6 +192,22 @@ pub fn run() {
                     // 3. Si la partida está en curso en ARAM Caos o Arena, evaluar visualmente la presencia de las 3 cartas
                     if en_partida {
                         let capturado = tauri::async_runtime::spawn_blocking(|| {
+                            // Prioridad 1: Capturar directamente los píxeles de la ventana de LoL
+                            if let Ok(windows) = xcap::Window::all() {
+                                for w in windows {
+                                    let no_minimizada = !w.is_minimized().unwrap_or(true);
+                                    let coincide_titulo = w.title().map(|t| t.contains("League of Legends (TM) Client")).unwrap_or(false);
+                                    if no_minimizada && coincide_titulo {
+                                        if let Ok(img) = w.capture_image() {
+                                            if img.width() >= 640 && img.height() >= 360 {
+                                                return Some(img);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Prioridad 2: Capturar el monitor principal
                             if let Ok(monitors) = xcap::Monitor::all() {
                                 if let Some(mon) = monitors.first() {
                                     if let Ok(img) = mon.capture_image() {
@@ -186,12 +228,23 @@ pub fn run() {
                             let cols = [0.325f32, 0.500f32, 0.675f32];
                             for col in cols {
                                 let px = (caja16a9.x as f32 + col * caja16a9.width as f32) as u32;
-                                let py_fondo = (caja16a9.y as f32 + 0.45 * caja16a9.height as f32) as u32;
+                                // Fondo de descripción de la carta (zona oscura de texto)
+                                let py_fondo_desc = (caja16a9.y as f32 + 0.60 * caja16a9.height as f32) as u32;
+                                // Fondo de cabecera de la carta (zona superior oscura)
+                                let py_fondo_head = (caja16a9.y as f32 + 0.32 * caja16a9.height as f32) as u32;
                                 let py_borde = (caja16a9.y as f32 + 0.28 * caja16a9.height as f32) as u32;
-                                let py_reroll = (caja16a9.y as f32 + 0.72 * caja16a9.height as f32) as u32;
+                                let py_reroll = (caja16a9.y as f32 + 0.74 * caja16a9.height as f32) as u32;
 
-                                if px < img.width() && py_fondo < img.height() {
-                                    let p = img.get_pixel(px, py_fondo);
+                                if px < img.width() && py_fondo_desc < img.height() {
+                                    let p = img.get_pixel(px, py_fondo_desc);
+                                    muestras.push(MuestraRoi {
+                                        tipo: TipoMuestra::FondoCarta,
+                                        color: ColorRgb::new(p[0], p[1], p[2]),
+                                    });
+                                }
+
+                                if px < img.width() && py_fondo_head < img.height() {
+                                    let p = img.get_pixel(px, py_fondo_head);
                                     muestras.push(MuestraRoi {
                                         tipo: TipoMuestra::FondoCarta,
                                         color: ColorRgb::new(p[0], p[1], p[2]),
@@ -219,7 +272,7 @@ pub fn run() {
                             let hueco_cols = [0.415f32, 0.585f32];
                             for hcol in hueco_cols {
                                 let px = (caja16a9.x as f32 + hcol * caja16a9.width as f32) as u32;
-                                let py = (caja16a9.y as f32 + 0.45 * caja16a9.height as f32) as u32;
+                                let py = (caja16a9.y as f32 + 0.60 * caja16a9.height as f32) as u32;
                                 if px < img.width() && py < img.height() {
                                     let p = img.get_pixel(px, py);
                                     muestras.push(MuestraRoi {
@@ -227,17 +280,6 @@ pub fn run() {
                                         color: ColorRgb::new(p[0], p[1], p[2]),
                                     });
                                 }
-                            }
-
-                            // Muestras de entorno
-                            let px_entorno = (caja16a9.x as f32 + 0.10 * caja16a9.width as f32) as u32;
-                            let py_entorno = (caja16a9.y as f32 + 0.10 * caja16a9.height as f32) as u32;
-                            if px_entorno < img.width() && py_entorno < img.height() {
-                                let p = img.get_pixel(px_entorno, py_entorno);
-                                muestras.push(MuestraRoi {
-                                    tipo: TipoMuestra::Entorno,
-                                    color: ColorRgb::new(p[0], p[1], p[2]),
-                                });
                             }
 
                             let visible = evaluar_visibilidad_panel(&muestras);
@@ -284,6 +326,7 @@ pub fn run() {
             overlay_hide,
             overlay_toggle,
             overlay_get_state,
+            overlay_test_trigger,
             overlay_reanalyze,
             modes_get_champion_augments,
             modes_check_borderless,

@@ -164,6 +164,16 @@ export function OverlayApp() {
         if (newState.visible) {
           setCollapsed(false);
           setCountdown(25);
+          if (newState.cards && Array.isArray(newState.cards) && newState.cards.length === 3) {
+            setCardSlots(newState.cards);
+            const c1 = newState.cards[0]?.augment || null;
+            const c2 = newState.cards[1]?.augment || null;
+            const c3 = newState.cards[2]?.augment || null;
+            setCards([c1, c2, c3]);
+            if ((newState as any).bestCardIndex) {
+              setBestCardIndex((newState as any).bestCardIndex);
+            }
+          }
         } else {
           setCollapsed(true);
           setCards([null, null, null]);

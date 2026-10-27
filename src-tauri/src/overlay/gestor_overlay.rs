@@ -105,7 +105,39 @@ impl GestorOverlay {
 
         if let Some(w) = self.app_handle.get_webview_window("overlay") {
             let _ = w.set_ignore_cursor_events(true);
+            let _ = w.set_always_on_top(true);
             let _ = w.show();
+
+            #[cfg(windows)]
+            {
+                if let Ok(hwnd) = w.hwnd() {
+                    unsafe {
+                        use windows::Win32::Foundation::HWND;
+                        use windows::Win32::UI::WindowsAndMessaging::{
+                            GetWindowLongPtrW, SetWindowLongPtrW, SetWindowPos, GWL_EXSTYLE,
+                            HWND_TOPMOST, SWP_NOMOVE, SWP_NOSIZE, SWP_NOACTIVATE, SWP_SHOWWINDOW,
+                            WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
+                        };
+                        let h = HWND(hwnd.0 as _);
+                        let ex_style = GetWindowLongPtrW(h, GWL_EXSTYLE);
+                        let nuevo_ex_style = ex_style
+                            | (WS_EX_TOPMOST.0 as isize)
+                            | (WS_EX_TRANSPARENT.0 as isize)
+                            | (WS_EX_NOACTIVATE.0 as isize)
+                            | (WS_EX_LAYERED.0 as isize);
+                        let _ = SetWindowLongPtrW(h, GWL_EXSTYLE, nuevo_ex_style);
+                        let _ = SetWindowPos(
+                            h,
+                            HWND_TOPMOST,
+                            0,
+                            0,
+                            0,
+                            0,
+                            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW,
+                        );
+                    }
+                }
+            }
         }
 
         let st_clon = self.obtener_estado();
@@ -141,5 +173,91 @@ impl GestorOverlay {
             self.show();
             true
         }
+    }
+
+    pub fn disparar_prueba_overlay(&self, duracion_segundos: u64) {
+        use crate::modos::servicio_aumentos_modo::InfoAumento;
+        let c1 = ResultadoCartaOcr {
+            card_index: 1,
+            augment: Some(InfoAumento {
+                id: 101,
+                key: "golpe_certero".to_string(),
+                name: "Golpe Certero".to_string(),
+                name_es: Some("Golpe Certero".to_string()),
+                rarity: Some("prismatic".to_string()),
+                icon_url: None,
+                desc: Some("Críticos aumentados un 50%".to_string()),
+                desc_es: Some("Críticos aumentados un 50%".to_string()),
+                tier: Some("S".to_string()),
+                pick_rate: Some(34.2),
+                win_rate: Some(58.4),
+            }),
+            raw_text: "Golpe Certero".to_string(),
+            confidence: 0.99,
+            crop_preview_data_url: None,
+            error: None,
+        };
+
+        let c2 = ResultadoCartaOcr {
+            card_index: 2,
+            augment: Some(InfoAumento {
+                id: 102,
+                key: "fuerza_fantasma".to_string(),
+                name: "Fuerza Fantasma".to_string(),
+                name_es: Some("Fuerza Fantasma".to_string()),
+                rarity: Some("gold".to_string()),
+                icon_url: None,
+                desc: Some("Daño adaptativo acumulativo".to_string()),
+                desc_es: Some("Daño adaptativo acumulativo".to_string()),
+                tier: Some("A".to_string()),
+                pick_rate: Some(21.0),
+                win_rate: Some(54.1),
+            }),
+            raw_text: "Fuerza Fantasma".to_string(),
+            confidence: 0.95,
+            crop_preview_data_url: None,
+            error: None,
+        };
+
+        let c3 = ResultadoCartaOcr {
+            card_index: 3,
+            augment: Some(InfoAumento {
+                id: 103,
+                key: "escudo_radiante".to_string(),
+                name: "Escudo Radiante".to_string(),
+                name_es: Some("Escudo Radiante".to_string()),
+                rarity: Some("silver".to_string()),
+                icon_url: None,
+                desc: Some("Escudo protector pasivo".to_string()),
+                desc_es: Some("Escudo protector pasivo".to_string()),
+                tier: Some("B".to_string()),
+                pick_rate: Some(15.4),
+                win_rate: Some(51.0),
+            }),
+            raw_text: "Escudo Radiante".to_string(),
+            confidence: 0.92,
+            crop_preview_data_url: None,
+            error: None,
+        };
+
+        self.actualizar_escaneo_ocr(ResultadoEscaneoAugments {
+            cards: [c1, c2, c3],
+            best_card_index: Some(1),
+            detected_at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0),
+            is_analyzing: false,
+        });
+
+        self.show();
+
+        let gestor_c = self.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(duracion_segundos)).await;
+            if gestor_c.obtener_estado().visible {
+                gestor_c.hide();
+            }
+        });
     }
 }

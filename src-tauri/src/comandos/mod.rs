@@ -75,6 +75,12 @@ pub fn overlay_get_state(estado: State<'_, EstadoApp>) -> Result<OverlayState, S
 }
 
 #[tauri::command]
+pub fn overlay_test_trigger(estado: State<'_, EstadoApp>) -> Result<serde_json::Value, String> {
+    estado.gestor_overlay.disparar_prueba_overlay(12);
+    Ok(serde_json::json!({ "success": true, "durationSeconds": 12 }))
+}
+
+#[tauri::command]
 pub async fn overlay_reanalyze(estado: State<'_, EstadoApp>) -> Result<bool, String> {
     let st = estado.gestor_overlay.obtener_estado();
     if !st.visible || st.mode.is_empty() {

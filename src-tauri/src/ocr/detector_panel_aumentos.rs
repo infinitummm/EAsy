@@ -111,30 +111,21 @@ pub fn evaluar_visibilidad_panel(muestras: &[MuestraRoi]) -> bool {
     }
 
     let proporcion_desaturadas = desaturadas as f32 / muestras.len() as f32;
-    // Si más del 80% está desaturado o la saturación máxima de la pantalla es casi nula (< 14), es pantalla de muerte
-    if proporcion_desaturadas > 0.80 || max_sat < 14 {
+    // Si más del 85% está desaturado o la saturación máxima de la pantalla es casi nula (< 12), es pantalla de muerte
+    if proporcion_desaturadas > 0.85 || max_sat < 12 {
         return false;
     }
 
-    // 2. REGLA DE ENTORNO: Rechazo de Tienda o Tabulador (pantalla muy iluminada)
-    let entornos: Vec<&MuestraRoi> = muestras.iter().filter(|m| m.tipo == TipoMuestra::Entorno).collect();
-    if !entornos.is_empty() {
-        let lum_media: f32 = entornos.iter().map(|m| m.color.luminancia()).sum::<f32>() / entornos.len() as f32;
-        if lum_media > 85.0 {
-            return false;
-        }
-    }
-
-    // 3. REGLA DE FONDOS OSCUROS DE LAS CARTAS (luminancia < 55)
+    // 2. REGLA DE FONDOS OSCUROS DE LAS CARTAS (luminancia <= 68.0)
     let fondos: Vec<&MuestraRoi> = muestras.iter().filter(|m| m.tipo == TipoMuestra::FondoCarta).collect();
-    let fondos_oscuros = fondos.iter().filter(|m| m.color.luminancia() <= 55.0).count();
+    let fondos_oscuros = fondos.iter().filter(|m| m.color.luminancia() <= 68.0).count();
 
-    // 4. REGLA DE REROLLS O BORDES DE COLOR
+    // 3. REGLA DE REROLLS O BORDES DE COLOR
     let rerolls: Vec<&MuestraRoi> = muestras.iter().filter(|m| m.tipo == TipoMuestra::BotonReroll).collect();
     let mut rerolls_dorados = 0;
     for r in rerolls {
-        // Tono dorado/ámbar del dado: R alto, G medio-alto, R > B + 15
-        if r.color.r >= 135 && r.color.g >= 110 && r.color.r > r.color.b.saturating_add(15) {
+        // Tono dorado/ámbar del dado: R alto, G medio-alto, R > B + 10
+        if r.color.r >= 120 && r.color.g >= 95 && r.color.r > r.color.b.saturating_add(10) {
             rerolls_dorados += 1;
         }
     }
@@ -142,29 +133,19 @@ pub fn evaluar_visibilidad_panel(muestras: &[MuestraRoi]) -> bool {
     let bordes: Vec<&MuestraRoi> = muestras.iter().filter(|m| m.tipo == TipoMuestra::BordeRareza).collect();
     let mut bordes_con_color = 0;
     for b in bordes {
-        if b.color.saturacion_cromatica() >= 18 || b.color.luminancia() > 65.0 {
+        if b.color.saturacion_cromatica() >= 16 || b.color.luminancia() > 60.0 {
             bordes_con_color += 1;
-        }
-    }
-
-    // 5. REGLA DE PASILLOS INTER-CARTAS
-    let huecos: Vec<&MuestraRoi> = muestras.iter().filter(|m| m.tipo == TipoMuestra::HuecoInterCarta).collect();
-    if !huecos.is_empty() && fondos.len() >= 2 {
-        let lum_fondos = fondos.iter().map(|m| m.color.luminancia()).sum::<f32>() / fondos.len() as f32;
-        let lum_huecos = huecos.iter().map(|m| m.color.luminancia()).sum::<f32>() / huecos.len() as f32;
-        // Si no hay diferencia estructural entre los pasillos y las cartas (color plano)
-        if (lum_fondos - lum_huecos).abs() < 1.5 && rerolls_dorados == 0 {
-            return false;
         }
     }
 
     // Confirmación positiva robusta:
     // 1) Al menos 2 fondos oscuros + presencia de rerolls o bordes ornamentales
-    // 2) O al menos 3 fondos oscuros de cartas con huecos estructurales (sin reroll disponible)
-    // 3) O al menos 2 dados de reroll activos
+    // 2) O al menos 3 fondos oscuros de cartas
+    // 3) O al menos 1 dado de reroll dorado activo + 1 fondo oscuro
+    // 4) O al menos 2 dados de reroll activos
     (fondos_oscuros >= 2 && (rerolls_dorados >= 1 || bordes_con_color >= 1))
-        || (fondos_oscuros >= 3 && !huecos.is_empty())
         || (fondos_oscuros >= 3)
+        || (rerolls_dorados >= 1 && fondos_oscuros >= 1)
         || (rerolls_dorados >= 2)
 }
 
@@ -264,6 +245,20 @@ mod tests {
         ];
 
         assert_eq!(evaluar_visibilidad_panel(&muestras_sin_dados), true);
+    }
+
+    #[test]
+    fn test_panel_visible_con_nieve_aram() {
+        // En Howling Abyss la nieve en entorno es brillante (luminancia > 150)
+        let muestras_aram_nieve = vec![
+            MuestraRoi { tipo: TipoMuestra::FondoCarta, color: ColorRgb::new(30, 32, 40) },
+            MuestraRoi { tipo: TipoMuestra::FondoCarta, color: ColorRgb::new(28, 30, 38) },
+            MuestraRoi { tipo: TipoMuestra::FondoCarta, color: ColorRgb::new(32, 35, 42) },
+            MuestraRoi { tipo: TipoMuestra::BordeRareza, color: ColorRgb::new(190, 160, 90) },
+            MuestraRoi { tipo: TipoMuestra::Entorno, color: ColorRgb::new(170, 185, 210) }, // nieve brillante
+        ];
+
+        assert_eq!(evaluar_visibilidad_panel(&muestras_aram_nieve), true);
     }
 
     #[test]

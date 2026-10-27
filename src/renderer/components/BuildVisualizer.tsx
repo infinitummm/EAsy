@@ -1,5 +1,6 @@
 import React from 'react';
 import { GeminiMatchupRecommendation } from '../../shared/types';
+import { toDdragonVersion } from '../../shared/patchUtils';
 
 interface BuildVisualizerProps {
   build: GeminiMatchupRecommendation['buildRecommendation'];
@@ -12,8 +13,10 @@ export const BuildVisualizer: React.FC<BuildVisualizerProps> = ({
   skillOrder,
   patch = '16.20.1'
 }) => {
+  const ddragonPatch = toDdragonVersion(patch);
+
   const getItemImg = (itemId: number) =>
-    `https://ddragon.leagueoflegends.com/cdn/${patch}/img/item/${itemId}.png`;
+    `https://ddragon.leagueoflegends.com/cdn/${ddragonPatch}/img/item/${itemId}.png`;
 
   return (
     <div className="space-y-6 select-none">
@@ -31,13 +34,17 @@ export const BuildVisualizer: React.FC<BuildVisualizerProps> = ({
               Inicio de Partida
             </span>
             <div className="flex flex-wrap gap-2.5">
-              {build.startingItems.map((id, idx) => (
+              {(build?.startingItems || []).map((id, idx) => (
                 <div key={idx} className="relative group">
                   <img
                     src={getItemImg(id)}
                     alt={`Ítem ${id}`}
                     onError={(e) => {
-                      (e.target as HTMLElement).style.display = 'none';
+                      const target = e.target as HTMLImageElement;
+                      if (!target.dataset.triedFallback) {
+                        target.dataset.triedFallback = 'true';
+                        target.src = `https://ddragon.leagueoflegends.com/cdn/16.20.1/img/item/${id}.png`;
+                      }
                     }}
                     className="w-11 h-11 border border-[#16335F] bg-[#050E20] object-cover group-hover:border-[#00E5FF] transition-colors p3r-cut-tr"
                   />
@@ -55,14 +62,18 @@ export const BuildVisualizer: React.FC<BuildVisualizerProps> = ({
               Objetos Centrales (Core)
             </span>
             <div className="flex flex-wrap gap-2.5">
-              {build.coreItems.map((id, idx) => (
+              {(build?.coreItems || []).map((id, idx) => (
                 <div key={idx} className="relative group">
                   <div className="relative">
                     <img
                       src={getItemImg(id)}
                       alt={`Core ${id}`}
                       onError={(e) => {
-                        (e.target as HTMLElement).style.display = 'none';
+                        const target = e.target as HTMLImageElement;
+                        if (!target.dataset.triedFallback) {
+                          target.dataset.triedFallback = 'true';
+                          target.src = `https://ddragon.leagueoflegends.com/cdn/16.20.1/img/item/${id}.png`;
+                        }
                       }}
                       className="w-11 h-11 border-2 border-[#FFE277] bg-[#050E20] object-cover group-hover:border-white transition-colors p3r-cut-tr p3r-shadow-hard"
                     />
@@ -84,21 +95,30 @@ export const BuildVisualizer: React.FC<BuildVisualizerProps> = ({
               Opciones Situacionales
             </span>
             <div className="flex flex-col space-y-2">
-              {build.situationalItems.map((item, idx) => (
-                <div key={idx} className="flex items-center space-x-2.5">
-                  <img
-                    src={getItemImg(item.itemId)}
-                    alt={`Situacional ${item.itemId}`}
-                    onError={(e) => {
-                      (e.target as HTMLElement).style.display = 'none';
-                    }}
-                    className="w-8 h-8 border border-[#16335F] bg-[#050E20] shrink-0 p3r-cut-tr"
-                  />
-                  <span className="text-xs text-[#CBD5E1] leading-tight">
-                    {item.condition}
-                  </span>
-                </div>
-              ))}
+              {(build?.situationalItems || []).map((item: any, idx) => {
+                const itemId = typeof item === 'number' ? item : item?.itemId;
+                const condition = typeof item === 'object' && item?.condition ? item.condition : 'Opción táctica';
+                if (!itemId) return null;
+                return (
+                  <div key={idx} className="flex items-center space-x-2.5">
+                    <img
+                      src={getItemImg(itemId)}
+                      alt={`Situacional ${itemId}`}
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        if (!target.dataset.triedFallback) {
+                          target.dataset.triedFallback = 'true';
+                          target.src = `https://ddragon.leagueoflegends.com/cdn/16.20.1/img/item/${itemId}.png`;
+                        }
+                      }}
+                      className="w-8 h-8 border border-[#16335F] bg-[#050E20] shrink-0 p3r-cut-tr"
+                    />
+                    <span className="text-xs text-[#CBD5E1] leading-tight">
+                      {condition}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

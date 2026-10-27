@@ -361,13 +361,14 @@ pub fn settings_export_diagnostic() -> Result<serde_json::Value, String> {
 
 #[tauri::command]
 pub fn ddragon_get_patch() -> Result<String, String> {
-    Ok("26.20".to_string())
+    Ok("16.20.1".to_string())
 }
 
 #[tauri::command]
 pub fn ddragon_refresh_data() -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({
-        "patch": "26.20",
+        "patch": "16.20.1",
+        "displayPatch": "26.20",
         "championsCount": 168
     }))
 }
@@ -375,7 +376,7 @@ pub fn ddragon_refresh_data() -> Result<serde_json::Value, String> {
 #[tauri::command]
 pub fn ddragon_get_catalog() -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({
-        "patch": "26.20",
+        "patch": "16.20.1",
         "displayPatch": "26.20",
         "champions": [],
         "count": 0

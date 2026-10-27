@@ -21,3 +21,21 @@ export function formatFullPatchLabel(patch?: string): string {
   }
   return display;
 }
+
+/**
+ * Normaliza cualquier versión de parche (display 26.20, incompleta 16.20 o vacía)
+ * a una versión canónica de 3 partes válida para la CDN de Riot Data Dragon (ej. 16.20.1).
+ */
+export function toDdragonVersion(patch?: string): string {
+  if (!patch) return '16.20.1';
+  // Si viene con nomenclatura de display 26.X o 26.X.Y, convertir a 16.X.1
+  if (patch.startsWith('26.')) {
+    const parts = patch.slice(3).split('.');
+    return `16.${parts[0]}.${parts[1] || '1'}`;
+  }
+  const parts = patch.split('.');
+  if (parts.length === 2) {
+    return `${patch}.1`;
+  }
+  return patch;
+}

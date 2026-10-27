@@ -294,6 +294,7 @@ pub struct ChampSelectService {
     clave_ban: Arc<Mutex<Option<String>>>,
     clave_hechizos: Arc<Mutex<Option<String>>>,
     objetivo_recordado: Arc<Mutex<Option<i64>>>,
+    ultimo_intento_ban: Arc<Mutex<Option<std::time::Instant>>>,
 }
 
 impl ChampSelectService {
@@ -313,6 +314,7 @@ impl ChampSelectService {
             clave_ban: Arc::new(Mutex::new(None)),
             clave_hechizos: Arc::new(Mutex::new(None)),
             objetivo_recordado: Arc::new(Mutex::new(None)),
+            ultimo_intento_ban: Arc::new(Mutex::new(None)),
         };
 
         let mut servicio_worker = s.clone();
@@ -336,6 +338,7 @@ impl ChampSelectService {
         *self.clave_ban.lock().await = None;
         *self.clave_hechizos.lock().await = None;
         *self.objetivo_recordado.lock().await = None;
+        *self.ultimo_intento_ban.lock().await = None;
         registrar_automatizacion("[AutoChampSelect] Estado reseteado al salir de selección de campeones.");
     }
 
@@ -382,16 +385,26 @@ impl ChampSelectService {
         for accion in plan.acciones {
             match accion {
                 AccionChampSelect::Ban { action_id, champion_id: _, completada } => {
+                    // Si ya se confirmó el ban con éxito en esta selección, no hacer nada
+                    if self.clave_ban.lock().await.is_some() {
+                        continue;
+                    }
+
+                    // Rate-limiting: no reenviar más de una vez cada 1000 ms
+                    {
+                        let mut ultimo = self.ultimo_intento_ban.lock().await;
+                        if let Some(inst) = *ultimo {
+                            if inst.elapsed() < Duration::from_millis(1000) {
+                                continue;
+                            }
+                        }
+                        *ultimo = Some(std::time::Instant::now());
+                    }
+
                     let mut ban_exitoso = false;
-                    let mut ya_aplicada_previamente = false;
 
                     for cand_id in plan.candidatos_ban.iter().take(4) {
-                        let clave = format!("{}:{}:{}", action_id, cand_id, if completada { 1 } else { 0 });
-                        if *self.clave_ban.lock().await == Some(clave.clone()) {
-                            ya_aplicada_previamente = true;
-                            break;
-                        }
-
+                        let cand_id = *cand_id;
                         registrar_automatizacion(&format!(
                             "[AutoChampSelect][Ban] Intentando banear campeón ID {} en acción {}...",
                             cand_id, action_id
@@ -400,7 +413,7 @@ impl ChampSelectService {
                         // 1. Asignar campeón (hover) en la acción de ban primero
                         let _ = self.cliente_lcu.patch_vacio(
                             &format!("/lol-champ-select/v1/session/actions/{}", action_id),
-                            &serde_json::json!({ "championId": cand_id })
+                            &serde_json::json!({ "championId": cand_id, "type": "ban" })
                         ).await;
 
                         tokio::time::sleep(Duration::from_millis(150)).await;
@@ -422,35 +435,61 @@ impl ChampSelectService {
                         // 3. Respaldo por PATCH con completed: true
                         let body = serde_json::json!({
                             "championId": cand_id,
+                            "type": "ban",
                             "completed": completada
                         });
 
-                        match self.cliente_lcu.patch_vacio(&format!("/lol-champ-select/v1/session/actions/{}", action_id), &body).await {
-                            Ok(_) => {
-                                registrar_automatizacion(&format!(
-                                    "[AutoChampSelect][Ban] ¡Ban completado y confirmado para campeón ID {}!",
-                                    cand_id
-                                ));
-                                *self.clave_ban.lock().await = Some(clave);
-                                ban_exitoso = true;
-                                let _ = self.app_handle.emit("champ-select:action-executed", serde_json::json!({
-                                    "tipo": "ban",
-                                    "actionId": action_id,
-                                    "championId": cand_id,
-                                    "completada": completada
-                                }));
-                                break;
-                            }
-                            Err(e) => {
-                                registrar_automatizacion(&format!(
-                                    "[AutoChampSelect][Ban] Falló ban para campeón ID {}: {}. Probando siguiente candidato...",
-                                    cand_id, e
-                                ));
+                        let _ = self.cliente_lcu.patch_vacio(&format!("/lol-champ-select/v1/session/actions/{}", action_id), &body).await;
+
+                        // 4. Verificación y confirmación real con GET de la sesión
+                        tokio::time::sleep(Duration::from_millis(200)).await;
+                        let mut confirmado = false;
+                        if let Ok(sesion_verif) = self.cliente_lcu.get_json::<Value>("/lol-champ-select/v1/session").await {
+                            if let Some(actions) = sesion_verif.get("actions").and_then(|v| v.as_array()) {
+                                for round in actions {
+                                    if let Some(arr_round) = round.as_array() {
+                                        for act in arr_round {
+                                            let aid = act.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
+                                            let is_completed = act.get("completed").and_then(|v| v.as_bool()).unwrap_or(false);
+                                            let champ_set = act.get("championId").and_then(|v| v.as_i64()).unwrap_or(0);
+                                            if aid == action_id && is_completed && champ_set == cand_id {
+                                                confirmado = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    if confirmado {
+                                        break;
+                                    }
+                                }
                             }
                         }
+
+                        if confirmado {
+                            let clave = format!("{}:{}:{}", action_id, cand_id, if completada { 1 } else { 0 });
+                            registrar_automatizacion(&format!(
+                                "[AutoChampSelect][Ban] ¡Ban completado y confirmado en LCU para campeón ID {}!",
+                                cand_id
+                            ));
+                            *self.clave_ban.lock().await = Some(clave);
+                            ban_exitoso = true;
+                            let _ = self.app_handle.emit("champ-select:action-executed", serde_json::json!({
+                                "tipo": "ban",
+                                "actionId": action_id,
+                                "championId": cand_id,
+                                "completada": completada
+                            }));
+                            break;
+                        } else {
+                            registrar_automatizacion(&format!(
+                                "[AutoChampSelect][Ban] Acción {} aún no confirmada como completed en LCU. Reintentando en el siguiente ciclo...",
+                                action_id
+                            ));
+                        }
                     }
-                    if !ban_exitoso && !ya_aplicada_previamente && !plan.candidatos_ban.is_empty() {
-                        registrar_automatizacion("[AutoChampSelect][Ban ERROR] No se pudo confirmar ninguno de los candidatos de ban disponibles.");
+
+                    if !ban_exitoso && plan.candidatos_ban.is_empty() {
+                        registrar_automatizacion("[AutoChampSelect][Ban ERROR] No se encontraron candidatos de ban disponibles en tus preferencias.");
                     }
                 }
                 AccionChampSelect::Pick { action_id, champion_id, completada } => {

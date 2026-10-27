@@ -3,6 +3,8 @@
  * Auto-generado para soporte de nombres y avatares en la UI.
  */
 
+import { toDdragonVersion } from './patchUtils';
+
 export interface ChampionInfo {
   readonly id: number;
   readonly name: string;
@@ -1176,6 +1178,8 @@ export function getChampionIconUrl(
     return GENERIC_CHAMPION_ICON_URL;
   }
 
+  const ddragonPatch = toDdragonVersion(patch);
+
   if (typeof imageOrId === 'number') {
     if (imageOrId <= 0 || isNaN(imageOrId)) {
       return GENERIC_CHAMPION_ICON_URL;
@@ -1187,7 +1191,7 @@ export function getChampionIconUrl(
     if (champ.iconUrl) {
       return champ.iconUrl;
     }
-    return `https://ddragon.leagueoflegends.com/cdn/${patch}/img/champion/${champ.image}`;
+    return `https://ddragon.leagueoflegends.com/cdn/${ddragonPatch}/img/champion/${champ.image}`;
   }
 
   if (typeof imageOrId === 'string') {
@@ -1205,7 +1209,7 @@ export function getChampionIconUrl(
     if (champ?.iconUrl) {
       return champ.iconUrl;
     }
-    return `https://ddragon.leagueoflegends.com/cdn/${patch}/img/champion/${file}`;
+    return `https://ddragon.leagueoflegends.com/cdn/${ddragonPatch}/img/champion/${file}`;
   }
 
   return GENERIC_CHAMPION_ICON_URL;

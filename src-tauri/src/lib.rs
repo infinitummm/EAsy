@@ -22,7 +22,27 @@ use std::time::Duration;
 use tauri::{Emitter, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+#[cfg(target_os = "windows")]
+fn asegurar_instancia_unica() {
+    use std::os::windows::process::CommandExt;
+    let pid_actual = std::process::id();
+    let _ = std::process::Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            &format!(
+                "Get-Process -Name 'EAsy' -ErrorAction SilentlyContinue | Where-Object {{ $_.Id -ne {} }} | Stop-Process -Force -ErrorAction SilentlyContinue",
+                pid_actual
+            ),
+        ])
+        .creation_flags(0x08000000) // CREATE_NO_WINDOW
+        .output();
+}
+
 pub fn run() {
+    #[cfg(target_os = "windows")]
+    asegurar_instancia_unica();
+
     let bd = AlmacenamientoBd::abrir_por_defecto().unwrap_or_else(|_| AlmacenamientoBd::abrir_en_memoria().unwrap());
     let lcu_cliente = ClienteLcu::nuevo();
     let partida_vivo = ClientePartidaVivo::nuevo();

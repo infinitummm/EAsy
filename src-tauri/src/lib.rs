@@ -55,7 +55,7 @@ pub fn run() {
             let vivo_c = partida_vivo.clone();
             let gestor_o = gestor_overlay.clone();
 
-            tokio::spawn(async move {
+            tauri::async_runtime::spawn(async move {
                 let mut ticks_negativos = 0;
                 let mut en_partida;
 
@@ -83,7 +83,7 @@ pub fn run() {
 
                     // 3. Si la partida está en curso en ARAM Caos o Arena, evaluar visualmente la presencia de las 3 cartas
                     if en_partida {
-                        let capturado = tokio::task::spawn_blocking(|| {
+                        let capturado = tauri::async_runtime::spawn_blocking(|| {
                             if let Ok(monitors) = xcap::Monitor::all() {
                                 if let Some(mon) = monitors.first() {
                                     if let Ok(img) = mon.capture_image() {

@@ -4,6 +4,14 @@ version = "1.0.1"
 description = "EAsy - Asistente de League of Legends"
 edition = "2021"
 
+[lib]
+name = "easy_app"
+path = "src/lib.rs"
+
+[[bin]]
+name = "EAsy"
+path = "src/main.rs"
+
 [dependencies]
 tauri = { version = "2", features = ["tray-icon", "image-ico", "image-png"] }
 tauri-plugin-global-shortcut = "2"

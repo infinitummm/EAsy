@@ -76,8 +76,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       if (window.api && window.api.getProfile) {
         const puuid = settings.activeAccount?.puuid || '';
         const res = await window.api.getProfile(puuid);
-        setAccount(res.account);
-        setMatches(res.matches);
+        if (res) {
+          setAccount(res.account || null);
+          setMatches(Array.isArray(res.matches) ? res.matches : []);
+        }
       } else {
         // Fallback para preview
         setAccount({
@@ -231,16 +233,17 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   };
 
   // Cálculos estadísticos
-  const totalMatches = matches.length;
-  const wins = matches.filter((m) => m.win).length;
+  const safeMatches = Array.isArray(matches) ? matches : [];
+  const totalMatches = safeMatches.length;
+  const wins = safeMatches.filter((m) => m?.win).length;
   const winrate = totalMatches > 0 ? Math.round((wins / totalMatches) * 100) : 0;
   const avgKda =
     totalMatches > 0
-      ? (matches.reduce((acc, m) => acc + m.kda, 0) / totalMatches).toFixed(2)
+      ? (safeMatches.reduce((acc, m) => acc + (m?.kda || 0), 0) / totalMatches).toFixed(2)
       : '0.00';
   const avgCsMin =
     totalMatches > 0
-      ? (matches.reduce((acc, m) => acc + m.csPerMinute, 0) / totalMatches).toFixed(1)
+      ? (safeMatches.reduce((acc, m) => acc + (m?.csPerMinute || 0), 0) / totalMatches).toFixed(1)
       : '0.0';
 
   return (
@@ -476,9 +479,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           <span>HISTORIAL DE PARTIDAS RECIENTES // BATTLE LOG</span>
         </h3>
 
-        {matches.length > 0 ? (
+        {safeMatches.length > 0 ? (
           <div className="space-y-2.5">
-            {matches.map((m) => (
+            {safeMatches.map((m) => (
               <div
                 key={m.matchId}
                 className={`p-3.5 border-2 flex flex-wrap items-center justify-between gap-3 p3r-cut-tr transition-all ${

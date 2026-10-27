@@ -129,9 +129,10 @@ export default function App() {
     if (window.api) {
       window.api.getSettings().then((loaded) => {
         if (loaded) {
-          setSettings(loaded);
-          setAutoAcceptEnabled(loaded.autoAccept.enabled);
-          setAutoAcceptDelay(loaded.autoAccept.delaySeconds);
+          const merged = mergeSettings(loaded);
+          setSettings(merged);
+          setAutoAcceptEnabled(merged.autoAccept.enabled);
+          setAutoAcceptDelay(merged.autoAccept.delaySeconds);
         }
       }).catch(console.error);
 
@@ -219,11 +220,13 @@ export default function App() {
   };
 
   const handleSaveSettings = async (newSettings: Partial<AppSettings>) => {
+    const fusionado = mergeSettings({ ...settings, ...newSettings });
+    setSettings(fusionado);
     if (window.api) {
-      await window.api.saveSettings(newSettings);
-      const updated = await window.api.getSettings();
+      await window.api.saveSettings(fusionado).catch(console.error);
+      const updated = await window.api.getSettings().catch(() => null);
       if (updated) {
-        setSettings(updated);
+        setSettings(mergeSettings(updated));
       }
     }
   };
@@ -393,59 +396,64 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === 'dashboard' && (
-          <DashboardView
-            lcuState={lcuState}
-            mainLcuState={mainLcuState}
-            gameflow={gameflow}
-            gameMode={gameMode}
-            readyCheck={readyCheck}
-            autoAcceptEnabled={autoAcceptEnabled}
-            autoAcceptDelay={autoAcceptDelay}
-            autoAcceptLastAction={autoAcceptStatus.lastAction}
-            autoAcceptLastTimestamp={autoAcceptStatus.lastActionTimestamp}
-            autoAcceptPollingActive={autoAcceptStatus.pollingActivo}
-            lastConnectionError={lastConnectionError}
-            lcuPort={lcuPort}
-            lastIpcTimestamp={lastIpcTimestamp}
-            lastIpcEvent={lastIpcEvent}
-            onToggleAutoAccept={handleToggleAutoAccept}
-            onChangeDelay={handleChangeDelay}
-            onRefreshLcu={refrescarEstadoLcu}
-          />
-        )}
+        <ErrorBoundary
+          fallbackTitle={`Error al cargar la sección ${activeTab}`}
+          onReset={() => setActiveTab('dashboard')}
+        >
+          {activeTab === 'dashboard' && (
+            <DashboardView
+              lcuState={lcuState}
+              mainLcuState={mainLcuState}
+              gameflow={gameflow}
+              gameMode={gameMode}
+              readyCheck={readyCheck}
+              autoAcceptEnabled={autoAcceptEnabled}
+              autoAcceptDelay={autoAcceptDelay}
+              autoAcceptLastAction={autoAcceptStatus.lastAction}
+              autoAcceptLastTimestamp={autoAcceptStatus.lastActionTimestamp}
+              autoAcceptPollingActive={autoAcceptStatus.pollingActivo}
+              lastConnectionError={lastConnectionError}
+              lcuPort={lcuPort}
+              lastIpcTimestamp={lastIpcTimestamp}
+              lastIpcEvent={lastIpcEvent}
+              onToggleAutoAccept={handleToggleAutoAccept}
+              onChangeDelay={handleChangeDelay}
+              onRefreshLcu={refrescarEstadoLcu}
+            />
+          )}
 
-        {activeTab === 'champSelect' && (
-          <ChampSelectView
-            settings={settings}
-            onSaveSettings={handleSaveSettings}
-          />
-        )}
+          {activeTab === 'champSelect' && (
+            <ChampSelectView
+              settings={settings}
+              onSaveSettings={handleSaveSettings}
+            />
+          )}
 
-        {activeTab === 'matchups' && (
-          <MatchupView />
-        )}
+          {activeTab === 'matchups' && (
+            <MatchupView />
+          )}
 
-        {activeTab === 'profile' && (
-          <ProfileView
-            settings={settings}
-            onSaveSettings={handleSaveSettings}
-          />
-        )}
+          {activeTab === 'profile' && (
+            <ProfileView
+              settings={settings}
+              onSaveSettings={handleSaveSettings}
+            />
+          )}
 
-        {activeTab === 'settings' && (
-          <SettingsView
-            settings={settings}
-            onSaveSettings={handleSaveSettings}
-            mainLcuState={mainLcuState}
-            lcuState={lcuState}
-            lcuPort={lcuPort}
-            lastIpcTimestamp={lastIpcTimestamp}
-            lastIpcEvent={lastIpcEvent}
-            lastConnectionError={lastConnectionError}
-            onRefreshLcu={refrescarEstadoLcu}
-          />
-        )}
+          {activeTab === 'settings' && (
+            <SettingsView
+              settings={settings}
+              onSaveSettings={handleSaveSettings}
+              mainLcuState={mainLcuState}
+              lcuState={lcuState}
+              lcuPort={lcuPort}
+              lastIpcTimestamp={lastIpcTimestamp}
+              lastIpcEvent={lastIpcEvent}
+              lastConnectionError={lastConnectionError}
+              onRefreshLcu={refrescarEstadoLcu}
+            />
+          )}
+        </ErrorBoundary>
       </main>
 
       {/* Modal Acerca de y Disclaimer Legal Riot */}

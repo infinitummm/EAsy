@@ -49,14 +49,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   lastConnectionError = null,
   onRefreshLcu
 }) => {
-  const [riotKey, setRiotKey] = useState<string>(settings.apiKeys.riotApiKeyEncrypted || '');
-  const [geminiKey, setGeminiKey] = useState<string>(settings.apiKeys.geminiApiKeyEncrypted || '');
-  const [showAdvancedRiotKey, setShowAdvancedRiotKey] = useState<boolean>(Boolean(settings.apiKeys.riotApiKeyEncrypted));
-  const [showGeminiSection, setShowGeminiSection] = useState<boolean>(Boolean(settings.apiKeys.geminiApiKeyEncrypted));
+  const [riotKey, setRiotKey] = useState<string>(settings?.apiKeys?.riotApiKeyEncrypted || '');
+  const [geminiKey, setGeminiKey] = useState<string>(settings?.apiKeys?.geminiApiKeyEncrypted || '');
+  const [showAdvancedRiotKey, setShowAdvancedRiotKey] = useState<boolean>(Boolean(settings?.apiKeys?.riotApiKeyEncrypted));
+  const [showGeminiSection, setShowGeminiSection] = useState<boolean>(Boolean(settings?.apiKeys?.geminiApiKeyEncrypted));
   const [showAdvancedDiag, setShowAdvancedDiag] = useState<boolean>(false);
   const [exportingDiag, setExportingDiag] = useState<boolean>(false);
   const [diagMessage, setDiagMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [leaguePath, setLeaguePath] = useState<string>(settings.leagueInstallationPath || '');
+  const [leaguePath, setLeaguePath] = useState<string>(settings?.leagueInstallationPath || '');
   const [showRiotKey, setShowRiotKey] = useState<boolean>(false);
   const [showGeminiKey, setShowGeminiKey] = useState<boolean>(false);
   const [keyHealth, setKeyHealth] = useState<KeyHealthStatus | null>(null);
@@ -70,9 +70,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [refreshingData, setRefreshingData] = useState<boolean>(false);
   const [dataRefreshMsg, setDataRefreshMsg] = useState<string | null>(null);
   const [quotaInfo, setQuotaInfo] = useState<any>(null);
-  const [opggTier, setOpggTier] = useState<any>(settings.opggTier || 'emerald_plus');
-  const [minMatchupSampleThreshold, setMinMatchupSampleThreshold] = useState<number>(settings.minMatchupSampleThreshold || 200);
-  const [allowAiChoiceTop3, setAllowAiChoiceTop3] = useState<boolean>(settings.allowAiChoiceTop3 || false);
+  const [opggTier, setOpggTier] = useState<any>(settings?.opggTier || 'emerald_plus');
+  const [minMatchupSampleThreshold, setMinMatchupSampleThreshold] = useState<number>(settings?.minMatchupSampleThreshold || 200);
+  const [allowAiChoiceTop3, setAllowAiChoiceTop3] = useState<boolean>(settings?.allowAiChoiceTop3 || false);
   const [cleaningAssets, setCleaningAssets] = useState<boolean>(false);
   const [cleanResultMsg, setCleanResultMsg] = useState<string | null>(null);
   const [versionInfo, setVersionInfo] = useState<{
@@ -219,7 +219,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       allowAiChoiceTop3,
       leagueInstallationPath: leaguePath.trim(),
       apiKeys: {
-        ...settings.apiKeys,
+        ...(settings?.apiKeys || {}),
         riotApiKeyEncrypted: riotKey.trim(),
         geminiApiKeyEncrypted: geminiKey.trim(),
       },
@@ -395,7 +395,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* Automatización de Selección y Preferencias de Rol */}
       <RolePreferencesEditor
-        settings={settings.autoChampSelect}
+        settings={settings?.autoChampSelect || DEFAULT_APP_SETTINGS.autoChampSelect}
         onSave={(autoChampSelect) => onSaveSettings({ autoChampSelect })}
         championsCatalog={catalogChampions}
       />

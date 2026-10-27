@@ -302,8 +302,20 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
   disabled = false,
   championsCatalog
 }) => {
+  const safeSettings = useMemo(() => {
+    if (settings && settings.rolePreferences) return settings;
+    return {
+      ...DEFAULT_APP_SETTINGS.autoChampSelect,
+      ...(settings || {}),
+      rolePreferences: {
+        ...DEFAULT_APP_SETTINGS.autoChampSelect.rolePreferences,
+        ...(settings?.rolePreferences || {}),
+      },
+    };
+  }, [settings]);
+
   const [selectedRole, setSelectedRole] = useState<Role>('TOP');
-  const [prefs, setPrefs] = useState<AppSettings['autoChampSelect']>(settings);
+  const [prefs, setPrefs] = useState<AppSettings['autoChampSelect']>(safeSettings);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [internalChampions, setInternalChampions] = useState<ChampionInfo[]>(() => obtenerTodosLosCampeones());
   const [pickableIds, setPickableIds] = useState<number[]>([]);
@@ -343,11 +355,11 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
   useEffect(() => {
     if (settings !== lastSettingsRef.current) {
       lastSettingsRef.current = settings;
-      setPrefs(settings);
+      setPrefs(safeSettings);
     }
-  }, [settings]);
+  }, [settings, safeSettings]);
 
-  const currentRolePref = prefs.rolePreferences[selectedRole] || {
+  const currentRolePref = prefs?.rolePreferences?.[selectedRole] || {
     preferredChampions: [],
     fallbackChampions: [],
     banChampions: [],
@@ -356,7 +368,8 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
 
   const handleUpdateCurrentRole = useCallback((updatedFields: Partial<typeof currentRolePref>) => {
     setPrefs((prev) => {
-      const rolePref = prev.rolePreferences[selectedRole] || {
+      const baseRolePrefs = prev?.rolePreferences || DEFAULT_APP_SETTINGS.autoChampSelect.rolePreferences;
+      const rolePref = baseRolePrefs[selectedRole] || {
         preferredChampions: [],
         fallbackChampions: [],
         banChampions: [],
@@ -365,7 +378,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
       return {
         ...prev,
         rolePreferences: {
-          ...prev.rolePreferences,
+          ...baseRolePrefs,
           [selectedRole]: {
             ...rolePref,
             ...updatedFields
@@ -401,7 +414,8 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
     champId: number
   ) => {
     setPrefs((prev) => {
-      const rolePref = prev.rolePreferences[selectedRole] || {
+      const baseRolePrefs = prev?.rolePreferences || DEFAULT_APP_SETTINGS.autoChampSelect.rolePreferences;
+      const rolePref = baseRolePrefs[selectedRole] || {
         preferredChampions: [],
         fallbackChampions: [],
         banChampions: [],
@@ -412,7 +426,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
       return {
         ...prev,
         rolePreferences: {
-          ...prev.rolePreferences,
+          ...baseRolePrefs,
           [selectedRole]: {
             ...rolePref,
             [listType]: [...currentList, champId]
@@ -427,7 +441,8 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
     champId: number
   ) => {
     setPrefs((prev) => {
-      const rolePref = prev.rolePreferences[selectedRole] || {
+      const baseRolePrefs = prev?.rolePreferences || DEFAULT_APP_SETTINGS.autoChampSelect.rolePreferences;
+      const rolePref = baseRolePrefs[selectedRole] || {
         preferredChampions: [],
         fallbackChampions: [],
         banChampions: [],
@@ -437,7 +452,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
       return {
         ...prev,
         rolePreferences: {
-          ...prev.rolePreferences,
+          ...baseRolePrefs,
           [selectedRole]: {
             ...rolePref,
             [listType]: currentList.filter((id) => id !== champId)
@@ -453,7 +468,8 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
     direction: 'up' | 'down'
   ) => {
     setPrefs((prev) => {
-      const rolePref = prev.rolePreferences[selectedRole] || {
+      const baseRolePrefs = prev?.rolePreferences || DEFAULT_APP_SETTINGS.autoChampSelect.rolePreferences;
+      const rolePref = baseRolePrefs[selectedRole] || {
         preferredChampions: [],
         fallbackChampions: [],
         banChampions: [],
@@ -470,7 +486,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
       return {
         ...prev,
         rolePreferences: {
-          ...prev.rolePreferences,
+          ...baseRolePrefs,
           [selectedRole]: {
             ...rolePref,
             [listType]: currentList
@@ -482,7 +498,8 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
 
   const handleSelectSpell = useCallback((slot: 0 | 1, spellId: number) => {
     setPrefs((prev) => {
-      const rolePref = prev.rolePreferences[selectedRole] || {
+      const baseRolePrefs = prev?.rolePreferences || DEFAULT_APP_SETTINGS.autoChampSelect.rolePreferences;
+      const rolePref = baseRolePrefs[selectedRole] || {
         preferredChampions: [],
         fallbackChampions: [],
         banChampions: [],
@@ -495,7 +512,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
       return {
         ...prev,
         rolePreferences: {
-          ...prev.rolePreferences,
+          ...baseRolePrefs,
           [selectedRole]: {
             ...rolePref,
             spells: newSpells

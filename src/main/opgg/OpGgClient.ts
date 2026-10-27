@@ -12,9 +12,24 @@
 import type { IDatabaseService } from '../../shared/contracts';
 import type { Role, OpGgMatchupData, OpGgRunePage, GeminiMatchupRecommendation } from '../../shared/types';
 import { getChampionById } from '../../shared/champions';
-import { DataDragonTranslator } from '../riot/DataDragonTranslator';
-import type { DataDragonService } from '../riot/DataDragonService';
-import { registrarLog } from '../lcu/LcuDetector';
+
+export interface IDataDragonTranslator {
+  getPatchVersion(): string;
+  [key: string]: any;
+}
+
+export interface IDataDragonService {
+  [key: string]: any;
+}
+
+function registrarLog(mensaje: string, error?: unknown): void {
+  const prefijo = `[${new Date().toISOString()}] [OPGG-CLIENT] ${mensaje}`;
+  if (error) {
+    console.error(prefijo, error);
+  } else {
+    console.log(prefijo);
+  }
+}
 
 export const OPGG_MCP_ENDPOINT = 'https://mcp-api.op.gg/mcp';
 export const UMBRAL_MUESTRA_MINIMA = 200; // REQ-023: umbral predeterminado de 200 partidas
@@ -24,8 +39,8 @@ export interface OpcionesOpGgClient {
   endpoint?: string;
   fetchImpl?: typeof fetch;
   dbService?: IDatabaseService;
-  translator?: DataDragonTranslator;
-  dataDragonService?: DataDragonService;
+  translator?: IDataDragonTranslator;
+  dataDragonService?: IDataDragonService;
   minSampleThreshold?: number;
 }
 
@@ -170,8 +185,8 @@ export class OpGgClient {
   private readonly endpoint: string;
   private readonly fetchImpl: typeof fetch;
   private readonly dbService?: IDatabaseService;
-  private readonly translator?: DataDragonTranslator;
-  private readonly dataDragonService?: DataDragonService;
+  private readonly translator?: IDataDragonTranslator;
+  private readonly dataDragonService?: IDataDragonService;
   private readonly minSampleThreshold: number;
   private lastRequestTime = 0;
 

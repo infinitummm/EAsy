@@ -3,7 +3,14 @@
  * Este archivo es propiedad exclusiva de ANTIGRAVITY.
  */
 
-import { EventEmitter } from 'node:events';
+export interface ILcuEventEmitter {
+  on(event: string | symbol, listener: (...args: any[]) => void): this;
+  once(event: string | symbol, listener: (...args: any[]) => void): this;
+  off(event: string | symbol, listener: (...args: any[]) => void): this;
+  emit(event: string | symbol, ...args: any[]): boolean;
+  removeListener(event: string | symbol, listener: (...args: any[]) => void): this;
+}
+
 import {
   LcuConnectionState,
   GameflowPhase,
@@ -28,7 +35,7 @@ import {
 // ==========================================
 // 1. Cliente LCU
 // ==========================================
-export interface ILcuClient extends EventEmitter {
+export interface ILcuClient extends ILcuEventEmitter {
   initialize(): Promise<void>;
   disconnect(): void;
   getConnectionState(): LcuConnectionState;

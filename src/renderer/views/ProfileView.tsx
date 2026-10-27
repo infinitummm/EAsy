@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AccountEntity } from '../../shared/contracts';
+import type { AccountEntity } from '../../shared/contracts';
 import { ParsedMatchSummary, PlatformRouting, RegionalRouting, AppSettings } from '../../shared/types';
 import { P3rButton } from '../components/p3r/P3rButton';
 import { P3rBadge } from '../components/p3r/P3rBadge';

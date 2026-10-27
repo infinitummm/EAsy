@@ -116,7 +116,7 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
     }
   }, [session?.timer?.phase, session?.localPlayerCellId]);
 
-  // DetecciÃ³n de turnos y acciones activas
+  // Detección de turnos y acciones activas
   const allActions = session?.actions?.flat() || [];
   const myActionInProgress = allActions.find(
     (a) => a.actorCellId === session?.localPlayerCellId && a.isInProgress && !a.completed
@@ -131,7 +131,7 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
   >({});
   const fetchedOpponentsRef = useRef<Set<number>>(new Set());
 
-  // Verificar si los 10 campeones estÃ¡n bloqueados
+  // Verificar si los 10 campeones están bloqueados
   const all10Locked = Boolean(
     session &&
     session.theirTeam.length === 5 &&
@@ -169,11 +169,11 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
     });
   }, [session?.theirTeam, settings.opggTier]);
 
-  // Consulta a Gemini IA: SOLO cuando los 10 picks estÃ¡n fijados o manual con botÃ³n
+  // Consulta a Gemini IA: SOLO cuando los 10 picks están fijados o manual con botón
   const fetchDraftRecommendations = async (forceManual = false) => {
     if (!session || !window.api?.getDraftRecommendations) return;
 
-    // REGLA DEL DRAFT: CERO llamadas a Gemini a menos que estÃ©n los 10 picks completos o sea forzado manual
+    // REGLA DEL DRAFT: CERO llamadas a Gemini a menos que estén los 10 picks completos o sea forzado manual
     if (!all10Locked && !forceManual) {
       return;
     }
@@ -215,7 +215,7 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
     }
   };
 
-  // Disparar Gemini automÃ¡ticamente SOLO cuando los 10 picks se completan
+  // Disparar Gemini automáticamente SOLO cuando los 10 picks se completan
   const prevAll10LockedRef = useRef(false);
   useEffect(() => {
     if (all10Locked && !prevAll10LockedRef.current) {
@@ -226,7 +226,7 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
     }
   }, [all10Locked]);
 
-  // AcciÃ³n Hover (reflejar pick en League of Legends)
+  // Acción Hover (reflejar pick en League of Legends)
   const handleHover = async (championId: number) => {
     if (!window.api?.hoverChampion) return;
     setHoveringId(championId);
@@ -263,7 +263,7 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
         >
           <div className="transform skew-x-8 flex items-center space-x-2">
             <span className={`w-2 h-2 transform rotate-45 ${activeTab === 'live' ? 'bg-[#030814]' : 'bg-[#0066FF]'}`}></span>
-            <span>SELECCIÃ“N EN VIVO</span>
+            <span>SELECCIÓN EN VIVO</span>
           </div>
         </button>
 
@@ -303,11 +303,11 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                     <div className="flex items-center space-x-2">
                       <span className="w-2.5 h-2.5 bg-[#00E676] transform rotate-45" />
                       <h3 className="text-sm font-black text-white uppercase tracking-wider font-p3r">
-                        FASE // {session.timer.phase || 'SELECCIÃ“N'}
+                        FASE // {session.timer.phase || 'SELECCIÓN'}
                       </h3>
                     </div>
                     <p className="text-xs text-[#7E9BB8] mt-0.5 font-medium">
-                      POSICIÃ“N DETECTADA: <strong className="text-white font-mono">{localRole}</strong> | CELDA: <span className="font-mono text-[#00E5FF] font-bold">#{session.localPlayerCellId}</span>
+                      POSICIÓN DETECTADA: <strong className="text-white font-mono">{localRole}</strong> | CELDA: <span className="font-mono text-[#00E5FF] font-bold">#{session.localPlayerCellId}</span>
                     </p>
                   </div>
                 </div>
@@ -336,7 +336,7 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
 
               {/* Indicador de Turno Activo & Bans */}
               <div className="space-y-3">
-                {/* Banner de Turno DinÃ¡mico */}
+                {/* Banner de Turno Dinámico */}
                 {isMyPickTurn ? (
                   <div className="bg-[#050E20] border-2 border-[#00E5FF] p-4.5 p3r-bevel p3r-shadow-blue flex items-center justify-between animate-p3r-slide">
                     <div className="flex items-center space-x-3.5">
@@ -345,10 +345,10 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                       </div>
                       <div>
                         <h4 className="text-base font-black text-white uppercase tracking-wider font-p3r">
-                          Â¡ES TU TURNO DE ELEGIR CAMPEÃ“N!
+                          ¡ES TU TURNO DE ELEGIR CAMPEÓN!
                         </h4>
                         <p className="text-xs text-[#B8F2FF]">
-                          Haz clic en &ldquo;SELECCIONAR EN LOL&rdquo; en cualquiera de las recomendaciones tÃ¡cticas para reflejar el pick directamente en el cliente.
+                          Haz clic en &ldquo;SELECCIONAR EN LOL&rdquo; en cualquiera de las recomendaciones tácticas para reflejar el pick directamente en el cliente.
                         </p>
                       </div>
                     </div>
@@ -364,7 +364,7 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                       </div>
                       <div>
                         <h4 className="text-base font-black text-white uppercase tracking-wider font-p3r">
-                          Â¡FASE DE BLOQUEO (BAN) EN CURSO!
+                          ¡FASE DE BLOQUEO (BAN) EN CURSO!
                         </h4>
                         <p className="text-xs text-[#FFE277]/90">
                           Banea tu objetivo prioritario en el cliente de League of Legends antes de que expire el tiempo.
@@ -407,7 +407,7 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                               className="w-7 h-7 object-cover border border-[#0066FF] grayscale hover:grayscale-0 transition"
                             />
                             <div className="absolute inset-0 bg-[#FF1744]/40 flex items-center justify-center">
-                              <span className="text-[10px] text-white font-black">âœ•</span>
+                              <span className="text-[10px] text-white font-black">✕</span>
                             </div>
                           </div>
                         ))
@@ -433,7 +433,7 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                               className="w-7 h-7 object-cover border border-[#FF1744] grayscale hover:grayscale-0 transition"
                             />
                             <div className="absolute inset-0 bg-[#FF1744]/40 flex items-center justify-center">
-                              <span className="text-[10px] text-white font-black">âœ•</span>
+                              <span className="text-[10px] text-white font-black">✕</span>
                             </div>
                           </div>
                         ))
@@ -454,7 +454,7 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                     </div>
                     <div>
                       <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center space-x-2 font-p3r">
-                        <span>RECOMENDACIONES DE PICK // DRAFT TÃCTICO</span>
+                        <span>RECOMENDACIONES DE PICK // DRAFT TÁCTICO</span>
                         {all10Locked ? (
                           <P3rBadge label="10 PICKS FIJADOS (IA COMPLETA)" variant="green" />
                         ) : (
@@ -463,8 +463,8 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                       </h3>
                       <p className="text-xs text-[#7E9BB8] mt-0.5">
                         {all10Locked
-                          ? `AnÃ¡lisis para tu rol (${localRole})`
-                          : `Counters y estadÃ­sticas de OP.GG para tu rol (${localRole})`}
+                          ? `Análisis para tu rol (${localRole})`
+                          : `Counters y estadísticas de OP.GG para tu rol (${localRole})`}
                       </p>
                     </div>
                   </div>
@@ -482,7 +482,7 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                   </div>
                 </div>
 
-                {/* Banner de Fallback SOLO si ocurriÃ³ un error real */}
+                {/* Banner de Fallback SOLO si ocurrió un error real */}
                 {draftRecs?.source === 'fallback' && draftRecs.error && (
                   <div className="bg-[#2A1405] border-2 border-[#FFE277] p-3 text-xs text-[#FFE277] flex items-start space-x-2 p3r-cut-tr">
                     <AlertCircle className="w-4 h-4 text-[#FFE277] shrink-0 mt-0.5" />
@@ -510,7 +510,7 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                       )}
                       <span className="font-p3r-head">
                         {hoverResult.success
-                          ? `âœ“ CampeÃ³n seleccionado con Ã©xito en League of Legends (${getChampionName(hoverResult.championId || 0)}).`
+                          ? `✓ Campeón seleccionado con éxito en League of Legends (${getChampionName(hoverResult.championId || 0)}).`
                           : `Fallo al reflejar pick en LoL: ${hoverResult.error}`}
                       </span>
                     </div>
@@ -533,7 +533,7 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                           {/* Badge de prioridad */}
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] font-black tracking-widest uppercase bg-[#0066FF] text-white px-2 py-0.5 transform -skew-x-8 font-p3r-head p3r-shadow-blue border-l-2 border-white">
-                              <span className="transform skew-x-8 inline-block">#{idx + 1} RECOMENDACIÃ“N</span>
+                              <span className="transform skew-x-8 inline-block">#{idx + 1} RECOMENDACIÓN</span>
                             </span>
 
                             {pick.isNewChampion && (
@@ -541,7 +541,7 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                             )}
                           </div>
 
-                          {/* Avatar y Datos del CampeÃ³n */}
+                          {/* Avatar y Datos del Campeón */}
                           <div className="flex items-center space-x-3">
                             <img
                               src={getChampionIconUrl(pick.championId)}
@@ -565,18 +565,18 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                             </div>
                           </div>
 
-                          {/* Razones de selecciÃ³n */}
+                          {/* Razones de selección */}
                           <div className="space-y-1.5 text-xs text-[#CBD5E1] bg-[#050E20] p-3 border border-[#16335F] flex-1 p3r-cut-tr">
                             <div>
-                              <span className="text-[10px] uppercase font-bold text-[#7E9BB8] block font-p3r-head">Encaje TÃ¡ctico:</span>
+                              <span className="text-[10px] uppercase font-bold text-[#7E9BB8] block font-p3r-head">Encaje Táctico:</span>
                               <p className="text-[11px] text-[#E2E8F0] mt-0.5 leading-snug">
-                                {pick.fitReason || 'SÃ³lida presencia tÃ¡ctica en el parche.'}
+                                {pick.fitReason || 'Sólida presencia táctica en el parche.'}
                               </p>
                             </div>
 
                             {pick.threatMitigation && (
                               <div className="pt-1.5 border-t border-[#16335F]">
-                                <span className="text-[10px] uppercase font-bold text-[#FF1744] block font-p3r-head">MitigaciÃ³n:</span>
+                                <span className="text-[10px] uppercase font-bold text-[#FF1744] block font-p3r-head">Mitigación:</span>
                                 <p className="text-[11px] text-[#CBD5E1] mt-0.5 leading-snug">
                                   {pick.threatMitigation}
                                 </p>
@@ -593,7 +593,7 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                             )}
                           </div>
 
-                          {/* BotÃ³n de AcciÃ³n Hover en LoL */}
+                          {/* Botón de Acción Hover en LoL */}
                           <P3rButton
                             variant={isMyPickTurn ? 'cyan' : 'primary'}
                             size="md"
@@ -621,7 +621,7 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                     <div className="space-y-3">
                       <div className="flex items-center justify-between text-xs border-b border-[#16335F] pb-2">
                         <span className="text-[#00E5FF] font-bold font-mono tracking-wider">
-                          â˜… COUNTERS EN VIVO DE OP.GG (Parche 26.20 - {settings.opggTier || 'Esmeralda +'}):
+                          ★ COUNTERS EN VIVO DE OP.GG (Parche 26.20 - {settings.opggTier || 'Esmeralda +'}):
                         </span>
                         <span className="text-[11px] text-[#7E9BB8] font-mono">Tokens IA preservados: 0 llamadas</span>
                       </div>
@@ -682,15 +682,15 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                     </div>
                   )}
 
-                {/* Resumen TÃ¡ctico de Equipos (Gemini) */}
+                {/* Resumen Táctico de Equipos (Gemini) */}
                 {draftRecs?.allyCompAnalysis && (
                   <div className="p-3.5 bg-[#030814] border border-[#16335F] space-y-2 text-xs p3r-cut-tr">
                     <span className="text-[10px] font-black uppercase tracking-wider text-[#00E5FF] block font-p3r-head">
-                      Perfil TÃ¡ctico de la ComposiciÃ³n:
+                      Perfil Táctico de la Composición:
                     </span>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono">
                       <div className="bg-[#050E20] p-2 border border-[#16335F]">
-                        <span className="text-[#7E9BB8] text-[9px] block">DAÃ‘O</span>
+                        <span className="text-[#7E9BB8] text-[9px] block">DAÑO</span>
                         <span className="text-white font-bold">{draftRecs.allyCompAnalysis.damageProfile || 'Equilibrado'}</span>
                       </div>
                       <div className="bg-[#050E20] p-2 border border-[#16335F]">
@@ -698,31 +698,31 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                         <span className="text-white font-bold">{draftRecs.allyCompAnalysis.frontlinePresence || 'Moderada'}</span>
                       </div>
                       <div className="bg-[#050E20] p-2 border border-[#16335F]">
-                        <span className="text-[#7E9BB8] text-[9px] block">INICIACIÃ“N</span>
+                        <span className="text-[#7E9BB8] text-[9px] block">INICIACIÓN</span>
                         <span className="text-white font-bold">{draftRecs.allyCompAnalysis.engagePresence || 'Media'}</span>
                       </div>
                       <div className="bg-[#050E20] p-2 border border-[#16335F]">
                         <span className="text-[#7E9BB8] text-[9px] block">CONTROL (CC)</span>
-                        <span className="text-white font-bold">{draftRecs.allyCompAnalysis.crowdControl || 'EstÃ¡ndar'}</span>
+                        <span className="text-white font-bold">{draftRecs.allyCompAnalysis.crowdControl || 'Estándar'}</span>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* Panel Colapsable de DepuraciÃ³n IA // Draft */}
+                {/* Panel Colapsable de Depuración IA // Draft */}
                 <div className="pt-2 border-t border-[#1E355B]/60">
                   <button
                     type="button"
                     onClick={() => setShowAiDebug(!showAiDebug)}
                     className="text-[11px] text-[#60A5FA] hover:text-white flex items-center space-x-1.5 font-mono"
                   >
-                    <span>{showAiDebug ? 'â–² Ocultar DepuraciÃ³n IA (Draft)' : 'â–¼ Mostrar DepuraciÃ³n IA (Draft)'}</span>
+                    <span>{showAiDebug ? '▲ Ocultar Depuración IA (Draft)' : '▼ Mostrar Depuración IA (Draft)'}</span>
                   </button>
 
                   {showAiDebug && (
                     <div className="mt-3 p-3 bg-[#0A111F] rounded border border-[#1E355B] space-y-2 text-xs font-mono">
                       <div>
-                        <span className="text-[#94A3B8] text-[10px] block font-bold">ESTADO DE VALIDACIÃ“N:</span>
+                        <span className="text-[#94A3B8] text-[10px] block font-bold">ESTADO DE VALIDACIÓN:</span>
                         <span className="text-emerald-400">
                           {draftRecs?.debugInfo?.lcuStatus || 'Sincronizado con LCU'}
                         </span>
@@ -748,7 +748,7 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
 
                       {hoverResult && (
                         <div>
-                          <span className="text-[#94A3B8] text-[10px] block font-bold">ÃšLTIMA RESPUESTA LCU HOVER:</span>
+                          <span className="text-[#94A3B8] text-[10px] block font-bold">ÚLTIMA RESPUESTA LCU HOVER:</span>
                           <span className={hoverResult.success ? 'text-emerald-400' : 'text-rose-400'}>
                             {hoverResult.success ? '200 OK - PATCH /lol-champ-select/v1/session/actions/{id}' : hoverResult.error}
                           </span>
@@ -796,10 +796,10 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                             )}
                             <div>
                               <div className="text-xs font-bold text-white flex items-center space-x-2 font-p3r-head">
-                                <span>{isMe ? 'TÃš' : `Aliado #${p.cellId}`}</span>
+                                <span>{isMe ? 'TÚ' : `Aliado #${p.cellId}`}</span>
                                 {isMe && (
                                   <span className="text-[10px] bg-[#0066FF] text-white font-black px-1.5 py-0.2 transform -skew-x-8 border-l border-white">
-                                    <span className="transform skew-x-8 inline-block">TÃš</span>
+                                    <span className="transform skew-x-8 inline-block">TÚ</span>
                                   </span>
                                 )}
                                 <span className="text-[10px] text-[#00E5FF] font-mono">
@@ -822,7 +822,7 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                   </div>
                 </div>
 
-                {/* Equipo Enemigo con AsignaciÃ³n RÃ¡pida de Rival */}
+                {/* Equipo Enemigo con Asignación Rápida de Rival */}
                 <div className="bg-[#050E20] border-2 border-[#16335F] p-5 p3r-bevel p3r-shadow-hard">
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="text-xs font-black text-[#FF1744] uppercase tracking-wider flex items-center space-x-2 font-p3r">
@@ -835,7 +835,7 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                         onClick={() => setManualOpponentId(null)}
                         className="text-[11px] text-[#00E5FF] hover:text-white font-mono cursor-pointer"
                       >
-                        â†º Restaurar automÃ¡tico
+                        ↺ Restaurar automático
                       </button>
                     )}
                   </div>
@@ -891,9 +891,9 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                               <span className="text-[11px] text-[#7E9BB8]">
                                 {hasChamp
                                   ? (isCurrentRival
-                                      ? (manualOpponentId === champId ? 'Seleccionado por ti' : `Detectado en tu lÃ­nea (${pRole})`)
+                                      ? (manualOpponentId === champId ? 'Seleccionado por ti' : `Detectado en tu línea (${pRole})`)
                                       : 'Haz clic para enfrentar')
-                                  : 'CampeÃ³n Oculto'}
+                                  : 'Campeón Oculto'}
                               </span>
                             </div>
                           </div>
@@ -923,7 +923,7 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                 </div>
               </div>
 
-              {/* Panel de Matchup y RecomendaciÃ³n con Auto-EjecuciÃ³n */}
+              {/* Panel de Matchup y Recomendación con Auto-Ejecución */}
               <div className="pt-2">
                 <MatchupView
                   initialChampionId={myChampionId > 0 ? myChampionId : undefined}
@@ -948,10 +948,10 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
               </div>
 
               <h3 className="text-2xl font-black text-white mb-2 tracking-wider uppercase font-p3r">
-                ESPERANDO SELECCIÃ“N DE CAMPEÃ“N
+                ESPERANDO SELECCIÓN DE CAMPEÓN
               </h3>
               <p className="text-xs text-[#7E9BB8] max-w-lg mx-auto mb-6 leading-relaxed">
-                Al entrar en selecciÃ³n de campeÃ³n en League of Legends, la app detectarÃ¡ tu campeÃ³n y posiciÃ³n para recomendarte runas y objetos.
+                Al entrar en selección de campeón en League of Legends, la app detectará tu campeón y posición para recomendarte runas y objetos.
               </p>
 
               <div className="inline-flex items-center space-x-2 text-xs bg-[#030814] px-4 py-2 border border-[#16335F] transform -skew-x-8">

@@ -49,10 +49,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   lastConnectionError = null,
   onRefreshLcu
 }) => {
-  const [riotKey, setRiotKey] = useState<string>(settings?.apiKeys?.riotApiKeyEncrypted || '');
-  const [geminiKey, setGeminiKey] = useState<string>(settings?.apiKeys?.geminiApiKeyEncrypted || '');
-  const [showAdvancedRiotKey, setShowAdvancedRiotKey] = useState<boolean>(Boolean(settings?.apiKeys?.riotApiKeyEncrypted));
-  const [showGeminiSection, setShowGeminiSection] = useState<boolean>(Boolean(settings?.apiKeys?.geminiApiKeyEncrypted));
+  const [riotKey, setRiotKey] = useState<string>(settings.apiKeys.riotApiKeyEncrypted || '');
+  const [geminiKey, setGeminiKey] = useState<string>(settings.apiKeys.geminiApiKeyEncrypted || '');
+  const [showAdvancedRiotKey, setShowAdvancedRiotKey] = useState<boolean>(Boolean(settings.apiKeys.riotApiKeyEncrypted));
+  const [showGeminiSection, setShowGeminiSection] = useState<boolean>(Boolean(settings.apiKeys.geminiApiKeyEncrypted));
   const [showAdvancedDiag, setShowAdvancedDiag] = useState<boolean>(false);
   const [exportingDiag, setExportingDiag] = useState<boolean>(false);
   const [diagMessage, setDiagMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -116,7 +116,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setCleanResultMsg(null);
     try {
       const res = await window.api.cleanAppAssets();
-      setCleanResultMsg(`Limpieza completada: ${res.deletedItemSets} conjunto(s) de objetos y ${res.deletedRunePages} pÃ¡gina(s) de runas eliminadas.`);
+      setCleanResultMsg(`Limpieza completada: ${res.deletedItemSets} conjunto(s) de objetos y ${res.deletedRunePages} página(s) de runas eliminadas.`);
     } catch (err: any) {
       setCleanResultMsg(`Error en la limpieza: ${err.message || String(err)}`);
     } finally {
@@ -138,9 +138,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         const cat = await window.api.getChampionCatalog();
         if (cat?.champions?.length) setCatalogChampions(cat.champions);
       }
-      setDataRefreshMsg(`CatÃ¡logo actualizado: Parche ${formatFullPatchLabel(res.patch)} (${res.championsCount || 173} campeones).`);
+      setDataRefreshMsg(`Catálogo actualizado: Parche ${formatFullPatchLabel(res.patch)} (${res.championsCount || 173} campeones).`);
     } catch (err: any) {
-      setDataRefreshMsg(`Error al actualizar catÃ¡logo: ${err.message || String(err)}`);
+      setDataRefreshMsg(`Error al actualizar catálogo: ${err.message || String(err)}`);
     } finally {
       setRefreshingData(false);
     }
@@ -165,7 +165,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       const rep = await window.api.testLcuDetection(leaguePath.trim() || undefined);
       setLcuReport(rep);
     } catch (err) {
-      console.error('Error al probar conexiÃ³n:', err);
+      console.error('Error al probar conexión:', err);
     } finally {
       setTestingLcu(false);
     }
@@ -180,12 +180,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         if (res.success && res.filePath) {
           setDiagMessage({
             type: 'success',
-            text: `DiagnÃ³stico exportado en: ${res.filePath}`
+            text: `Diagnóstico exportado en: ${res.filePath}`
           });
         } else {
           setDiagMessage({
             type: 'error',
-            text: res.error || 'Error al exportar diagnÃ³stico.'
+            text: res.error || 'Error al exportar diagnóstico.'
           });
         }
       }
@@ -219,7 +219,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       allowAiChoiceTop3,
       leagueInstallationPath: leaguePath.trim(),
       apiKeys: {
-        ...(settings?.apiKeys || {}),
+        ...settings.apiKeys,
         riotApiKeyEncrypted: riotKey.trim(),
         geminiApiKeyEncrypted: geminiKey.trim(),
       },
@@ -237,7 +237,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <h2 className="text-3xl font-black text-white tracking-wider flex items-center space-x-2 font-p3r uppercase">
             <span>AJUSTES</span>
           </h2>
-          <p className="text-xs text-[#7E9BB8] mt-0.5">Preferencias y configuraciÃ³n de la aplicaciÃ³n.</p>
+          <p className="text-xs text-[#7E9BB8] mt-0.5">Preferencias y configuración de la aplicación.</p>
         </div>
 
         <P3rButton
@@ -266,7 +266,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             type="button"
             className="text-xs font-black px-3 py-1 bg-[#030814] text-[#00E5FF] border border-[#16335F] transform -skew-x-8 uppercase font-p3r-head cursor-pointer"
           >
-            <span className="transform skew-x-8 inline-block">{showAdvancedRiotKey ? 'Ocultar â–²' : 'Configurar â–¼'}</span>
+            <span className="transform skew-x-8 inline-block">{showAdvancedRiotKey ? 'Ocultar ▲' : 'Configurar ▼'}</span>
           </button>
         </div>
 
@@ -279,7 +279,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 rel="noreferrer"
                 className="text-xs text-[#00E5FF] hover:underline flex items-center space-x-1 font-mono"
               >
-                <span>Portal de Riot Games â†—</span>
+                <span>Portal de Riot Games ↗</span>
               </a>
             </div>
 
@@ -333,8 +333,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               {keyHealth.valid
                 ? 'Clave de Riot activa.'
                 : keyHealth.isExpired
-                ? 'Clave expirada. RenuÃ©vala en el portal de Riot.'
-                : `Error de validaciÃ³n (${keyHealth.statusCode || 'desconocido'}).`}
+                ? 'Clave expirada. Renuévala en el portal de Riot.'
+                : `Error de validación (${keyHealth.statusCode || 'desconocido'}).`}
             </span>
           </div>
         )}
@@ -349,14 +349,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <span>Clave de Gemini (Opcional)</span>
             </h3>
             <p className="text-xs text-[#7E9BB8] mt-0.5">
-              Opcional. Activa explicaciones adaptadas a la composiciÃ³n.
+              Opcional. Activa explicaciones adaptadas a la composición.
             </p>
           </div>
           <button
             type="button"
             className="text-xs font-black px-3 py-1 bg-[#030814] text-[#00E5FF] border border-[#16335F] transform -skew-x-8 uppercase font-p3r-head cursor-pointer"
           >
-            <span className="transform skew-x-8 inline-block">{showGeminiSection ? 'Ocultar â–²' : 'Configurar â–¼'}</span>
+            <span className="transform skew-x-8 inline-block">{showGeminiSection ? 'Ocultar ▲' : 'Configurar ▼'}</span>
           </button>
         </div>
 
@@ -369,7 +369,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 rel="noreferrer"
                 className="text-xs text-[#00E5FF] hover:underline font-mono"
               >
-                <span>Google AI Studio â†—</span>
+                <span>Google AI Studio ↗</span>
               </a>
             </div>
 
@@ -393,14 +393,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         )}
       </div>
 
-      {/* AutomatizaciÃ³n de SelecciÃ³n y Preferencias de Rol */}
+      {/* Automatización de Selección y Preferencias de Rol */}
       <RolePreferencesEditor
-        settings={settings?.autoChampSelect || DEFAULT_APP_SETTINGS.autoChampSelect}
+        settings={settings.autoChampSelect}
         onSave={(autoChampSelect) => onSaveSettings({ autoChampSelect })}
         championsCatalog={catalogChampions}
       />
 
-      {/* Preferencias de EstadÃ­sticas OP.GG */}
+      {/* Preferencias de Estadísticas OP.GG */}
       <div className="bg-[#050E20] p-6 border-2 border-[#16335F] p3r-bevel p3r-shadow-hard space-y-4">
         <div className="flex justify-between items-start">
           <div>
@@ -433,8 +433,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             >
               <option value="emerald_plus">Esmeralda +</option>
               <option value="diamond_plus">Diamante +</option>
-              <option value="master_plus">MÃ¡ster +</option>
-              <option value="grandmaster">Gran MÃ¡ster</option>
+              <option value="master_plus">Máster +</option>
+              <option value="grandmaster">Gran Máster</option>
               <option value="challenger">Challenger</option>
               <option value="all">Todos los rangos</option>
             </select>
@@ -442,7 +442,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           <div>
             <label className="text-[10px] font-black text-[#7E9BB8] uppercase block mb-1 font-p3r-head">
-              MÃ­nimo de partidas:
+              Mínimo de partidas:
             </label>
             <input
               type="number"
@@ -471,7 +471,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
-      {/* Datos del Juego y CatÃ¡logo */}
+      {/* Datos del Juego y Catálogo */}
       <div className="bg-[#050E20] p-6 border-2 border-[#16335F] p3r-bevel p3r-shadow-hard space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
@@ -480,7 +480,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <span>Datos del juego</span>
             </h3>
             <p className="text-xs text-[#7E9BB8] mt-1">
-              CatÃ¡logo sincronizado con Data Dragon y el cliente de LoL.
+              Catálogo sincronizado con Data Dragon y el cliente de LoL.
             </p>
           </div>
 
@@ -526,7 +526,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
-      {/* SECCIÃ“N PLEGADA: Avanzado / DiagnÃ³stico */}
+      {/* SECCIÓN PLEGADA: Avanzado / Diagnóstico */}
       <div className="bg-[#050E20] border-2 border-[#16335F] p3r-bevel p3r-shadow-hard overflow-hidden">
         <div
           className="p-6 flex items-center justify-between cursor-pointer hover:bg-[#071329] transition"
@@ -535,10 +535,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div>
             <h3 className="text-base font-black text-white flex items-center space-x-2 uppercase font-p3r tracking-wider">
               <span className="w-2.5 h-2.5 bg-[#FFE277] transform rotate-45"></span>
-              <span>Avanzado / DiagnÃ³stico</span>
+              <span>Avanzado / Diagnóstico</span>
             </h3>
             <p className="text-xs text-[#7E9BB8] mt-1">
-              Herramientas de diagnÃ³stico tÃ©cnico, enlace LCU, rutas y exportaciÃ³n de logs.
+              Herramientas de diagnóstico técnico, enlace LCU, rutas y exportación de logs.
             </p>
           </div>
 
@@ -555,14 +555,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         {showAdvancedDiag && (
           <div className="p-6 pt-0 border-t-2 border-[#16335F] space-y-6">
-            {/* 1. DiagnÃ³stico de enlace LCU Engine */}
+            {/* 1. Diagnóstico de enlace LCU Engine */}
             <div className="pt-4 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#16335F] pb-3">
                 <div className="flex items-center space-x-3">
                   <span className={`w-3 h-3 transform rotate-45 ${mainLcuState === 'connected' ? 'bg-[#00E676]' : 'bg-[#0066FF]'}`}></span>
                   <div>
                     <h4 className="text-sm font-black text-white uppercase tracking-wider font-p3r">
-                      DiagnÃ³stico en vivo // LCU Engine
+                      Diagnóstico en vivo // LCU Engine
                     </h4>
                     <p className="text-[11px] text-[#7E9BB8]">Canal IPC directo entre Main y Renderer</p>
                   </div>
@@ -580,7 +580,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 )}
               </div>
 
-              {/* MÃ©tricas tÃ©cnicas */}
+              {/* Métricas técnicas */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono">
                 <div className="bg-[#030814] p-3 border border-[#16335F] p3r-cut-tr">
                   <div className="text-[#7E9BB8] text-[10px] uppercase font-bold font-p3r-head">Estado en Main</div>
@@ -604,9 +604,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
 
                 <div className="bg-[#030814] p-3 border border-[#16335F] p3r-cut-tr">
-                  <div className="text-[#7E9BB8] text-[10px] uppercase font-bold font-p3r-head">Ãšltimo Evento</div>
+                  <div className="text-[#7E9BB8] text-[10px] uppercase font-bold font-p3r-head">Último Evento</div>
                   <div className="mt-1 text-[#00E5FF] truncate text-xs" title={`${lastIpcEvent} (${lastIpcTimestamp})`}>
-                    {lastIpcTimestamp || 'N/A'} â€¢ {lastIpcEvent || 'Ninguno'}
+                    {lastIpcTimestamp || 'N/A'} • {lastIpcEvent || 'Ninguno'}
                   </div>
                 </div>
               </div>
@@ -616,15 +616,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <Terminal className="w-4 h-4 text-[#7E9BB8] shrink-0" />
                 <span className="text-[#7E9BB8] font-bold uppercase text-[11px] font-p3r-head">Registro de enlace:</span>
                 <span className={`font-mono ${lastConnectionError ? 'text-[#FF1744] font-bold' : 'text-[#00E676]'}`}>
-                  {lastConnectionError || 'ConexiÃ³n activa con el cliente de LoL'}
+                  {lastConnectionError || 'Conexión activa con el cliente de LoL'}
                 </span>
               </div>
             </div>
 
-            {/* 2. Ruta de instalaciÃ³n y Prueba de ConexiÃ³n */}
+            {/* 2. Ruta de instalación y Prueba de Conexión */}
             <div className="space-y-3 pt-3 border-t border-[#16335F]">
               <div className="text-xs font-bold text-white uppercase font-p3r-head">
-                Ruta de InstalaciÃ³n de League of Legends
+                Ruta de Instalación de League of Legends
               </div>
 
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
@@ -654,17 +654,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   disabled={testingLcu}
                   icon={testingLcu ? <RefreshCw className="w-4 h-4 animate-spin text-[#030814]" /> : <Terminal className="w-4 h-4 text-[#030814]" />}
                 >
-                  Probar conexiÃ³n
+                  Probar conexión
                 </P3rButton>
               </div>
 
-              {/* Reporte detallado si se probÃ³ */}
+              {/* Reporte detallado si se probó */}
               {lcuReport && (
                 <div className="space-y-3 mt-3 pt-3 border-t border-[#16335F]">
                   <div className="flex justify-between items-center text-xs font-semibold">
                     <span className="text-white font-p3r-head uppercase">Resultado:</span>
                     <P3rBadge
-                      label={lcuReport.success ? 'ConexiÃ³n exitosa' : 'Fallo de conexiÃ³n'}
+                      label={lcuReport.success ? 'Conexión exitosa' : 'Fallo de conexión'}
                       variant={lcuReport.success ? 'green' : 'red'}
                     />
                   </div>
@@ -693,10 +693,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               )}
             </div>
 
-            {/* 3. ExportaciÃ³n de DiagnÃ³stico y Limpieza */}
+            {/* 3. Exportación de Diagnóstico y Limpieza */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-[#16335F]">
               <div className="bg-[#030814] p-4 border border-[#16335F] p3r-cut-tr space-y-2">
-                <div className="text-xs font-black text-white uppercase font-p3r-head">Exportar DiagnÃ³stico</div>
+                <div className="text-xs font-black text-white uppercase font-p3r-head">Exportar Diagnóstico</div>
                 <p className="text-[11px] text-[#7E9BB8]">
                   Genera un archivo JSON sanitizado con logs y estado para soporte.
                 </p>
@@ -708,7 +708,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     disabled={exportingDiag}
                     icon={<Download className="w-3.5 h-3.5 text-[#00E5FF]" />}
                   >
-                    {exportingDiag ? 'Exportando...' : 'Exportar diagnÃ³stico'}
+                    {exportingDiag ? 'Exportando...' : 'Exportar diagnóstico'}
                   </P3rButton>
                 </div>
                 {diagMessage && (
@@ -721,7 +721,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <div className="bg-[#030814] p-4 border border-[#16335F] p3r-cut-tr space-y-2">
                 <div className="text-xs font-black text-white uppercase font-p3r-head">Limpieza de Importaciones</div>
                 <p className="text-[11px] text-[#7E9BB8]">
-                  Elimina pÃ¡ginas de runas y conjuntos de objetos creados por la app (EAsy, [IL]).
+                  Elimina páginas de runas y conjuntos de objetos creados por la app (EAsy, [IL]).
                 </p>
                 <div className="pt-1">
                   <P3rButton
@@ -745,18 +745,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         )}
       </div>
 
-      {/* Monitor de LÃ­mites de Uso */}
+      {/* Monitor de Límites de Uso */}
       <div className="bg-[#050E20] p-6 border-2 border-[#16335F] p3r-bevel p3r-shadow-hard space-y-4">
         <h3 className="text-base font-black text-white flex items-center space-x-2 uppercase font-p3r tracking-wider">
           <span className="w-2.5 h-2.5 bg-[#00E5FF] transform rotate-45"></span>
-          <span>LÃ­mites de uso</span>
+          <span>Límites de uso</span>
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
           <div className="bg-[#030814] p-4 border border-[#16335F] p3r-cut-tr">
             <div className="font-bold text-white mb-2 font-p3r-head uppercase">Riot Games API</div>
             <div className="text-[#7E9BB8] space-y-1">
-              <div>LÃ­mite: 20 peticiones / seg â€¢ 100 / 2 min</div>
+              <div>Límite: 20 peticiones / seg • 100 / 2 min</div>
               <div className="text-[#00E676] font-bold mt-2">Control de tasa activo</div>
             </div>
           </div>
@@ -771,10 +771,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
-      {/* Footer de versiÃ³n */}
+      {/* Footer de versión */}
       <div className="pt-4 border-t-2 border-[#16335F] flex items-center justify-between text-[11px] text-[#7E9BB8] font-mono">
         <div>
-          <span>EAsy</span> â€¢ <span>Parche: <strong className="text-white">v{formatFullPatchLabel(patchVersion)}</strong></span>
+          <span>EAsy</span> • <span>Parche: <strong className="text-white">v{formatFullPatchLabel(patchVersion)}</strong></span>
         </div>
         <div>
           <span>OP.GG & LCU</span>

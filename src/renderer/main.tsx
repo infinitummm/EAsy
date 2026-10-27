@@ -7,8 +7,6 @@ import './styles/index.css';
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <ErrorBoundary fallbackTitle="Error al iniciar EAsy">
-      <App />
-    </ErrorBoundary>
+    <App />
   </React.StrictMode>
 );

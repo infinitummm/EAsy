@@ -74,14 +74,14 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
     }
   }, [activePatch]);
 
-  // Sincronizar campeÃ³n propio
+  // Sincronizar campeón propio
   useEffect(() => {
     if (initialChampionId && initialChampionId > 0 && initialChampionId !== championId) {
       setChampionId(initialChampionId);
     }
   }, [initialChampionId]);
 
-  // Sincronizar rival predicho SOLO si el usuario no fijÃ³ manualmente uno
+  // Sincronizar rival predicho SOLO si el usuario no fijó manualmente uno
   useEffect(() => {
     if (!isManualOpponent && initialOpponentId && initialOpponentId > 0 && initialOpponentId !== opponentId) {
       setOpponentId(initialOpponentId);
@@ -140,11 +140,11 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
 
       if (runeRes.success && buildRes.success) {
         setImportStatus('success');
-        setImportMsg('Â¡Runas oficiales activadas y Build importada a la ColecciÃ³n de LoL!');
+        setImportMsg('¡Runas oficiales activadas y Build importada a la Colección de LoL!');
         setTimeout(() => setImportStatus('idle'), 6000);
       } else if (runeRes.success) {
         setImportStatus('success');
-        setImportMsg('Â¡Runas aplicadas en LoL! (Build guardada en disco)');
+        setImportMsg('¡Runas aplicadas en LoL! (Build guardada en disco)');
         setTimeout(() => setImportStatus('idle'), 6000);
       } else {
         setImportStatus('error');
@@ -196,7 +196,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
 
       setRecommendation(res);
 
-      // Auto-importar automÃ¡ticamente si estÃ¡ activado
+      // Auto-importar automáticamente si está activado
       if (autoImportEnabled) {
         await aplicarRunasYBuild(res, mode);
       }
@@ -207,7 +207,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
     }
   };
 
-  // Disparar auto-anÃ¡lisis cuando cambian campeÃ³n o rival en autoRun
+  // Disparar auto-análisis cuando cambian campeón o rival en autoRun
   useEffect(() => {
     if (autoRun && championId > 0 && opponentId > 0) {
       const key = `${championId}-${opponentId}-${role}`;
@@ -221,12 +221,12 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
     if (diff <= 3) return { bg: 'bg-[#10B981]', text: 'text-[#10B981]', label: 'FAVORABLE' };
     if (diff <= 6) return { bg: 'bg-[#F5A623]', text: 'text-[#F5A623]', label: 'EQUILIBRADO' };
     if (diff <= 8) return { bg: 'bg-[#F97316]', text: 'text-[#F97316]', label: 'DESAFIANTE' };
-    return { bg: 'bg-[#D92546]', text: 'text-[#D92546]', label: 'MUY DIFÃCIL' };
+    return { bg: 'bg-[#D92546]', text: 'text-[#D92546]', label: 'MUY DIFÍCIL' };
   };
 
   return (
     <div className="space-y-6 select-none">
-      {/* Cabecera y ParÃ¡metros Estilo Persona 3 Reload */}
+      {/* Cabecera y Parámetros Estilo Persona 3 Reload */}
       <div className="bg-[#050E20] border-2 border-[#16335F] p-6 p3r-bevel p3r-shadow-hard relative">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
@@ -238,7 +238,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
             </div>
 
             <h2 className="text-2xl font-black text-white tracking-wider font-p3r uppercase">
-              ENFRENTAMIENTO DIRECTO EN LÃNEA
+              ENFRENTAMIENTO DIRECTO EN LÍNEA
             </h2>
 
             <div className="flex flex-wrap items-center gap-2 mt-2">
@@ -246,7 +246,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
                 <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 bg-[#030814] border border-[#00E5FF]/40 text-[11px] text-[#00E5FF] font-mono">
                   <span className="w-1.5 h-1.5 bg-[#00E5FF]"></span>
                   <span>
-                    Datos OP.GG ({recommendation.opggData.totalMatches.toLocaleString()} partidas â€¢{' '}
+                    Datos OP.GG ({recommendation.opggData.totalMatches.toLocaleString()} partidas •{' '}
                     <strong className="text-white">
                       {viewMode === 'matchup' ? 'Matchup: todos los rangos' : (recommendation.opggData.eloLabel || 'General: Esmeralda+')}
                     </strong>)
@@ -255,7 +255,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
               )}
               <span
                 className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 bg-[#030814] border border-[#16335F] text-[11px] text-[#7E9BB8] font-mono"
-                title={groundingQuota?.quotaNote || 'Google AI Studio: BÃºsqueda web requiere facturaciÃ³n, generaciÃ³n de texto estÃ¡ndar es ilimitada (1500 req/dÃ­a)'}
+                title={groundingQuota?.quotaNote || 'Google AI Studio: Búsqueda web requiere facturación, generación de texto estándar es ilimitada (1500 req/día)'}
               >
                 <span className="w-1.5 h-1.5 bg-[#0066FF]"></span>
                 <span>Grounding: <strong className="text-white">{groundingQuota?.groundingUsedToday ?? 0}</strong> hoy</span>
@@ -321,7 +321,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
               </span>
             </label>
 
-            {/* BotÃ³n de Regenerar AnÃ¡lisis */}
+            {/* Botón de Regenerar Análisis */}
             <P3rButton
               variant="secondary"
               size="md"
@@ -336,7 +336,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
               REGENERAR DATOS
             </P3rButton>
 
-            {/* BotÃ³n Principal Analizar */}
+            {/* Botón Principal Analizar */}
             <P3rButton
               variant="cyan"
               size="md"
@@ -360,7 +360,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
           </div>
         </div>
 
-        {/* NotificaciÃ³n de Estado de InyecciÃ³n */}
+        {/* Notificación de Estado de Inyección */}
         {importMsg && (
           <div
             className={`mt-4 p-3 text-xs font-bold flex items-center space-x-2 border-2 transition-all p3r-cut-tr ${
@@ -372,7 +372,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
             }`}
           >
             <span className="text-sm font-black">
-              {importStatus === 'success' ? 'âœ“' : importStatus === 'error' ? 'âœ•' : 'â„¹'}
+              {importStatus === 'success' ? '✓' : importStatus === 'error' ? '✕' : 'ℹ'}
             </span>
             <span className="font-p3r-head tracking-wide">{importMsg}</span>
           </div>
@@ -382,7 +382,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
         {viewMode === 'matchup' && (recommendation?.opggData?.totalMatches ?? 0) < 200 && (
           <div className="mt-4 bg-[#2A1705] border-2 border-[#FFE277] p-3 text-xs text-[#FFE277] flex flex-col sm:flex-row sm:items-center justify-between gap-2 p3r-bevel p3r-shadow-hard">
             <span className="leading-relaxed">
-              âš ï¸ <strong>Muestra reducida ({recommendation?.opggData?.totalMatches ?? 0} partidas):</strong> Los datos de este enfrentamiento especÃ­fico son escasos. Se recomienda la <strong>Build General en Esmeralda+</strong>.
+              ⚠️ <strong>Muestra reducida ({recommendation?.opggData?.totalMatches ?? 0} partidas):</strong> Los datos de este enfrentamiento específico son escasos. Se recomienda la <strong>Build General en Esmeralda+</strong>.
             </span>
             <button
               type="button"
@@ -400,17 +400,17 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
         {/* Banner de Fallback Honesto si falla OP.GG */}
         {recommendation?.source === 'fallback' && (
           <div className="mt-4 bg-[#2A050A] border-2 border-[#FF1744] p-3 text-xs text-[#FF1744] flex items-center space-x-2 p3r-cut-tr">
-            <span>âš ï¸</span>
+            <span>⚠️</span>
             <span className="font-p3r-head">
-              <strong>Aviso de contingencia:</strong> No se pudieron obtener datos de OP.GG. Mostrando configuraciÃ³n de contingencia (genÃ©rica).
+              <strong>Aviso de contingencia:</strong> No se pudieron obtener datos de OP.GG. Mostrando configuración de contingencia (genérica).
             </span>
           </div>
         )}
 
-        {/* Selector de ParÃ¡metros */}
+        {/* Selector de Parámetros */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-5 pt-4 border-t-2 border-[#16335F]">
           <ChampionSelectInput
-            label="Mi CampeÃ³n"
+            label="Mi Campeón"
             value={championId}
             onChange={setChampionId}
             patchVersion={activePatch}
@@ -418,7 +418,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
 
           <div>
             <ChampionSelectInput
-              label={isManualOpponent ? "CampeÃ³n Rival (Manual)" : "CampeÃ³n Rival (Detectado)"}
+              label={isManualOpponent ? "Campeón Rival (Manual)" : "Campeón Rival (Detectado)"}
               value={opponentId}
               onChange={handleOpponentChange}
               patchVersion={activePatch}
@@ -429,14 +429,14 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
                 onClick={handleResetOpponent}
                 className="mt-1.5 text-[11px] text-[#00E5FF] hover:text-white font-mono inline-block cursor-pointer"
               >
-                â†º Restablecer a rival automÃ¡tico
+                ↺ Restablecer a rival automático
               </button>
             )}
           </div>
 
           <div>
             <label className="text-[10px] text-[#7E9BB8] font-black uppercase tracking-wider block mb-1 font-p3r-head">
-              PosiciÃ³n Asignada
+              Posición Asignada
             </label>
             <select
               value={role}
@@ -459,7 +459,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
               <div className="flex items-center space-x-2">
                 <span className="w-2 h-2 rounded-full bg-[#F5A623]"></span>
                 <span className="text-xs font-bold text-white uppercase tracking-wider">
-                  Diferencial Data Dragon: Parche {patchDiff.previousPatch} â†’ {patchDiff.currentPatch}
+                  Diferencial Data Dragon: Parche {patchDiff.previousPatch} → {patchDiff.currentPatch}
                 </span>
               </div>
               <span className="px-2 py-0.5 bg-[#10B981]/15 text-[#10B981] text-[10px] font-bold rounded border border-[#10B981]/40">
@@ -541,7 +541,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
 
       {error && (
         <div className="bg-[#D92546]/15 border border-[#D92546]/50 p-4 rounded-xl text-xs text-[#F87171]">
-          <strong>ERROR DE ANÃLISIS:</strong> {error}
+          <strong>ERROR DE ANÁLISIS:</strong> {error}
         </div>
       )}
 
@@ -550,13 +550,13 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
         recommendation.source === 'fallback' && !recommendation.opggData ? (
           <div className="bg-[#D92546]/20 border-2 border-[#D92546] p-4 rounded-xl text-xs flex items-center justify-between gap-3 text-white">
             <div className="flex items-center space-x-2.5">
-              <span className="text-xl">âš ï¸</span>
+              <span className="text-xl">⚠️</span>
               <div>
                 <span className="font-bold text-[#F87171] uppercase block text-sm">
-                  Sin anÃ¡lisis de IA: recomendaciÃ³n genÃ©rica de contingencia
+                  Sin análisis de IA: recomendación genérica de contingencia
                 </span>
                 <span className="text-[#CBD5E1] text-xs">
-                  Motivo: {recommendation.fallbackReason || 'Sin conexiÃ³n o error al consultar fuentes estadÃ­sticas.'}
+                  Motivo: {recommendation.fallbackReason || 'Sin conexión o error al consultar fuentes estadísticas.'}
                 </span>
               </div>
             </div>
@@ -585,20 +585,20 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
                 ) : (
                   <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-[#64748B]/20 border border-[#64748B] text-[#94A3B8] font-bold text-[11px] tracking-wide">
                     <span className="w-2 h-2 rounded-full bg-[#64748B]"></span>
-                    <span>ESCASO (Datos mÃ­nimos)</span>
+                    <span>ESCASO (Datos mínimos)</span>
                   </span>
                 )}
 
                 <span className="text-[#94A3B8] font-medium">
-                  â€¢ Parche: <strong className="text-white">{recommendation.patchVersion || activePatch}</strong>
+                  • Parche: <strong className="text-white">{recommendation.patchVersion || activePatch}</strong>
                 </span>
 
                 <span className="text-[#94A3B8]">
-                  â€¢ Modelo: <strong className="text-[#60A5FA]">{recommendation.modelUsed || 'gemini-3.5-flash'}</strong>
+                  • Modelo: <strong className="text-[#60A5FA]">{recommendation.modelUsed || 'gemini-3.5-flash'}</strong>
                 </span>
 
                 <span className="text-[#94A3B8]">
-                  â€¢ {recommendation.generatedAt ? new Date(recommendation.generatedAt).toLocaleTimeString() : 'Reciente'}
+                  • {recommendation.generatedAt ? new Date(recommendation.generatedAt).toLocaleTimeString() : 'Reciente'}
                 </span>
               </div>
 
@@ -606,16 +606,16 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
                 onClick={() => setShowDebug(!showDebug)}
                 className="text-[11px] text-[#60A5FA] hover:text-white underline font-semibold self-start sm:self-auto"
               >
-                {showDebug ? 'Ocultar DepuraciÃ³n IA â–²' : 'Ver DepuraciÃ³n IA â–¼'}
+                {showDebug ? 'Ocultar Depuración IA ▲' : 'Ver Depuración IA ▼'}
               </button>
             </div>
 
-            {/* Aviso transparente si no se utilizÃ³ Grounding en vivo por cuota */}
+            {/* Aviso transparente si no se utilizó Grounding en vivo por cuota */}
             {!recommendation.groundingUsed && (
               <div className="bg-[#11223F] p-2.5 rounded border border-[#1E355B] text-[11px] text-[#CBD5E1] flex items-center space-x-2">
-                <span className="text-sm">â„¹ï¸</span>
+                <span className="text-sm">ℹ️</span>
                 <span>
-                  <strong>Transparencia de cuota:</strong> BÃºsqueda web en vivo no ejecutada por lÃ­mite de cuota en nivel gratuito (HTTP 429). Se garantizan datos reales del parche mediante Data Dragon determinista y tus partidas locales.
+                  <strong>Transparencia de cuota:</strong> Búsqueda web en vivo no ejecutada por límite de cuota en nivel gratuito (HTTP 429). Se garantizan datos reales del parche mediante Data Dragon determinista y tus partidas locales.
                 </span>
               </div>
             )}
@@ -633,7 +633,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
                     className="px-2 py-0.5 rounded bg-[#060D17] border border-[#1E355B] text-[11px] text-[#60A5FA] hover:text-white hover:border-[#60A5FA] transition flex items-center space-x-1"
                     title={src.uri}
                   >
-                    <span>ðŸŒ</span>
+                    <span>🌐</span>
                     <span className="max-w-[200px] truncate">{src.title || src.uri}</span>
                   </a>
                 ))}
@@ -643,10 +643,10 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
         )
       )}
 
-      {/* Resultados de la RecomendaciÃ³n */}
+      {/* Resultados de la Recomendación */}
       {recommendation ? (
         <div className="space-y-6">
-          {/* Tarjeta de Dificultad, Resumen y BotÃ³n de InyecciÃ³n */}
+          {/* Tarjeta de Dificultad, Resumen y Botón de Inyección */}
           <div className="bg-[#050E20] border-2 border-[#16335F] p3r-bevel p3r-shadow-hard p-6">
             {/* Header visual del Enfrentamiento */}
             <div className="flex items-center space-x-3 pb-4 mb-4 border-b-2 border-[#16335F]">
@@ -660,7 +660,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
                   }}
                 />
                 <div>
-                  <span className="text-[10px] text-[#00E5FF] font-black uppercase tracking-wider block font-p3r-head">MI ELECCIÃ“N</span>
+                  <span className="text-[10px] text-[#00E5FF] font-black uppercase tracking-wider block font-p3r-head">MI ELECCIÓN</span>
                   <span className="font-bold text-white text-sm font-p3r-head">
                     {getChampionName(recommendation.championId)}
                   </span>
@@ -681,7 +681,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
                   }}
                 />
                 <div>
-                  <span className="text-[10px] text-[#FF1744] font-black uppercase tracking-wider block font-p3r-head">RIVAL EN LÃNEA</span>
+                  <span className="text-[10px] text-[#FF1744] font-black uppercase tracking-wider block font-p3r-head">RIVAL EN LÍNEA</span>
                   <span className="font-bold text-white text-sm font-p3r-head">
                     {getChampionName(recommendation.opponentChampionId)}
                   </span>
@@ -692,7 +692,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
               <div>
                 <span className="text-[10px] font-black text-[#7E9BB8] uppercase tracking-wider font-p3r-head">
-                  DIFICULTAD ESTIMADA DE LÃNEA
+                  DIFICULTAD ESTIMADA DE LÍNEA
                 </span>
                 <div className="flex items-center space-x-3 mt-1">
                   <span className="text-4xl font-black text-white tracking-tight font-p3r">
@@ -706,7 +706,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
                 </div>
               </div>
 
-              {/* BotÃ³n Maestro: Importar Runas y Build a LoL */}
+              {/* Botón Maestro: Importar Runas y Build a LoL */}
               <P3rButton
                 variant="cyan"
                 size="lg"
@@ -738,7 +738,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
             <div className="bg-[#030814] p-4 border border-[#16335F] p3r-cut-tr">
               <h4 className="text-xs font-black text-[#00E5FF] uppercase tracking-wider mb-1 flex items-center space-x-2 font-p3r">
                 <span className="w-2 h-2 bg-[#0066FF] transform rotate-45" />
-                <span>DINÃMICA DEL ENFRENTAMIENTO</span>
+                <span>DINÁMICA DEL ENFRENTAMIENTO</span>
               </h4>
               <p className="text-xs text-[#CBD5E1] leading-relaxed">
                 {recommendation.matchupSummary}
@@ -751,7 +751,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
             <div className="flex items-center justify-between mb-4 pb-3 border-b-2 border-[#16335F]">
               <h3 className="text-sm font-black text-white flex items-center space-x-2 tracking-wide font-p3r">
                 <span className="w-2.5 h-2.5 bg-[#0066FF] transform rotate-45"></span>
-                <span className="uppercase">CONFIGURACIÃ“N DE RUNAS // PARCHE {formatFullPatchLabel(activePatch)}</span>
+                <span className="uppercase">CONFIGURACIÓN DE RUNAS // PARCHE {formatFullPatchLabel(activePatch)}</span>
               </h3>
               <span className="text-xs text-[#00E5FF] font-mono font-bold">
                 Ramas: #{recommendation.runesRecommendation.primaryStyleId} + #{recommendation.runesRecommendation.subStyleId}
@@ -777,7 +777,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
 
               <div className="bg-[#030814] p-4 border border-[#16335F] flex flex-col justify-center p3r-cut-tr">
                 <span className="text-[10px] text-[#00E5FF] uppercase tracking-wider block mb-1 font-black font-p3r-head">
-                  JustificaciÃ³n TÃ¡ctica
+                  Justificación Táctica
                 </span>
                 <p className="text-xs text-[#CBD5E1] leading-relaxed">
                   {recommendation.runesRecommendation.rationale}
@@ -799,7 +799,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
             <div className="bg-[#050E20] border-2 border-[#16335F] p3r-bevel p3r-shadow-hard p-6">
               <h3 className="text-xs font-black text-[#FFE277] uppercase tracking-wider mb-4 flex items-center space-x-2 font-p3r">
                 <span className="w-2.5 h-2.5 bg-[#FFE277] transform rotate-45"></span>
-                <span>PLAN DE FASE DE LÃNEAS // EARLY GAME</span>
+                <span>PLAN DE FASE DE LÍNEAS // EARLY GAME</span>
               </h3>
               <div className="space-y-3.5 text-xs">
                 <div>
@@ -821,11 +821,11 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
               </div>
             </div>
 
-            {/* AnÃ¡lisis de Amenazas y CondiciÃ³n de Victoria */}
+            {/* Análisis de Amenazas y Condición de Victoria */}
             <div className="bg-[#050E20] border-2 border-[#16335F] p3r-bevel p3r-shadow-hard p-6">
               <h3 className="text-xs font-black text-[#FF1744] uppercase tracking-wider mb-4 flex items-center space-x-2 font-p3r">
                 <span className="w-2.5 h-2.5 bg-[#FF1744] transform rotate-45"></span>
-                <span>AMENAZAS CRÃTICAS & CONDICIÃ“N DE VICTORIA</span>
+                <span>AMENAZAS CRÍTICAS & CONDICIÓN DE VICTORIA</span>
               </h3>
               <div className="space-y-4 text-xs">
                 <div>
@@ -837,14 +837,14 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
                   </ul>
                 </div>
                 <div className="bg-[#030814] p-3.5 border border-[#16335F] p3r-cut-tr">
-                  <span className="text-[#00E5FF] font-bold uppercase tracking-wider block mb-1 text-[10px] font-p3r-head">CondiciÃ³n de Victoria:</span>
+                  <span className="text-[#00E5FF] font-bold uppercase tracking-wider block mb-1 text-[10px] font-p3r-head">Condición de Victoria:</span>
                   <p className="text-[#CBD5E1] leading-relaxed">{recommendation.threatAnalysis.winCondition}</p>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Panel Desplegable de DepuraciÃ³n IA */}
+          {/* Panel Desplegable de Depuración IA */}
           <div className="bg-[#050E20] border-2 border-[#16335F] p3r-bevel overflow-hidden p3r-shadow-hard">
             <button
               onClick={() => setShowDebug(!showDebug)}
@@ -852,9 +852,9 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
             >
               <div className="flex items-center space-x-2">
                 <span className="w-2 h-2 bg-[#0066FF] transform rotate-45"></span>
-                <span>Panel de DepuraciÃ³n y Trazabilidad IA</span>
+                <span>Panel de Depuración y Trazabilidad IA</span>
               </div>
-              <span className="text-sm font-mono">{showDebug ? 'â–²' : 'â–¼'}</span>
+              <span className="text-sm font-mono">{showDebug ? '▲' : '▼'}</span>
             </button>
 
             {showDebug && (
@@ -869,18 +869,18 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
                   </div>
 
                   <div className="bg-[#060D17] p-3 rounded border border-[#1E355B]">
-                    <span className="text-[#60A5FA] font-bold block mb-1">ESTADO DE VALIDACIÃ“N:</span>
+                    <span className="text-[#60A5FA] font-bold block mb-1">ESTADO DE VALIDACIÓN:</span>
                     <p className="text-[#10B981]">{recommendation.debugInfo?.validationStatus || 'Validado con Data Dragon'}</p>
-                    <p className="text-[#94A3B8] mt-1">ImportaciÃ³n LoL: {importMsg || 'Listo'}</p>
+                    <p className="text-[#94A3B8] mt-1">Importación LoL: {importMsg || 'Listo'}</p>
                     <p className="text-[#CBD5E1] mt-1">Fuentes web detectadas: <strong className="text-[#60A5FA]">{recommendation.debugInfo?.groundingSourcesFound ?? recommendation.sources?.length ?? 0}</strong></p>
                   </div>
                 </div>
 
-                {/* Paso 1: InvestigaciÃ³n Cruda de Meta (Grounding o Fallback Local) */}
+                {/* Paso 1: Investigación Cruda de Meta (Grounding o Fallback Local) */}
                 {(recommendation.debugInfo?.rawResearchResponse || recommendation.researchNotes) && (
                   <div className="bg-[#060D17] p-3 rounded border border-[#1E355B]">
                     <span className="text-[#60A5FA] font-bold block mb-1">
-                      InvestigaciÃ³n del meta ({recommendation.groundingUsed ? 'Google Search' : 'Metadatos de Parche'}):
+                      Investigación del meta ({recommendation.groundingUsed ? 'Google Search' : 'Metadatos de Parche'}):
                     </span>
                     <pre className="max-h-40 overflow-y-auto p-2 bg-[#0A111F] rounded text-[11px] text-[#A5B4FC] whitespace-pre-wrap">
                       {recommendation.debugInfo?.rawResearchResponse || recommendation.researchNotes}
@@ -888,11 +888,11 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
                   </div>
                 )}
 
-                {/* Ãtems bloqueados deterministamente por Patch Diff (Capa 1) */}
+                {/* Ítems bloqueados deterministamente por Patch Diff (Capa 1) */}
                 {patchDiff && (patchDiff.removedItems?.length ?? 0) > 0 && (
                   <div className="bg-[#060D17] p-3 rounded border border-[#1E355B]">
                     <span className="text-[#F87171] font-bold block mb-1">
-                      CAPA 1: ÃTEMS ELIMINADOS EN EL PARCHE {patchDiff.currentPatch} (BLOQUEADOS DETERMINISTAMENTE):
+                      CAPA 1: ÍTEMS ELIMINADOS EN EL PARCHE {patchDiff.currentPatch} (BLOQUEADOS DETERMINISTAMENTE):
                     </span>
                     <p className="text-[#94A3B8] text-[11px]">
                       {patchDiff.removedItems?.map(i => i.name).join(', ')}
@@ -902,7 +902,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
 
                 {recommendation.debugInfo?.resolvedRunes && (
                   <div className="bg-[#060D17] p-3 rounded border border-[#1E355B]">
-                    <span className="text-[#60A5FA] font-bold block mb-1.5">TRADUCCIÃ“N DE RUNAS (Data Dragon):</span>
+                    <span className="text-[#60A5FA] font-bold block mb-1.5">TRADUCCIÓN DE RUNAS (Data Dragon):</span>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {recommendation.debugInfo.resolvedRunes.map((r, i) => (
                         <div key={i} className="text-[11px] text-[#CBD5E1]">
@@ -915,7 +915,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
 
                 {recommendation.debugInfo?.resolvedItems && (
                   <div className="bg-[#060D17] p-3 rounded border border-[#1E355B]">
-                    <span className="text-[#60A5FA] font-bold block mb-1.5">TRADUCCIÃ“N DE OBJETOS (Data Dragon):</span>
+                    <span className="text-[#60A5FA] font-bold block mb-1.5">TRADUCCIÓN DE OBJETOS (Data Dragon):</span>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {recommendation.debugInfo.resolvedItems.map((item, i) => (
                         <div key={i} className="text-[11px] text-[#CBD5E1]">
@@ -946,12 +946,12 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
           <p className="text-white text-sm font-semibold mb-1">
             {championId > 0
               ? `Presiona "ANALIZAR" para obtener runas y build para ${getChampionName(championId)}`
-              : 'Esperando selecciÃ³n de campeÃ³n'}
+              : 'Esperando selección de campeón'}
           </p>
           <p className="text-[#94A3B8] text-xs max-w-md mx-auto">
             {championId > 0
               ? 'Puedes analizar el enfrentamiento seleccionando los campeones.'
-              : 'Elige tu campeÃ³n para calcular tu build y runas automÃ¡ticamente.'}
+              : 'Elige tu campeón para calcular tu build y runas automáticamente.'}
           </p>
         </div>
       )}

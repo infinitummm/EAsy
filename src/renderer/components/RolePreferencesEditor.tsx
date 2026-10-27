@@ -70,7 +70,7 @@ export const ChampionAutocomplete = React.memo<ChampionAutocompleteProps>(({
       )
       .slice(0, 8);
 
-    // Respaldo dinÃ¡mico por ID numÃ©rico (ej: Yunara 804 o campeÃ³n dÃ­a-0 no indexado aÃºn)
+    // Respaldo dinámico por ID numérico (ej: Yunara 804 o campeón día-0 no indexado aún)
     const numericId = parseInt(query, 10);
     if (
       Number.isInteger(numericId) &&
@@ -164,11 +164,11 @@ export const ChampionAutocomplete = React.memo<ChampionAutocompleteProps>(({
                     <span className="text-xs font-semibold text-white truncate">{c.name}</span>
                     {isNotOwned && (
                       <span
-                        title="CampeÃ³n no poseÃ­do en tu cuenta (puedes seleccionarlo igual)"
+                        title="Campeón no poseído en tu cuenta (puedes seleccionarlo igual)"
                         className="text-[9px] text-amber-400 bg-amber-950/60 border border-amber-600/40 px-1 py-0.5 rounded flex items-center space-x-0.5 shrink-0"
                       >
                         <Lock className="w-2.5 h-2.5" />
-                        <span>No poseÃ­do</span>
+                        <span>No poseído</span>
                       </span>
                     )}
                   </div>
@@ -302,20 +302,8 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
   disabled = false,
   championsCatalog
 }) => {
-  const safeSettings = useMemo(() => {
-    if (settings && settings.rolePreferences) return settings;
-    return {
-      ...DEFAULT_APP_SETTINGS.autoChampSelect,
-      ...(settings || {}),
-      rolePreferences: {
-        ...DEFAULT_APP_SETTINGS.autoChampSelect.rolePreferences,
-        ...(settings?.rolePreferences || {}),
-      },
-    };
-  }, [settings]);
-
   const [selectedRole, setSelectedRole] = useState<Role>('TOP');
-  const [prefs, setPrefs] = useState<AppSettings['autoChampSelect']>(safeSettings);
+  const [prefs, setPrefs] = useState<AppSettings['autoChampSelect']>(settings);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [internalChampions, setInternalChampions] = useState<ChampionInfo[]>(() => obtenerTodosLosCampeones());
   const [pickableIds, setPickableIds] = useState<number[]>([]);
@@ -355,9 +343,9 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
   useEffect(() => {
     if (settings !== lastSettingsRef.current) {
       lastSettingsRef.current = settings;
-      setPrefs(safeSettings);
+      setPrefs(settings);
     }
-  }, [settings, safeSettings]);
+  }, [settings]);
 
   const currentRolePref = prefs.rolePreferences[selectedRole] || {
     preferredChampions: [],
@@ -527,7 +515,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
     if (!ids || ids.length === 0) {
       return (
         <div className="py-2 text-[11px] text-neutral-500 italic text-center border border-dashed border-neutral-800 rounded-lg mt-1.5">
-          NingÃºn campeÃ³n asignado. Agrega uno con el buscador superior.
+          Ningún campeón asignado. Agrega uno con el buscador superior.
         </div>
       );
     }
@@ -574,11 +562,11 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
                   <span className="text-[10px] text-neutral-500 font-mono ml-1.5">({id})</span>
                   {isNotOwned && (
                     <span
-                      title="CampeÃ³n no poseÃ­do en tu cuenta de LoL"
+                      title="Campeón no poseído en tu cuenta de LoL"
                       className="ml-2 text-[9px] text-amber-400 bg-amber-950/60 border border-amber-600/40 px-1 py-0.5 rounded inline-flex items-center space-x-0.5 shrink-0"
                     >
                       <Lock className="w-2.5 h-2.5" />
-                      <span>No poseÃ­do</span>
+                      <span>No poseído</span>
                     </span>
                   )}
                 </div>
@@ -631,10 +619,10 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
             CHAMP SELECT AUTO-PILOT // LOCK-IN REAL
           </div>
           <h3 className="text-lg font-bold text-white flex items-center space-x-2">
-            <span>AutomatizaciÃ³n de Champ Select y Preferencias por Rol</span>
+            <span>Automatización de Champ Select y Preferencias por Rol</span>
           </h3>
           <p className="text-xs text-[#94A3B8] mt-0.5">
-            ConfiguraciÃ³n por nombres y avatares con bloqueo automÃ¡tico real en cliente (LCU API).
+            Configuración por nombres y avatares con bloqueo automático real en cliente (LCU API).
           </p>
         </div>
 
@@ -645,12 +633,12 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
         >
           <div className="transform skew-x-6 flex items-center space-x-1.5">
             {savedSuccess ? <Check className="w-4 h-4" /> : <Flame className="w-4 h-4" />}
-            <span>{savedSuccess ? 'Â¡GUARDADO!' : 'GUARDAR PREFERENCIAS'}</span>
+            <span>{savedSuccess ? '¡GUARDADO!' : 'GUARDAR PREFERENCIAS'}</span>
           </div>
         </button>
       </div>
 
-      {/* Toggles Globales de AutomatizaciÃ³n */}
+      {/* Toggles Globales de Automatización */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#070D19] p-3.5 rounded-lg border border-[#1E282D]">
         <label className="flex items-center space-x-2 cursor-pointer select-none">
           <input
@@ -660,7 +648,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
             disabled={disabled}
             className="rounded border-neutral-700 bg-neutral-800 text-[#00D4FF] focus:ring-0 w-4 h-4"
           />
-          <span className="text-xs text-neutral-200 font-medium">Auto Hover (IntenciÃ³n)</span>
+          <span className="text-xs text-neutral-200 font-medium">Auto Hover (Intención)</span>
         </label>
 
         <label className="flex items-center space-x-2 cursor-pointer select-none">
@@ -703,13 +691,13 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
           <Clock className="w-4 h-4 text-[#00D4FF]" />
           <div>
             <div className="text-xs text-white font-semibold">
-              Retardo de confirmaciÃ³n (Lock-in Delay):{' '}
+              Retardo de confirmación (Lock-in Delay):{' '}
               <span className="font-mono text-[#00D4FF] font-bold">
                 {prefs.pickDelaySeconds ?? 1} segundos
               </span>
             </div>
             <div className="text-[11px] text-neutral-400">
-              Tiempo de espera antes de completar el pick para permitirte cancelar o cambiar de opiniÃ³n.
+              Tiempo de espera antes de completar el pick para permitirte cancelar o cambiar de opinión.
             </div>
           </div>
         </div>
@@ -731,7 +719,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
         </div>
       </div>
 
-      {/* Selector de PestaÃ±a de Rol */}
+      {/* Selector de Pestaña de Rol */}
       <div className="flex flex-wrap gap-2">
         {ROLES.map((r) => (
           <button
@@ -749,7 +737,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
         ))}
       </div>
 
-      {/* Formulario de ConfiguraciÃ³n del Rol Seleccionado */}
+      {/* Formulario de Configuración del Rol Seleccionado */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5 bg-[#070D19]/80 p-4 rounded-xl border border-[#1E282D]">
         {/* Columna 1: Campeones Preferidos */}
         <div className="space-y-2">
@@ -773,7 +761,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
           />
           {renderReorderableChips('preferredChampions', currentRolePref.preferredChampions)}
           <p className="text-[10px] text-neutral-400">
-            EAsy elegirÃ¡ el primero de la lista que estÃ© disponible.
+            EAsy elegirá el primero de la lista que esté disponible.
           </p>
         </div>
 
@@ -799,7 +787,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
           />
           {renderReorderableChips('fallbackChampions', currentRolePref.fallbackChampions)}
           <p className="text-[10px] text-neutral-400">
-            Se usarÃ¡n si todos tus campeones preferidos fueron baneados o elegidos.
+            Se usarán si todos tus campeones preferidos fueron baneados o elegidos.
           </p>
         </div>
 
@@ -816,7 +804,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
           </div>
           <ChampionAutocomplete
             listType="banChampions"
-            placeholder="Buscar campeÃ³n a banear por nombre o ID (ej: Yasuo, Zed, Yunara, 804)..."
+            placeholder="Buscar campeón a banear por nombre o ID (ej: Yasuo, Zed, Yunara, 804)..."
             existingIds={currentRolePref.banChampions}
             allChampions={allChampions}
             pickableIds={pickableIds}
@@ -825,7 +813,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
           />
           {renderReorderableChips('banChampions', currentRolePref.banChampions)}
           <p className="text-[10px] text-neutral-400">
-            En tu turno de ban, se bloquearÃ¡ el primero que no haya sido baneado previamente.
+            En tu turno de ban, se bloqueará el primero que no haya sido baneado previamente.
           </p>
         </div>
 
@@ -861,7 +849,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
           <div className="bg-[#0A1428] p-2.5 rounded-lg border border-[#1E282D] text-[11px] text-neutral-400 flex items-start space-x-2 mt-2">
             <AlertCircle className="w-4 h-4 text-[#00D4FF] shrink-0 mt-0.5" />
             <span>
-              Al comenzar la fase de selecciÃ³n, estos hechizos se asignarÃ¡n automÃ¡ticamente segÃºn el rol que te asigne el cliente.
+              Al comenzar la fase de selección, estos hechizos se asignarán automáticamente según el rol que te asigne el cliente.
             </span>
           </div>
         </div>

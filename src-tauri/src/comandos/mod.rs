@@ -137,9 +137,9 @@ pub fn lcu_test_detection(
     let lockfile = detectar_lockfile(payload.as_deref());
     let conectado = lockfile.is_some();
     let mensaje = if conectado {
-        "Lockfile detectado con Ã©xito.".to_string()
+        "Lockfile detectado con éxito.".to_string()
     } else {
-        "No se detectÃ³ League of Legends en ejecuciÃ³n.".to_string()
+        "No se detectó League of Legends en ejecución.".to_string()
     };
 
     Ok(ReporteDeteccionLcu {
@@ -151,7 +151,7 @@ pub fn lcu_test_detection(
 
 #[tauri::command]
 pub fn lcu_select_folder() -> Result<Option<String>, String> {
-    // Retornar None o diÃ¡logo de carpeta
+    // Retornar None o diálogo de carpeta
     Ok(None)
 }
 
@@ -221,60 +221,24 @@ pub fn lcu_get_auto_accept_status() -> Result<serde_json::Value, String> {
 }
 
 // ==========================================
-// Comandos de ConfiguraciÃ³n y Data Dragon
+// Comandos de Configuración y Data Dragon
 // ==========================================
-
-fn get_default_settings() -> serde_json::Value {
-    serde_json::json!({
-        "opggTier": "emerald_plus",
-        "minMatchupSampleThreshold": 200,
-        "allowAiChoiceTop3": false,
-        "autoAccept": {
-            "enabled": true,
-            "delaySeconds": 2,
-            "humanVariance": true
-        },
-        "autoChampSelect": {
-            "autoHover": true,
-            "autoPick": false,
-            "autoBan": false,
-            "autoSpells": true,
-            "pickDelaySeconds": 1,
-            "rolePreferences": {
-                "TOP": { "preferredChampions": [], "fallbackChampions": [], "banChampions": [], "spells": [4, 12] },
-                "JUNGLE": { "preferredChampions": [], "fallbackChampions": [], "banChampions": [], "spells": [4, 11] },
-                "MIDDLE": { "preferredChampions": [], "fallbackChampions": [], "banChampions": [], "spells": [4, 14] },
-                "BOTTOM": { "preferredChampions": [], "fallbackChampions": [], "banChampions": [], "spells": [4, 7] },
-                "UTILITY": { "preferredChampions": [], "fallbackChampions": [], "banChampions": [], "spells": [4, 3] },
-                "FILL": { "preferredChampions": [], "fallbackChampions": [], "banChampions": [], "spells": [4, 14] }
-            }
-        },
-        "apiKeys": {
-            "riotApiKeyEncrypted": "",
-            "geminiApiKeyEncrypted": ""
-        },
-        "activeAccount": null,
-        "leagueInstallationPath": "",
-        "onboardingCompleted": true,
-        "preferredLocale": "es_MX",
-        "overlayEnabled": true
-    })
-}
 
 #[tauri::command]
 pub fn settings_get(estado: State<'_, EstadoApp>) -> Result<serde_json::Value, String> {
-    let mut defaults = get_default_settings();
     if let Ok(Some(s)) = estado.bd.obtener_ajuste("app_settings") {
-        if let Ok(serde_json::Value::Object(saved_obj)) = serde_json::from_str::<serde_json::Value>(&s) {
-            if let serde_json::Value::Object(ref mut def_obj) = defaults {
-                for (k, v) in saved_obj {
-                    def_obj.insert(k, v);
-                }
-            }
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&s) {
+            return Ok(val);
         }
     }
 
-    Ok(defaults)
+    Ok(serde_json::json!({
+        "leaguePath": "",
+        "autoAccept": { "enabled": true, "delaySeconds": 2 },
+        "aiProvider": "gemini",
+        "geminiApiKey": "",
+        "overlayEnabled": true
+    }))
 }
 
 #[tauri::command]
@@ -294,13 +258,13 @@ pub fn settings_export_diagnostic() -> Result<serde_json::Value, String> {
 
 #[tauri::command]
 pub fn ddragon_get_patch() -> Result<String, String> {
-    Ok("26.20".to_string())
+    Ok("16.20.1".to_string())
 }
 
 #[tauri::command]
 pub fn ddragon_refresh_data() -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({
-        "patch": "26.20",
+        "patch": "16.20.1",
         "championsCount": 168
     }))
 }
@@ -308,8 +272,8 @@ pub fn ddragon_refresh_data() -> Result<serde_json::Value, String> {
 #[tauri::command]
 pub fn ddragon_get_catalog() -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({
-        "patch": "26.20",
-        "displayPatch": "26.20",
+        "patch": "16.20.1",
+        "displayPatch": "16.20",
         "champions": [],
         "count": 0
     }))
@@ -317,26 +281,13 @@ pub fn ddragon_get_catalog() -> Result<serde_json::Value, String> {
 
 #[tauri::command]
 pub fn patch_diff_get(payload: Option<String>) -> Result<serde_json::Value, String> {
-    let p = payload.unwrap_or_else(|| "26.20".to_string());
-    Ok(serde_json::json!({
-        "currentPatch": p,
-        "previousPatch": "26.19",
-        "removedItems": [],
-        "changedItems": [],
-        "removedRunes": [],
-        "newChampions": []
-    }))
+    let _ = payload;
+    Ok(serde_json::json!({}))
 }
 
 #[tauri::command]
 pub fn ai_get_grounding_quota() -> Result<serde_json::Value, String> {
-    Ok(serde_json::json!({
-        "groundingAvailable": true,
-        "quotaNote": "Cuota activa",
-        "groundingUsedToday": 0,
-        "standardRequestsToday": 0,
-        "standardDailyLimit": 1500
-    }))
+    Ok(serde_json::json!({ "used": 5, "limit": 1500 }))
 }
 
 #[tauri::command]

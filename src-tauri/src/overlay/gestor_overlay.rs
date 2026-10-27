@@ -117,6 +117,9 @@ impl GestorOverlay {
         {
             let mut st = self.estado.lock().unwrap();
             st.visible = false;
+            st.cards.clear();
+            st.best_card_index = None;
+            st.is_analyzing = false;
         }
 
         if let Some(w) = self.app_handle.get_webview_window("overlay") {
@@ -125,7 +128,8 @@ impl GestorOverlay {
 
         let st_clon = self.obtener_estado();
         let _ = self.app_handle.emit("overlay:state-changed", &st_clon);
-        let _ = self.app_handle.emit("overlay:state-update", st_clon);
+        let _ = self.app_handle.emit("overlay:state-update", &st_clon);
+        let _ = self.app_handle.emit("overlay:dismiss", serde_json::json!({ "dismissed": true }));
     }
 
     pub fn toggle(&self) -> bool {

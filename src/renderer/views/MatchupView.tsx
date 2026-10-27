@@ -30,6 +30,8 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
   const [role, setRole] = useState<Role>(initialRole);
   const [activePatch, setActivePatch] = useState<string>(patchVersion || '16.20.1');
   const [isManualOpponent, setIsManualOpponent] = useState<boolean>(false);
+  const [isManualChampion, setIsManualChampion] = useState<boolean>(false);
+  const [isManualRole, setIsManualRole] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'general' | 'matchup'>('general');
   const [loading, setLoading] = useState(false);
   const [recommendation, setRecommendation] = useState<GeminiMatchupRecommendation | null>(null);
@@ -74,12 +76,12 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
     }
   }, [activePatch]);
 
-  // Sincronizar campeón propio
+  // Sincronizar campeón propio SOLO si el usuario no fijó manualmente uno
   useEffect(() => {
-    if (initialChampionId && initialChampionId > 0 && initialChampionId !== championId) {
+    if (!isManualChampion && initialChampionId && initialChampionId > 0 && initialChampionId !== championId) {
       setChampionId(initialChampionId);
     }
-  }, [initialChampionId]);
+  }, [initialChampionId, isManualChampion]);
 
   // Sincronizar rival predicho SOLO si el usuario no fijó manualmente uno
   useEffect(() => {
@@ -87,6 +89,25 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
       setOpponentId(initialOpponentId);
     }
   }, [initialOpponentId, isManualOpponent]);
+
+  // Sincronizar rol asignado SOLO si el usuario no fijó manualmente uno
+  useEffect(() => {
+    if (!isManualRole && initialRole && initialRole !== role) {
+      setRole(initialRole);
+    }
+  }, [initialRole, isManualRole]);
+
+  const handleChampionChange = (newChampId: number) => {
+    setChampionId(newChampId);
+    setIsManualChampion(true);
+  };
+
+  const handleResetChampion = () => {
+    setIsManualChampion(false);
+    if (initialChampionId) {
+      setChampionId(initialChampionId);
+    }
+  };
 
   const handleOpponentChange = (newOpponentId: number) => {
     setOpponentId(newOpponentId);
@@ -102,11 +123,17 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
     }
   };
 
-  useEffect(() => {
-    if (initialRole && initialRole !== role) {
+  const handleRoleChange = (newRole: Role) => {
+    setRole(newRole);
+    setIsManualRole(true);
+  };
+
+  const handleResetRole = () => {
+    setIsManualRole(false);
+    if (initialRole) {
       setRole(initialRole);
     }
-  }, [initialRole]);
+  };
 
   // Aplicar Runas y Build a LoL conjuntamente
   const aplicarRunasYBuild = async (rec: GeminiMatchupRecommendation | null = recommendation, currentMode = viewMode) => {
@@ -176,7 +203,11 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
     setError(null);
 
     const matchKey = `${targetChamp}-${targetOpponent}-${targetRole}-${mode}`;
-    lastAnalyzedKeyRef.current = matchKey;
+    if (forceRefresh) {
+      lastAnalyzedKeyRef.current = '';
+    } else {
+      lastAnalyzedKeyRef.current = matchKey;
+    }
 
     try {
       let res: GeminiMatchupRecommendation;
@@ -248,12 +279,12 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
   // Disparar auto-análisis cuando cambian campeón o rival en autoRun
   useEffect(() => {
     if (autoRun && championId > 0 && opponentId > 0) {
-      const key = `${championId}-${opponentId}-${role}`;
+      const key = `${championId}-${opponentId}-${role}-${viewMode}`;
       if (key !== lastAnalyzedKeyRef.current) {
-        fetchAdvice(championId, opponentId, role, false);
+        fetchAdvice(championId, opponentId, role, false, viewMode);
       }
     }
-  }, [autoRun, championId, opponentId, role]);
+  }, [autoRun, championId, opponentId, role, viewMode]);
 
   const getDifficultyColor = (diff: number) => {
     if (diff <= 3) return { bg: 'bg-[#10B981]', text: 'text-[#10B981]', label: 'FAVORABLE' };
@@ -447,12 +478,23 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
 
         {/* Selector de Parámetros */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-5 pt-4 border-t-2 border-[#16335F]">
-          <ChampionSelectInput
-            label="Mi Campeón"
-            value={championId}
-            onChange={setChampionId}
-            patchVersion={activePatch}
-          />
+          <div>
+            <ChampionSelectInput
+              label={isManualChampion ? "Mi Campeón (Manual)" : "Mi Campeón (Detectado)"}
+              value={championId}
+              onChange={handleChampionChange}
+              patchVersion={activePatch}
+            />
+            {isManualChampion && (
+              <button
+                type="button"
+                onClick={handleResetChampion}
+                className="mt-1.5 text-[11px] text-[#00E5FF] hover:text-white font-mono inline-block cursor-pointer"
+              >
+                ↺ Restablecer a campeón automático
+              </button>
+            )}
+          </div>
 
           <div>
             <ChampionSelectInput
@@ -474,11 +516,11 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
 
           <div>
             <label className="text-[10px] text-[#7E9BB8] font-black uppercase tracking-wider block mb-1 font-p3r-head">
-              Posición Asignada
+              {isManualRole ? "Posición Asignada (Manual)" : "Posición Asignada"}
             </label>
             <select
               value={role}
-              onChange={(e) => setRole(e.target.value as Role)}
+              onChange={(e) => handleRoleChange(e.target.value as Role)}
               className="w-full bg-[#030814] border border-[#16335F] focus:border-[#00E5FF] px-3 py-2 text-sm text-white font-bold font-mono focus:outline-none"
             >
               <option value="TOP">TOP (Superior)</option>
@@ -487,6 +529,15 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
               <option value="BOTTOM">BOTTOM (Tirador)</option>
               <option value="UTILITY">UTILITY (Soporte)</option>
             </select>
+            {isManualRole && (
+              <button
+                type="button"
+                onClick={handleResetRole}
+                className="mt-1.5 text-[11px] text-[#00E5FF] hover:text-white font-mono inline-block cursor-pointer"
+              >
+                ↺ Restablecer a rol automático
+              </button>
+            )}
           </div>
         </div>
 

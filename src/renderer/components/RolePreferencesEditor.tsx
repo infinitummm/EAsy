@@ -359,6 +359,29 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
     }
   }, [settings, safeSettings]);
 
+  // Auto-guardado reactivo (debounce 250ms): garantiza que los cambios persistan inmediatamente al cambiar de rol o pestaña
+  const isFirstMountRef = useRef(true);
+  const prefsRef = useRef(prefs);
+  prefsRef.current = prefs;
+
+  useEffect(() => {
+    if (isFirstMountRef.current) {
+      isFirstMountRef.current = false;
+      return;
+    }
+    const timer = setTimeout(() => {
+      onSave(prefs);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [prefs, onSave]);
+
+  // Flush al desmontar el componente para evitar cualquier pérdida de datos
+  useEffect(() => {
+    return () => {
+      onSave(prefsRef.current);
+    };
+  }, [onSave]);
+
   const currentRolePref = prefs?.rolePreferences?.[selectedRole] || {
     preferredChampions: [],
     fallbackChampions: [],

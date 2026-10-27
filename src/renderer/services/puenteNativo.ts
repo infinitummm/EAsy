@@ -22,11 +22,37 @@ import type {
   OverlayState,
   DatosModoCampeon,
 } from '../../shared/types';
+import { OpGgClient } from '../../main/opgg/OpGgClient';
+import { getChampionName } from '../../shared/champions';
+import { getAccurateFallbackRecommendation } from '../../shared/buildDatabase';
 
 // Determina si estamos corriendo en el entorno nativo de Tauri v2
 export const esEntornoTauri = (): boolean => {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 };
+
+// Puente HTTP que redirige llamadas a Tauri cuando corre en el cliente nativo para evitar restricciones CORS
+const fetchViaTauri = async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
+  if (esEntornoTauri()) {
+    try {
+      const body = typeof init?.body === 'string' ? init.body : JSON.stringify(init?.body || {});
+      const res: any = await invoke('opgg_mcp_raw_call', { payload: body });
+      if (res && typeof res === 'object') {
+        const text = typeof res.text === 'string' ? res.text : JSON.stringify(res);
+        const status = typeof res.status === 'number' ? res.status : 200;
+        return new Response(text, {
+          status,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    } catch (err) {
+      console.warn('[PuenteNativo] Error en puente HTTP opgg_mcp_raw_call:', err);
+    }
+  }
+  return fetch(url, init);
+};
+
+const opggClientInstancia = new OpGgClient({ fetchImpl: fetchViaTauri as any });
 
 /**
  * Crea el objeto de API que se inyecta en `window.api` y `window.electronAPI`.
@@ -139,7 +165,7 @@ export function crearPuenteNativo() {
     getProfile: (puuid: string) => genericInvoke(IPC_CHANNELS.RIOT_GET_PROFILE, puuid),
 
     // Matchup y Recomendaciones
-    getMatchupAdvice: (params: {
+    getMatchupAdvice: async (params: {
       championId: number;
       opponentId: number;
       role: Role;
@@ -150,7 +176,48 @@ export function crearPuenteNativo() {
       viewMode?: 'general' | 'matchup';
       elo?: string;
       askAi?: boolean;
-    }) => genericInvoke(IPC_CHANNELS.AI_GET_MATCHUP_ADVICE, params),
+    }) => {
+      try {
+        const isGeneral = params.viewMode === 'general' || !params.opponentId || params.opponentId <= 0;
+        let opggData;
+        if (isGeneral) {
+          opggData = await opggClientInstancia.getChampionAnalysis({
+            championId: params.championId,
+            role: params.role,
+            elo: params.elo || 'emerald_plus',
+            patch: params.patch || '26.20',
+            forceRefresh: params.forceRefresh,
+          });
+        } else {
+          opggData = await opggClientInstancia.getLaneMatchupGuide({
+            championId: params.championId,
+            opponentId: params.opponentId,
+            role: params.role,
+            patch: params.patch || '26.20',
+            elo: params.elo || 'emerald_plus',
+            forceRefresh: params.forceRefresh,
+          });
+        }
+
+        const champName = getChampionName(params.championId);
+        const rec = opggClientInstancia.construirRecomendacionDeterminista(
+          opggData,
+          champName,
+          params.role,
+          params.patch || '26.20',
+          isGeneral
+        );
+        return rec;
+      } catch (err) {
+        console.warn('[PuenteNativo] Error consultando OP.GG MCP, usando fallback táctico:', err);
+        return getAccurateFallbackRecommendation({
+          championId: params.championId,
+          opponentId: params.opponentId,
+          role: params.role,
+          patch: params.patch || '26.20',
+        });
+      }
+    },
     getDraftRecommendations: (params: {
       role: Role;
       patch: string;
@@ -168,7 +235,7 @@ export function crearPuenteNativo() {
       genericInvoke(IPC_CHANNELS.DDRAGON_REFRESH_DATA),
     getPatchDiff: (patch?: string) => genericInvoke(IPC_CHANNELS.PATCH_DIFF_GET, patch),
     getGroundingQuota: () => genericInvoke(IPC_CHANNELS.AI_GET_GROUNDING_QUOTA),
-    getOpGgMatchup: (params: {
+    getOpGgMatchup: async (params: {
       championId: number;
       opponentId?: number;
       role: Role;
@@ -176,7 +243,22 @@ export function crearPuenteNativo() {
       elo?: string;
       forceRefresh?: boolean;
       viewMode?: 'general' | 'matchup';
-    }) => genericInvoke(IPC_CHANNELS.OPGG_GET_MATCHUP, params),
+    }) => {
+      try {
+        if (params.viewMode === 'general' || !params.opponentId || params.opponentId <= 0) {
+          return await opggClientInstancia.getChampionAnalysis({
+            championId: params.championId,
+            role: params.role,
+            elo: params.elo,
+            patch: params.patch,
+            forceRefresh: params.forceRefresh,
+          });
+        }
+        return await opggClientInstancia.getLaneMatchupGuide(params as any);
+      } catch (err) {
+        return genericInvoke(IPC_CHANNELS.OPGG_GET_MATCHUP, params);
+      }
+    },
     cleanAppAssets: () => genericInvoke(IPC_CHANNELS.LCU_CLEAN_APP_ASSETS),
     getClientVersion: () => genericInvoke(IPC_CHANNELS.LCU_GET_CLIENT_VERSION),
     syncLocalAccount: () => genericInvoke(IPC_CHANNELS.LCU_SYNC_LOCAL_ACCOUNT),

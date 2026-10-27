@@ -155,4 +155,49 @@ describe('Base de Datos Táctica de Builds y Runas (buildDatabase)', () => {
     expect(rec.buildRecommendation.coreItems).toContain(3089); // Sombrero de Rabadon
     expect(rec.runesRecommendation.selectedPerkIds.length).toBe(9);
   });
+
+  it('genera build de Mago AP para Ziggs (115) jugado como ADC en BOTTOM', () => {
+    const rec = getAccurateFallbackRecommendation({
+      championId: 115, // Ziggs
+      opponentId: 51,  // Caitlyn
+      role: 'BOTTOM',
+      patch: '26.20'
+    });
+
+    // Debe recibir build AP, no crítico AD
+    expect(rec.buildRecommendation.coreItems).toContain(6657); // Antorcha de Fuego Negro
+    expect(rec.buildRecommendation.coreItems).toContain(3089); // Sombrero de Rabadon
+    expect(rec.buildRecommendation.coreItems).not.toContain(3031); // NO Filo Infinito
+    expect(rec.buildRecommendation.coreItems).not.toContain(6676); // NO Coleccionista
+    expect(rec.buildRecommendation.boots).toBe(3020); // Botas de Hechicero
+    expect(rec.runesRecommendation.primaryStyleId).toBe(8200); // Brujería
+    expect(rec.runesRecommendation.selectedPerkIds).toContain(8229); // Cometa Arcano
+  });
+
+  it('genera build de Mago AP para Karthus (30) en BOTTOM', () => {
+    const rec = getAccurateFallbackRecommendation({
+      championId: 30, // Karthus
+      opponentId: 222, // Jinx
+      role: 'BOTTOM',
+      patch: '26.20'
+    });
+
+    expect(rec.buildRecommendation.coreItems).toContain(6657); // Antorcha de Fuego Negro
+    expect(rec.buildRecommendation.coreItems).toContain(3151); // Liandry
+    expect(rec.buildRecommendation.boots).toBe(3020); // Botas de Hechicero
+    expect(rec.runesRecommendation.primaryStyleId).toBe(8100); // Dominación (Cosecha Oscura)
+  });
+
+  it('genera build de Tirador AD para Tristana o Lucian en MIDDLE', () => {
+    const recLucian = getAccurateFallbackRecommendation({
+      championId: 236, // Lucian
+      opponentId: 103, // Ahri
+      role: 'MIDDLE',
+      patch: '26.20'
+    });
+
+    expect(recLucian.buildRecommendation.coreItems).toContain(3031); // Filo Infinito
+    expect(recLucian.buildRecommendation.boots).toBe(3006); // Berserker
+    expect(recLucian.runesRecommendation.primaryStyleId).toBe(8000); // Precisión
+  });
 });

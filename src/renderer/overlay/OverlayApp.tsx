@@ -152,7 +152,24 @@ export function OverlayApp() {
           setCountdown(25);
         } else {
           setCollapsed(true);
+          setCards([null, null, null]);
+          setCardSlots([null, null, null]);
         }
+      });
+      return () => {
+        unsub?.();
+      };
+    }
+  }, []);
+
+  // Escuchar evento directo de descarte al seleccionar un aumento en LoL
+  useEffect(() => {
+    const api = getApi();
+    if (api?.on) {
+      const unsub = api.on('overlay:dismiss', () => {
+        setCollapsed(true);
+        setCards([null, null, null]);
+        setCardSlots([null, null, null]);
       });
       return () => {
         unsub?.();

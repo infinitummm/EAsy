@@ -15,6 +15,7 @@ use modos::ServicioAumentosModo;
 use ocr::detector_panel_aumentos::{
     calcular_caja_16_a_9, evaluar_visibilidad_panel, ColorRgb, MuestraRoi, TipoMuestra,
 };
+use ocr::detector_aumentos_pantalla::escanear_tres_cartas_en_pantalla;
 use overlay::GestorOverlay;
 use servicios::{AutoAcceptService, ChampSelectService, GestorAjustes};
 use std::sync::Arc;
@@ -109,7 +110,6 @@ pub fn run() {
 
             tauri::async_runtime::spawn(async move {
                 let mut ticks: u64 = 0;
-                let mut ticks_negativos = 0;
                 let mut en_partida;
 
                 loop {
@@ -209,14 +209,17 @@ pub fn run() {
 
                             let visible = evaluar_visibilidad_panel(&muestras);
                             if visible {
-                                ticks_negativos = 0;
-                                if !gestor_o.obtener_estado().visible {
+                                let estado_actual = gestor_o.obtener_estado();
+                                if !estado_actual.visible || estado_actual.cards.is_empty() {
+                                    // Escanear las 3 cartas visibles con OCR
+                                    let catalogo = servicio_modos.obtener_catalogo();
+                                    let resultado = escanear_tres_cartas_en_pantalla(&img, caja16a9, &catalogo);
+                                    gestor_o.actualizar_escaneo_ocr(resultado);
                                     gestor_o.show();
                                 }
                             } else {
-                                ticks_negativos += 1;
-                                // Cierre rápido en <= 1.5s (2 confirmaciones negativas)
-                                if gestor_o.obtener_estado().visible && ticks_negativos >= 2 {
+                                // Desaparición inmediata: en el momento que el usuario escoge el aumento en LoL
+                                if gestor_o.obtener_estado().visible {
                                     gestor_o.hide();
                                 }
                             }
@@ -261,6 +264,7 @@ pub fn run() {
             patch_diff_get,
             ai_get_grounding_quota,
             opgg_get_matchup,
+            opgg_mcp_raw_call,
             ai_get_matchup_advice,
             ai_get_draft_recommendations,
             riot_validate_key,

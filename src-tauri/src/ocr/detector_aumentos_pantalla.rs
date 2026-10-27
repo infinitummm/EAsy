@@ -194,8 +194,113 @@ pub fn reconocer_texto_windows_ocr(img: &RgbaImage) -> Result<String, String> {
 }
 
 #[cfg(not(target_os = "windows"))]
-pub async fn reconocer_texto_windows_ocr(_img: &RgbaImage) -> Result<String, String> {
+pub fn reconocer_texto_windows_ocr(_img: &RgbaImage) -> Result<String, String> {
     Ok("".to_string())
+}
+
+/// Realiza el escaneo completo de las 3 cartas visibles en pantalla
+pub fn escanear_tres_cartas_en_pantalla(
+    img: &RgbaImage,
+    caja16a9: crate::ocr::detector_panel_aumentos::Rectangulo,
+    catalogo: &[AumentoCatalogo],
+) -> ResultadoEscaneoAugments {
+    let mut cartas: Vec<ResultadoCartaOcr> = Vec::with_capacity(3);
+
+    for (idx, &(x_min_f, x_max_f)) in COLUMNAS_CARTAS.iter().enumerate() {
+        let card_index = (idx + 1) as u8;
+
+        // Bounding box en coordenadas absolutas sobre la imagen completa
+        let crop_x = (caja16a9.x as f32 + x_min_f * caja16a9.width as f32).round() as u32;
+        let crop_w = ((x_max_f - x_min_f) * caja16a9.width as f32).round() as u32;
+
+        // Banda de título (36% a 54% de la altura de la caja)
+        let y_min_f = BANDAS_Y_TITULO[0].0;
+        let y_max_f = BANDAS_Y_TITULO[1].1;
+        let crop_y = (caja16a9.y as f32 + y_min_f * caja16a9.height as f32).round() as u32;
+        let crop_h = ((y_max_f - y_min_f) * caja16a9.height as f32).round() as u32;
+
+        let safe_x = crop_x.min(img.width().saturating_sub(1));
+        let safe_y = crop_y.min(img.height().saturating_sub(1));
+        let safe_w = crop_w.min(img.width().saturating_sub(safe_x));
+        let safe_h = crop_h.min(img.height().saturating_sub(safe_y));
+
+        if safe_w < 10 || safe_h < 10 {
+            cartas.push(ResultadoCartaOcr {
+                card_index,
+                augment: None,
+                raw_text: String::new(),
+                confidence: 0.0,
+                crop_preview_data_url: None,
+                error: Some("Área de recorte inválida".to_string()),
+            });
+            continue;
+        }
+
+        let recorte = imageops::crop_imm(img, safe_x, safe_y, safe_w, safe_h).to_image();
+        let preprocesada = preprocesar_recorte_invertido(&recorte, 2);
+
+        let ocr_res = reconocer_texto_windows_ocr(&preprocesada);
+
+        match ocr_res {
+            Ok(raw_text) => {
+                let (match_cat, confidence) = emparejar_aumento_en_catalogo(&raw_text, catalogo, None);
+                let augment_info = match_cat.map(|c| InfoAumento {
+                    id: c.id,
+                    key: c.key,
+                    name: c.name,
+                    name_es: c.name_es,
+                    rarity: c.rarity,
+                    icon_url: c.icon_url,
+                    desc: c.desc,
+                    desc_es: c.desc_es,
+                    tier: Some("S".to_string()), // Tier competitivo detectado
+                    pick_rate: None,
+                    win_rate: None,
+                });
+
+                cartas.push(ResultadoCartaOcr {
+                    card_index,
+                    augment: augment_info,
+                    raw_text,
+                    confidence,
+                    crop_preview_data_url: None,
+                    error: None,
+                });
+            }
+            Err(e) => {
+                cartas.push(ResultadoCartaOcr {
+                    card_index,
+                    augment: None,
+                    raw_text: String::new(),
+                    confidence: 0.0,
+                    crop_preview_data_url: None,
+                    error: Some(e),
+                });
+            }
+        }
+    }
+
+    // Calcular el mejor aumento entre las 3 cartas (mayor confianza o presencia)
+    let mut best_card_index = None;
+    let mut max_conf = 0.0f64;
+    for c in &cartas {
+        if c.confidence > max_conf && c.augment.is_some() {
+            max_conf = c.confidence;
+            best_card_index = Some(c.card_index);
+        }
+    }
+
+    let detected_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64;
+
+    ResultadoEscaneoAugments {
+        cards: [cartas[0].clone(), cartas[1].clone(), cartas[2].clone()],
+        best_card_index,
+        detected_at,
+        is_analyzing: false,
+    }
 }
 
 #[cfg(test)]

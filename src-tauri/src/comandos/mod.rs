@@ -408,6 +408,43 @@ pub fn ai_get_grounding_quota() -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
+pub async fn opgg_mcp_raw_call(payload: Option<serde_json::Value>) -> Result<serde_json::Value, String> {
+    let body_str = if let Some(p) = payload {
+        if let Some(s) = p.as_str() {
+            s.to_string()
+        } else {
+            p.to_string()
+        }
+    } else {
+        return Err("Payload vacío para opgg_mcp_raw_call".to_string());
+    };
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(12))
+        .build()
+        .map_err(|e| format!("Error creando cliente HTTP: {}", e))?;
+
+    let res = client
+        .post("https://mcp-api.op.gg/mcp")
+        .header("Content-Type", "application/json")
+        .body(body_str)
+        .send()
+        .await
+        .map_err(|e| format!("Error de conexión a OP.GG MCP: {}", e))?;
+
+    let status = res.status().as_u16();
+    let text = res
+        .text()
+        .await
+        .map_err(|e| format!("Error leyendo respuesta de OP.GG MCP: {}", e))?;
+
+    Ok(serde_json::json!({
+        "status": status,
+        "text": text
+    }))
+}
+
+#[tauri::command]
 pub fn opgg_get_matchup(payload: Option<serde_json::Value>) -> Result<serde_json::Value, String> {
     let _ = payload;
     Ok(serde_json::json!({ "success": true }))
@@ -416,7 +453,7 @@ pub fn opgg_get_matchup(payload: Option<serde_json::Value>) -> Result<serde_json
 #[tauri::command]
 pub fn ai_get_matchup_advice(payload: Option<serde_json::Value>) -> Result<serde_json::Value, String> {
     let _ = payload;
-    Err("IA nativa no configurada; usando catálogo local determinista".to_string())
+    Err("IA nativa delegada a OpGgClient en frontend".to_string())
 }
 
 #[tauri::command]

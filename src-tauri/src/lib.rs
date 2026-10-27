@@ -222,6 +222,7 @@ pub fn run() {
             lcu_test_detection,
             lcu_select_folder,
             lcu_get_game_mode,
+            lcu_get_champ_select_session,
             lcu_get_pickable_champions,
             lcu_hover_champion,
             lcu_apply_runes,

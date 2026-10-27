@@ -194,6 +194,14 @@ pub async fn lcu_get_game_mode(estado: State<'_, EstadoApp>) -> Result<Option<St
 }
 
 #[tauri::command]
+pub async fn lcu_get_champ_select_session(estado: State<'_, EstadoApp>) -> Result<Option<serde_json::Value>, String> {
+    match estado.lcu_cliente.get_json::<serde_json::Value>("/lol-champ-select/v1/session").await {
+        Ok(s) => Ok(Some(s)),
+        Err(_) => Ok(None),
+    }
+}
+
+#[tauri::command]
 pub async fn lcu_get_pickable_champions(estado: State<'_, EstadoApp>) -> Result<Vec<i64>, String> {
     estado
         .lcu_cliente

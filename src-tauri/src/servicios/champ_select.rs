@@ -159,10 +159,17 @@ pub fn resolver_plan_champ_select(
         None
     };
 
-    // Candidatos para Ban
+    // Candidatos para Ban: usar los del rol asignado o respaldo de FILL
+    let mut pool_ban = prefs_rol.ban_champions.clone();
+    if pool_ban.is_empty() {
+        if let Some(fill_pref) = ajustes.role_preferences.get("FILL") {
+            pool_ban = fill_pref.ban_champions.clone();
+        }
+    }
+
     let mut set_ban = HashSet::new();
     let mut candidatos_ban = Vec::new();
-    for id in &prefs_rol.ban_champions {
+    for id in &pool_ban {
         let id = *id;
         if id > 0
             && !baneados.contains(&id)
@@ -172,6 +179,21 @@ pub fn resolver_plan_champ_select(
             && set_ban.insert(id)
         {
             candidatos_ban.push(id);
+        }
+    }
+
+    // Si el filtro de bannables descartó todo, probar sin restricción local
+    if candidatos_ban.is_empty() && set_bannables.is_some() {
+        for id in &pool_ban {
+            let id = *id;
+            if id > 0
+                && !baneados.contains(&id)
+                && !comprometidos_aliados.contains(&id)
+                && !propios.contains(&id)
+                && set_ban.insert(id)
+            {
+                candidatos_ban.push(id);
+            }
         }
     }
 
@@ -372,6 +394,15 @@ impl ChampSelectService {
                             cand_id, action_id
                         ));
 
+                        // 1. Asignar campeón (hover) en la acción de ban primero
+                        let _ = self.cliente_lcu.patch_vacio(
+                            &format!("/lol-champ-select/v1/session/actions/{}", action_id),
+                            &serde_json::json!({ "championId": cand_id })
+                        ).await;
+
+                        tokio::time::sleep(Duration::from_millis(150)).await;
+
+                        // 2. Bloquear (lock-in) con completed: true
                         let body = serde_json::json!({
                             "championId": cand_id,
                             "completed": completada
@@ -421,6 +452,14 @@ impl ChampSelectService {
                             ));
                             tokio::time::sleep(Duration::from_millis(delay_ms)).await;
                         }
+
+                        // 1. Hover previo antes de confirmar pick
+                        let _ = self.cliente_lcu.patch_vacio(
+                            &format!("/lol-champ-select/v1/session/actions/{}", action_id),
+                            &serde_json::json!({ "championId": champion_id, "completed": false })
+                        ).await;
+
+                        tokio::time::sleep(Duration::from_millis(150)).await;
 
                         registrar_automatizacion(&format!(
                             "[AutoChampSelect][Pick] Bloqueando (lock-in) campeón ID {} en acción {}...",

@@ -1160,13 +1160,26 @@ export function getChampionById(id: number): ChampionInfo | undefined {
   return CHAMPIONS_BY_ID.get(id);
 }
 
-export function getChampionName(id: number, fallback = 'Campeón'): string {
+export function getChampionName(id?: number | null, fallback = 'Campeón'): string {
+  if (typeof id !== 'number' || !id || id <= 0 || isNaN(id)) {
+    return fallback;
+  }
   const champ = CHAMPIONS_BY_ID.get(id);
   return champ ? champ.name : `${fallback} (ID: ${id})`;
 }
 
-export function getChampionIconUrl(imageOrId: string | number, patch = '16.20.1'): string {
+export function getChampionIconUrl(
+  imageOrId?: string | number | null,
+  patch = '16.20.1'
+): string {
+  if (imageOrId === undefined || imageOrId === null || imageOrId === '' || imageOrId === 0) {
+    return GENERIC_CHAMPION_ICON_URL;
+  }
+
   if (typeof imageOrId === 'number') {
+    if (imageOrId <= 0 || isNaN(imageOrId)) {
+      return GENERIC_CHAMPION_ICON_URL;
+    }
     const champ = CHAMPIONS_BY_ID.get(imageOrId);
     if (!champ) {
       return GENERIC_CHAMPION_ICON_URL;
@@ -1177,15 +1190,23 @@ export function getChampionIconUrl(imageOrId: string | number, patch = '16.20.1'
     return `https://ddragon.leagueoflegends.com/cdn/${patch}/img/champion/${champ.image}`;
   }
 
-  // Las URLs ya construidas (p. ej. Community Dragon) se respetan tal cual.
-  if (/^(https?:|data:)/i.test(imageOrId)) {
-    return imageOrId;
+  if (typeof imageOrId === 'string') {
+    const trimmed = imageOrId.trim();
+    if (!trimmed) {
+      return GENERIC_CHAMPION_ICON_URL;
+    }
+    // Las URLs ya construidas (p. ej. Community Dragon) se respetan tal cual.
+    if (/^(https?:|data:)/i.test(trimmed)) {
+      return trimmed;
+    }
+
+    const file = trimmed.endsWith('.png') ? trimmed : `${trimmed}.png`;
+    const champ = CHAMPIONS_BY_IMAGE.get(file);
+    if (champ?.iconUrl) {
+      return champ.iconUrl;
+    }
+    return `https://ddragon.leagueoflegends.com/cdn/${patch}/img/champion/${file}`;
   }
 
-  const file = imageOrId.endsWith('.png') ? imageOrId : `${imageOrId}.png`;
-  const champ = CHAMPIONS_BY_IMAGE.get(file);
-  if (champ?.iconUrl) {
-    return champ.iconUrl;
-  }
-  return `https://ddragon.leagueoflegends.com/cdn/${patch}/img/champion/${file}`;
+  return GENERIC_CHAMPION_ICON_URL;
 }

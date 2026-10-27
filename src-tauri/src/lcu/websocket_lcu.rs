@@ -214,6 +214,19 @@ async fn procesar_frame_wamp(
                     });
                 }
 
+                if fase == "ChampSelect" {
+                    let cl_cs = cliente_lcu.clone();
+                    let cs_inst = champ_select.clone();
+                    let h_cs = app_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        tokio::time::sleep(Duration::from_millis(200)).await;
+                        if let Ok(sesion) = cl_cs.get_json::<serde_json::Value>("/lol-champ-select/v1/session").await {
+                            cs_inst.encolar_sesion(Some(sesion.clone())).await;
+                            let _ = h_cs.emit("lcu:champ-select-session", sesion);
+                        }
+                    });
+                }
+
                 if fase == "None" || fase == "Lobby" {
                     auto_accept.reiniciar_ciclo().await;
                     champ_select.reiniciar_estado().await;

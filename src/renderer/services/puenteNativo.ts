@@ -113,6 +113,8 @@ export function crearPuenteNativo() {
     getAutoAcceptStatus: () => genericInvoke(IPC_CHANNELS.LCU_GET_AUTO_ACCEPT_STATUS),
     getPickableChampions: (): Promise<number[]> =>
       genericInvoke(IPC_CHANNELS.LCU_GET_PICKABLE_CHAMPIONS),
+    getChampSelectSession: (): Promise<any> =>
+      genericInvoke(IPC_CHANNELS.LCU_GET_CHAMP_SELECT_SESSION),
     hoverChampion: (championId: number): Promise<{ success: boolean; error?: string }> =>
       genericInvoke(IPC_CHANNELS.LCU_HOVER_CHAMPION, championId),
     applyRunes: (page: RunePage): Promise<{ success: boolean; error?: string }> =>

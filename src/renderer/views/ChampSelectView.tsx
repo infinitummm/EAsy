@@ -61,6 +61,15 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
   useEffect(() => {
     if (!window.api || !window.api.on) return;
 
+    // Consultar sesión activa de inmediato al montar la vista
+    if ((window.api as any).getChampSelectSession) {
+      (window.api as any).getChampSelectSession().then((data: any) => {
+        if (data) {
+          setSession(data);
+        }
+      }).catch(() => {});
+    }
+
     const unsubscribe = window.api.on(
       IPC_CHANNELS.LCU_CHAMP_SELECT_SESSION,
       (data: ChampSelectSession | null) => {

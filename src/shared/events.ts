@@ -48,6 +48,7 @@ export const IPC_CHANNELS = {
   LCU_SET_AUTO_ACCEPT: 'lcu:set-auto-accept',
   LCU_GET_AUTO_ACCEPT_STATUS: 'lcu:get-auto-accept-status',
   LCU_GET_PICKABLE_CHAMPIONS: 'lcu:get-pickable-champions',
+  LCU_GET_CHAMP_SELECT_SESSION: 'lcu:get-champ-select-session',
   LCU_HOVER_CHAMPION: 'lcu:hover-champion',
   LCU_APPLY_RUNES: 'lcu:apply-runes',
   LCU_APPLY_BUILD: 'lcu:apply-build',

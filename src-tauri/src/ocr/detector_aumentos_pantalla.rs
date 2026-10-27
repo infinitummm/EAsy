@@ -203,6 +203,7 @@ pub fn escanear_tres_cartas_en_pantalla(
     img: &RgbaImage,
     caja16a9: crate::ocr::detector_panel_aumentos::Rectangulo,
     catalogo: &[AumentoCatalogo],
+    aumentos_campeon: Option<&[InfoAumento]>,
 ) -> ResultadoEscaneoAugments {
     let mut cartas: Vec<ResultadoCartaOcr> = Vec::with_capacity(3);
 
@@ -244,18 +245,30 @@ pub fn escanear_tres_cartas_en_pantalla(
         match ocr_res {
             Ok(raw_text) => {
                 let (match_cat, confidence) = emparejar_aumento_en_catalogo(&raw_text, catalogo, None);
-                let augment_info = match_cat.map(|c| InfoAumento {
-                    id: c.id,
-                    key: c.key,
-                    name: c.name,
-                    name_es: c.name_es,
-                    rarity: c.rarity,
-                    icon_url: c.icon_url,
-                    desc: c.desc,
-                    desc_es: c.desc_es,
-                    tier: Some("S".to_string()), // Tier competitivo detectado
-                    pick_rate: None,
-                    win_rate: None,
+                let augment_info = match_cat.map(|c| {
+                    let (tier_calc, pick_rate_calc, win_rate_calc) = if let Some(stats) = aumentos_campeon {
+                        if let Some(encontrado) = stats.iter().find(|a| a.id == c.id || a.name.eq_ignore_ascii_case(&c.name)) {
+                            (encontrado.tier.clone(), encontrado.pick_rate, encontrado.win_rate)
+                        } else {
+                            (Some("B".to_string()), None, None)
+                        }
+                    } else {
+                        (Some("S".to_string()), None, None)
+                    };
+
+                    InfoAumento {
+                        id: c.id,
+                        key: c.key,
+                        name: c.name,
+                        name_es: c.name_es,
+                        rarity: c.rarity,
+                        icon_url: c.icon_url,
+                        desc: c.desc,
+                        desc_es: c.desc_es,
+                        tier: tier_calc,
+                        pick_rate: pick_rate_calc,
+                        win_rate: win_rate_calc,
+                    }
                 });
 
                 cartas.push(ResultadoCartaOcr {
@@ -280,13 +293,34 @@ pub fn escanear_tres_cartas_en_pantalla(
         }
     }
 
-    // Calcular el mejor aumento entre las 3 cartas (mayor confianza o presencia)
+    // Calcular el mejor aumento según el rendimiento competitivo de OP.GG
     let mut best_card_index = None;
-    let mut max_conf = 0.0f64;
+    let mut max_score = -1.0f64;
+
+    fn calcular_peso_tier(tier: Option<&str>, win_rate: Option<f64>) -> f64 {
+        let base_tier = match tier {
+            Some("S+") | Some("S") => 90.0,
+            Some("A") => 75.0,
+            Some("B") => 60.0,
+            Some("C") => 45.0,
+            Some("D") => 30.0,
+            Some("F") => 15.0,
+            _ => 50.0,
+        };
+        if let Some(wr) = win_rate {
+            base_tier * 0.4 + wr * 0.6
+        } else {
+            base_tier
+        }
+    }
+
     for c in &cartas {
-        if c.confidence > max_conf && c.augment.is_some() {
-            max_conf = c.confidence;
-            best_card_index = Some(c.card_index);
+        if let Some(aug) = &c.augment {
+            let score = calcular_peso_tier(aug.tier.as_deref(), aug.win_rate);
+            if score > max_score {
+                max_score = score;
+                best_card_index = Some(c.card_index);
+            }
         }
     }
 

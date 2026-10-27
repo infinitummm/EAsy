@@ -147,7 +147,17 @@ pub fn run() {
                         en_partida = true;
                         if let (Some(j), Some(m)) = (&snap.jugador, &snap.modo) {
                             let champ_nombre = j.champion_name.as_deref().unwrap_or("Desconocido");
-                            gestor_o.set_campeon_y_modo(0, champ_nombre, m);
+                            let champ_id = crate::lcu::resolver_id_campeon_por_nombre(champ_nombre);
+                            gestor_o.set_campeon_y_modo(champ_id, champ_nombre, m);
+
+                            if champ_id > 0 && ticks % 10 == 0 {
+                                let s_modos = servicio_modos.clone();
+                                let champ_nom_clon = champ_nombre.to_string();
+                                let m_clon = m.clone();
+                                tokio::spawn(async move {
+                                    let _ = s_modos.obtener_aumentos_campeon(champ_id, &champ_nom_clon, &m_clon, None).await;
+                                });
+                            }
                         }
                     } else {
                         en_partida = false;
@@ -172,11 +182,12 @@ pub fn run() {
                             // Muestrear puntos clave dentro de la caja normalizada 16:9
                             let mut muestras = Vec::new();
 
-                            // Fondos oscuros de cartas y botones de reroll
+                            // Fondos oscuros de cartas, bordes superiores y botones de reroll
                             let cols = [0.325f32, 0.500f32, 0.675f32];
                             for col in cols {
                                 let px = (caja16a9.x as f32 + col * caja16a9.width as f32) as u32;
                                 let py_fondo = (caja16a9.y as f32 + 0.45 * caja16a9.height as f32) as u32;
+                                let py_borde = (caja16a9.y as f32 + 0.28 * caja16a9.height as f32) as u32;
                                 let py_reroll = (caja16a9.y as f32 + 0.72 * caja16a9.height as f32) as u32;
 
                                 if px < img.width() && py_fondo < img.height() {
@@ -187,10 +198,32 @@ pub fn run() {
                                     });
                                 }
 
+                                if px < img.width() && py_borde < img.height() {
+                                    let p = img.get_pixel(px, py_borde);
+                                    muestras.push(MuestraRoi {
+                                        tipo: TipoMuestra::BordeRareza,
+                                        color: ColorRgb::new(p[0], p[1], p[2]),
+                                    });
+                                }
+
                                 if px < img.width() && py_reroll < img.height() {
                                     let p = img.get_pixel(px, py_reroll);
                                     muestras.push(MuestraRoi {
                                         tipo: TipoMuestra::BotonReroll,
+                                        color: ColorRgb::new(p[0], p[1], p[2]),
+                                    });
+                                }
+                            }
+
+                            // Pasillos inter-cartas para evaluar contraste
+                            let hueco_cols = [0.415f32, 0.585f32];
+                            for hcol in hueco_cols {
+                                let px = (caja16a9.x as f32 + hcol * caja16a9.width as f32) as u32;
+                                let py = (caja16a9.y as f32 + 0.45 * caja16a9.height as f32) as u32;
+                                if px < img.width() && py < img.height() {
+                                    let p = img.get_pixel(px, py);
+                                    muestras.push(MuestraRoi {
+                                        tipo: TipoMuestra::HuecoInterCarta,
                                         color: ColorRgb::new(p[0], p[1], p[2]),
                                     });
                                 }
@@ -211,9 +244,23 @@ pub fn run() {
                             if visible {
                                 let estado_actual = gestor_o.obtener_estado();
                                 if !estado_actual.visible || estado_actual.cards.is_empty() {
-                                    // Escanear las 3 cartas visibles con OCR
+                                    // Escanear las 3 cartas visibles con OCR y estadísticas reales de OP.GG
                                     let catalogo = servicio_modos.obtener_catalogo();
-                                    let resultado = escanear_tres_cartas_en_pantalla(&img, caja16a9, &catalogo);
+                                    let datos_campeon = servicio_modos
+                                        .obtener_aumentos_campeon(
+                                            estado_actual.champion_id,
+                                            &estado_actual.champion_name,
+                                            &estado_actual.mode,
+                                            None,
+                                        )
+                                        .await;
+
+                                    let resultado = escanear_tres_cartas_en_pantalla(
+                                        &img,
+                                        caja16a9,
+                                        &catalogo,
+                                        Some(&datos_campeon.augments),
+                                    );
                                     gestor_o.actualizar_escaneo_ocr(resultado);
                                     gestor_o.show();
                                 }

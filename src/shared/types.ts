@@ -526,7 +526,7 @@ export function obtenerNombreModo(modo: TipoModo | null | undefined): string {
   }
 }
 
-export type TierBadge = 'S+' | 'S' | 'A' | 'B' | 'C' | 'D' | '?';
+export type TierBadge = 'S+' | 'S' | 'A' | 'B' | 'C' | 'D' | 'F' | '?';
 
 export type RarityAugment = 'silver' | 'gold' | 'prismatic';
 export type RarezaAumento = 'Plata' | 'Oro' | 'Prismático';
@@ -595,6 +595,7 @@ export function seleccionarMejorAumento(aumentos: AumentoTier[]): AumentoTier | 
     'B': 55,
     'C': 40,
     'D': 25,
+    'F': 10,
     '?': 0,
   };
 

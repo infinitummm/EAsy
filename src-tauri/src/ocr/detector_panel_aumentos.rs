@@ -158,9 +158,13 @@ pub fn evaluar_visibilidad_panel(muestras: &[MuestraRoi]) -> bool {
         }
     }
 
-    // Confirmación positiva: al menos 2 fondos oscuros + presencia de rerolls o bordes activos
-    (fondos_oscuros >= 2 && rerolls_dorados >= 1)
-        || (fondos_oscuros >= 2 && bordes_con_color >= 2)
+    // Confirmación positiva robusta:
+    // 1) Al menos 2 fondos oscuros + presencia de rerolls o bordes ornamentales
+    // 2) O al menos 3 fondos oscuros de cartas con huecos estructurales (sin reroll disponible)
+    // 3) O al menos 2 dados de reroll activos
+    (fondos_oscuros >= 2 && (rerolls_dorados >= 1 || bordes_con_color >= 1))
+        || (fondos_oscuros >= 3 && !huecos.is_empty())
+        || (fondos_oscuros >= 3)
         || (rerolls_dorados >= 2)
 }
 
@@ -243,6 +247,23 @@ mod tests {
         ];
 
         assert_eq!(evaluar_visibilidad_panel(&muestras_panel), true);
+    }
+
+    #[test]
+    fn test_panel_visible_sin_rerolls_o_dados_inactivos() {
+        // Panel de aumentos cuando el jugador gastó sus dados (0 rerolls o grisáceos)
+        let muestras_sin_dados = vec![
+            MuestraRoi { tipo: TipoMuestra::BotonReroll, color: ColorRgb::new(60, 60, 65) },
+            MuestraRoi { tipo: TipoMuestra::BotonReroll, color: ColorRgb::new(58, 58, 62) },
+            MuestraRoi { tipo: TipoMuestra::FondoCarta, color: ColorRgb::new(32, 35, 42) },
+            MuestraRoi { tipo: TipoMuestra::FondoCarta, color: ColorRgb::new(30, 34, 40) },
+            MuestraRoi { tipo: TipoMuestra::FondoCarta, color: ColorRgb::new(33, 36, 41) },
+            MuestraRoi { tipo: TipoMuestra::BordeRareza, color: ColorRgb::new(180, 150, 80) },
+            MuestraRoi { tipo: TipoMuestra::HuecoInterCarta, color: ColorRgb::new(14, 16, 20) },
+            MuestraRoi { tipo: TipoMuestra::Entorno, color: ColorRgb::new(16, 18, 22) },
+        ];
+
+        assert_eq!(evaluar_visibilidad_panel(&muestras_sin_dados), true);
     }
 
     #[test]

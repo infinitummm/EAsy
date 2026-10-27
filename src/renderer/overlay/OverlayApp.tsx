@@ -47,17 +47,31 @@ function TierShield({ tier }: { tier: TierBadge }) {
         };
       case 'C':
         return {
-          bg: 'bg-gradient-to-b from-orange-600 to-amber-800',
-          border: 'border-amber-500',
+          bg: 'bg-gradient-to-b from-orange-500 to-amber-700',
+          border: 'border-orange-400',
           text: 'text-white font-bold',
-          glow: '',
+          glow: 'shadow-[0_0_6px_rgba(249,115,22,0.4)]',
         };
       case 'D':
-      default:
         return {
           bg: 'bg-gradient-to-b from-slate-600 to-slate-800',
           border: 'border-slate-500',
           text: 'text-slate-200 font-bold',
+          glow: '',
+        };
+      case 'F':
+        return {
+          bg: 'bg-gradient-to-b from-red-700 via-rose-800 to-red-950',
+          border: 'border-red-500',
+          text: 'text-white font-bold',
+          glow: 'shadow-[0_0_8px_rgba(239,68,68,0.5)]',
+        };
+      case '?':
+      default:
+        return {
+          bg: 'bg-gradient-to-b from-slate-700 to-slate-900',
+          border: 'border-slate-600',
+          text: 'text-slate-300 font-bold',
           glow: '',
         };
     }
@@ -65,7 +79,7 @@ function TierShield({ tier }: { tier: TierBadge }) {
 
   return (
     <div
-      className={`relative w-8 h-9 flex items-center justify-center border-2 ${config.bg} ${config.border} ${config.glow}`}
+      className={`relative w-7 h-8 flex items-center justify-center border-2 rounded-sm ${config.bg} ${config.border} ${config.glow}`}
       style={{
         clipPath: 'polygon(0% 0%, 100% 0%, 100% 70%, 50% 100%, 0% 70%)',
       }}
@@ -327,11 +341,11 @@ export function OverlayApp() {
     return null;
   }
 
-  // Posiciones fijas exactas abajo de las 3 cartas de Riot (resolución estándar de LoL)
+  // Posiciones fijas exactas sobre la zona inferior de cada carta en LoL (resolución estándar 16:9)
   const cardPositions = [
-    { left: '33.33%', index: 1 as const },
-    { left: '50.00%', index: 2 as const },
-    { left: '66.67%', index: 3 as const },
+    { left: '33.3%', index: 1 as const },
+    { left: '50.0%', index: 2 as const },
+    { left: '66.7%', index: 3 as const },
   ];
 
   return (
@@ -339,7 +353,7 @@ export function OverlayApp() {
       className="w-screen h-screen relative pointer-events-none select-none overflow-hidden bg-transparent"
       style={{ background: 'transparent', backgroundColor: 'transparent' }}
     >
-      {/* 3 INSIGNIAS FLOTANTES EN LA CABECERA DE CADA CARTA (ESTILO POROFESSOR / BLITZ, NUNCA TAPAN REROLL) */}
+      {/* 3 INSIGNIAS FLOTANTES SUPERPUESTAS EXACTAMENTE SOBRE LA ZONA INFERIOR DE CADA CARTA (ESTILO TIER BLITZ) */}
       {cardPositions.map((pos, i) => {
         const card = displayCards[i];
         const slotData = cardSlots[i];
@@ -351,12 +365,12 @@ export function OverlayApp() {
             style={{
               position: 'absolute',
               left: pos.left,
-              top: '14%',
-              transform: 'translate(-50%, 0)',
+              top: '64%',
+              transform: 'translate(-50%, -50%)',
             }}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
-            className="pointer-events-auto flex flex-col items-center z-40 transition-all"
+            className="pointer-events-auto flex flex-col items-center z-40 transition-all select-none"
           >
             {/* Cinta Superior: ★ MEJOR OPCIÓN si corresponde */}
             {isBest && (
@@ -366,90 +380,48 @@ export function OverlayApp() {
               </div>
             )}
 
-            {/* Contenedor de la Insignia Idéntico a Blitz */}
+            {/* Insignia Tier idéntica a la captura de referencia: [Shield] Tier */}
             <div
-              className={`relative flex flex-col items-center bg-[#030712]/95 backdrop-blur-md rounded-lg p-2 min-w-[130px] max-w-[160px] text-center border-2 transition-all ${
+              className={`relative flex items-center gap-2 px-3 py-1 rounded-md bg-[#02050e]/92 backdrop-blur-md border transition-all ${
                 isBest
-                  ? 'border-amber-400 shadow-[0_0_18px_rgba(245,158,11,0.5)] bg-gradient-to-b from-[#0b172a] via-[#050e1c] to-[#02050d]'
-                  : 'border-cyan-800/80 shadow-2xl bg-[#040914]/95'
+                  ? 'border-amber-400 shadow-[0_0_16px_rgba(245,158,11,0.6)]'
+                  : 'border-slate-700/80 shadow-[0_4px_16px_rgba(0,0,0,0.8)]'
               }`}
             >
-              {/* Avatar Cuadrado del Campeón con Bordes Redondeados */}
-              <div className="relative w-11 h-11 rounded-md border-2 border-cyan-400/80 bg-gray-950 overflow-hidden shadow-inner flex items-center justify-center">
-                {champion ? (
-                  <img
-                    src={`https://ddragon.leagueoflegends.com/cdn/16.20.1/img/champion/${champion.image}`}
-                    alt={champion.name}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src =
-                        'https://ddragon.leagueoflegends.com/cdn/16.20.1/img/profileicon/29.png';
-                    }}
-                  />
-                ) : (
-                  <span className="text-xs font-black text-amber-300">EA</span>
-                )}
-              </div>
+              <TierShield tier={card ? (card.tier as TierBadge) : ('?' as TierBadge)} />
+              <span className="text-base font-black text-white tracking-wider uppercase drop-shadow-sm font-sans">
+                Tier
+              </span>
+            </div>
 
-              {/* Escudo de Tier: Superpuesto sobre la parte inferior del avatar */}
-              <div className="-mt-3.5 z-10">
-                <TierShield tier={card ? card.tier : ('?' as TierBadge)} />
-              </div>
-
-              {/* Nombre del Aumento y Pick Rate en Cian */}
-              {card ? (
-                <div className="mt-1 w-full">
-                  <div
-                    className="text-[11px] font-bold text-white truncate w-full leading-tight"
-                    title={card.nameEs || card.name}
-                  >
-                    {card.nameEs || card.name}
-                  </div>
-
-                  <div className="flex items-center justify-center gap-1.5 mt-1 font-mono">
-                    <RarityTag rarity={card.rarity} />
-                    <span className="text-[11px] font-black text-cyan-300 drop-shadow-[0_0_5px_rgba(6,182,212,0.6)]">
-                      {card.pickRate != null && !isNaN(card.pickRate)
-                        ? `${card.pickRate.toFixed(1)}%`
-                        : 'Sin datos'}
-                    </span>
-                  </div>
+            {/* Detalles del Aumento (Nombre y Rendimiento Competitivo de OP.GG) */}
+            {card ? (
+              <div className="mt-1 px-2.5 py-1 rounded bg-[#030712]/85 border border-slate-800/80 backdrop-blur-sm flex flex-col items-center max-w-[170px] text-center shadow-md">
+                <div
+                  className="text-[11px] font-bold text-white truncate max-w-[155px] leading-tight"
+                  title={card.nameEs || card.name}
+                >
+                  {card.nameEs || card.name}
                 </div>
-              ) : (
-                <div className="mt-1 w-full text-center flex flex-col items-center">
-                  {isScanning ? (
-                    <div className="text-[10px] text-cyan-400 font-mono animate-pulse">
-                      {scanStatus}
-                    </div>
-                  ) : (
-                    <>
-                      <div className="text-[10px] text-amber-300 font-mono font-bold">
-                        No reconocido
-                      </div>
-                      {slotData?.rawText && (
-                        <div
-                          className="text-[8px] text-gray-400 truncate max-w-[130px] font-mono mt-0.5"
-                          title={`Texto leído: "${slotData.rawText}" (${Math.round(slotData.confidence * 100)}%)`}
-                        >
-                          "{slotData.rawText}" ({Math.round(slotData.confidence * 100)}%)
-                        </div>
-                      )}
-                      {slotData?.cropPreviewDataUrl && (
-                        <div className="mt-1 flex flex-col items-center">
-                          <img
-                            src={slotData.cropPreviewDataUrl}
-                            alt="Recorte OCR"
-                            className="w-24 h-6 object-contain rounded border border-cyan-800/80 bg-black/90 shadow-sm"
-                            title="Vista previa del recorte analizado por OCR"
-                          />
-                          <span className="text-[7px] text-gray-400 font-mono">Recorte OCR</span>
-                        </div>
-                      )}
-                    </>
+
+                <div className="flex items-center gap-1.5 mt-0.5 font-mono text-[10px]">
+                  {card.winRate != null && !isNaN(card.winRate) && (
+                    <span className="text-cyan-300 font-extrabold drop-shadow-[0_0_4px_rgba(6,182,212,0.5)]">
+                      {card.winRate.toFixed(1)}% Eficacia
+                    </span>
+                  )}
+                  {card.pickRate != null && !isNaN(card.pickRate) && (
+                    <span className="text-slate-400">
+                      • {card.pickRate.toFixed(0)}% Pick
+                    </span>
                   )}
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="mt-1 px-2.5 py-0.5 rounded bg-black/80 border border-slate-800 text-[10px] font-mono text-slate-300">
+                {isScanning ? scanStatus : 'Analizando...'}
+              </div>
+            )}
           </div>
         );
       })}

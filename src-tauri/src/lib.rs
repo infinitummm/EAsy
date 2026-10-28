@@ -285,7 +285,12 @@ pub fn run() {
                             let visible = evaluar_visibilidad_panel(&muestras);
                             if visible {
                                 let estado_actual = gestor_o.obtener_estado();
-                                if !estado_actual.visible || estado_actual.cards.is_empty() {
+                                let debe_escanear = !estado_actual.visible
+                                    || estado_actual.cards.is_empty()
+                                    || estado_actual.is_analyzing
+                                    || estado_actual.cards.iter().any(|c| c.augment.is_none());
+
+                                if debe_escanear {
                                     // Escanear las 3 cartas visibles con OCR y estadísticas reales de OP.GG
                                     let catalogo = servicio_modos.obtener_catalogo();
                                     let datos_campeon = servicio_modos

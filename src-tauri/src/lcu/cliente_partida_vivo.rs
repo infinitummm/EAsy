@@ -92,9 +92,63 @@ impl ClientePartidaVivo {
             }
         };
 
-        let jugador: Option<JugadorActivo> = val
+        let mut jugador: Option<JugadorActivo> = val
             .get("activePlayer")
             .and_then(|v| serde_json::from_value(v.clone()).ok());
+
+        // En la API Live Client de Riot, activePlayer contiene stats y nivel pero NO championName.
+        // championName reside en el array allPlayers asociado al summonerName / riotId.
+        if let Some(ref mut j) = jugador {
+            if j.champion_name.is_none() {
+                let active_name = val
+                    .get("activePlayer")
+                    .and_then(|ap| {
+                        ap.get("riotId")
+                            .or_else(|| ap.get("summonerName"))
+                            .or_else(|| ap.get("riotIdGameName"))
+                    })
+                    .and_then(|s| s.as_str());
+
+                if let Some(players) = val.get("allPlayers").and_then(|p| p.as_array()) {
+                    for p in players {
+                        let p_name = p
+                            .get("riotId")
+                            .or_else(|| p.get("summonerName"))
+                            .or_else(|| p.get("riotIdGameName"))
+                            .and_then(|s| s.as_str());
+
+                        let coincide = match (active_name, p_name) {
+                            (Some(a), Some(b)) => {
+                                a.eq_ignore_ascii_case(b)
+                                    || a.split('#').next().unwrap_or("").eq_ignore_ascii_case(b.split('#').next().unwrap_or(""))
+                            }
+                            _ => false,
+                        };
+
+                        if coincide {
+                            if let Some(c_name) = p.get("championName").and_then(|c| c.as_str()) {
+                                if !c_name.is_empty() {
+                                    j.champion_name = Some(c_name.to_string());
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    // Fallback 1: Si no hubo coincidencia por nombre de invocador (ej. partidas locales / bots)
+                    if j.champion_name.is_none() && !players.is_empty() {
+                        for p in players {
+                            if let Some(c_name) = p.get("championName").and_then(|c| c.as_str()) {
+                                if !c_name.is_empty() && c_name != "Unknown" {
+                                    j.champion_name = Some(c_name.to_string());
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         let datos_juego: Option<DatosJuego> = val
             .get("gameData")

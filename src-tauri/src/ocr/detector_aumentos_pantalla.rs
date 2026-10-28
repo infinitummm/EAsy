@@ -37,8 +37,8 @@ pub const COLUMNAS_CARTAS: [(f32, f32); 3] = [
 
 /// Sub-bandas verticales Y de título: superior (Arena / variantes) y central (ARAM Caos)
 pub const BANDAS_Y_TITULO: [(f32, f32); 2] = [
-    (0.360, 0.460), // Banda Superior
-    (0.440, 0.540), // Banda Central
+    (0.320, 0.440), // Banda Superior (Título)
+    (0.340, 0.520), // Banda Central (Título + Descripción)
 ];
 
 /// Preprocesa el recorte aplicando escalado x3 y binarización invertida (letras negras '0' sobre fondo blanco '255')
@@ -89,29 +89,80 @@ pub fn limpiar_texto_ocr(texto: &str) -> String {
     limpio.trim().to_string()
 }
 
-/// Empareja un texto crudo de OCR contra el catálogo de aumentos usando Damerau-Levenshtein normalizado
+/// Empareja un texto crudo de OCR contra el catálogo de aumentos usando matching de líneas y Damerau-Levenshtein
 pub fn emparejar_aumento_en_catalogo(
     texto_crudo: &str,
     catalogo: &[AumentoCatalogo],
     rareza_visual: Option<&str>,
 ) -> (Option<AumentoCatalogo>, f64) {
-    let texto_limpio = limpiar_texto_ocr(texto_crudo).to_lowercase();
-    if texto_limpio.is_empty() || texto_limpio.len() < 3 {
+    if texto_crudo.trim().is_empty() {
         return (None, 0.0);
     }
+
+    let lineas: Vec<String> = texto_crudo
+        .lines()
+        .map(|l| limpiar_texto_ocr(l).to_lowercase())
+        .filter(|l| l.len() >= 3)
+        .collect();
+
+    let texto_completo = limpiar_texto_ocr(texto_crudo).to_lowercase();
 
     let mut mejor_aumento: Option<AumentoCatalogo> = None;
     let mut mejor_score = 0.0f64;
 
     for item in catalogo {
-        let sim_en = normalized_damerau_levenshtein(&texto_limpio, &item.name.to_lowercase());
-        let sim_es = item
-            .name_es
-            .as_deref()
-            .map(|es| normalized_damerau_levenshtein(&texto_limpio, &es.to_lowercase()))
-            .unwrap_or(0.0);
+        let name_en = item.name.to_lowercase();
+        let name_es = item.name_es.as_deref().unwrap_or("").to_lowercase();
 
-        let max_sim = sim_en.max(sim_es);
+        let mut item_max_sim = 0.0f64;
+
+        // 1. Evaluar coincidencia línea por línea (el título de la carta siempre está en su propia línea)
+        for linea in &lineas {
+            let sim_en = normalized_damerau_levenshtein(linea, &name_en);
+            let sim_es = if !name_es.is_empty() {
+                normalized_damerau_levenshtein(linea, &name_es)
+            } else {
+                0.0
+            };
+
+            // Contención exacta de subcadena (e.g. si la línea incluye "Spin Me Right Round")
+            let contiene_en = if linea.contains(&name_en) || name_en.contains(linea.as_str()) {
+                0.88
+            } else {
+                0.0
+            };
+            let contiene_es = if !name_es.is_empty() && (linea.contains(&name_es) || name_es.contains(linea.as_str())) {
+                0.88
+            } else {
+                0.0
+            };
+
+            let linea_best = sim_en.max(sim_es).max(contiene_en).max(contiene_es);
+            if linea_best > item_max_sim {
+                item_max_sim = linea_best;
+            }
+        }
+
+        // 2. Si las 2 primeras líneas se combinaron
+        if lineas.len() >= 2 {
+            let combinadas = format!("{} {}", lineas[0], lineas[1]);
+            let sim_en = normalized_damerau_levenshtein(&combinadas, &name_en);
+            let sim_es = if !name_es.is_empty() {
+                normalized_damerau_levenshtein(&combinadas, &name_es)
+            } else {
+                0.0
+            };
+            if sim_en > item_max_sim { item_max_sim = sim_en; }
+            if sim_es > item_max_sim { item_max_sim = sim_es; }
+        }
+
+        // 3. Contención en el texto completo (por si los saltos de línea se perdieron)
+        if texto_completo.contains(&name_en) {
+            item_max_sim = item_max_sim.max(0.85);
+        }
+        if !name_es.is_empty() && texto_completo.contains(&name_es) {
+            item_max_sim = item_max_sim.max(0.85);
+        }
 
         let refuerzo_rareza = if let (Some(r_vis), Some(r_cat)) = (rareza_visual, item.rarity.as_deref()) {
             if r_vis.eq_ignore_ascii_case(r_cat) { 0.06 } else { 0.0 }
@@ -119,16 +170,15 @@ pub fn emparejar_aumento_en_catalogo(
             0.0
         };
 
-        let score_final = max_sim + refuerzo_rareza;
-
+        let score_final = item_max_sim + refuerzo_rareza;
         if score_final > mejor_score {
             mejor_score = score_final;
             mejor_aumento = Some(item.clone());
         }
     }
 
-    // Umbral de aceptación estricto: >= 0.62 o >= 0.55 con coincidencia de rareza
-    let umbral_minimo = if rareza_visual.is_some() { 0.55 } else { 0.62 };
+    // Umbral de aceptación calibrado para OCR de pantalla en juego
+    let umbral_minimo = 0.55;
     if mejor_score >= umbral_minimo {
         (mejor_aumento, mejor_score)
     } else {
@@ -396,5 +446,31 @@ mod tests {
         assert!(match_en.is_some());
         assert_eq!(match_en.unwrap().name, "Hybrid");
         assert!(score_en >= 0.90);
+    }
+
+    #[test]
+    fn test_emparejamiento_cartas_reales_screenshot_multilinea() {
+        let catalogo: Vec<AumentoCatalogo> = serde_json::from_str(CATALOGO_AUMENTOS_RAW).unwrap();
+
+        // Carta 1: Spin Me Right Round
+        let raw_c1 = "Spin Me Right Round\nGeneral\nReplace a Summoner Spell with Heroic Swing.";
+        let (match_c1, score_c1) = emparejar_aumento_en_catalogo(raw_c1, &catalogo, Some("silver"));
+        assert!(match_c1.is_some(), "Debe emparejar Spin Me Right Round");
+        assert_eq!(match_c1.unwrap().name, "Spin Me Right Round");
+        assert!(score_c1 >= 0.85);
+
+        // Carta 2: Kill Secured
+        let raw_c2 = "Kill Secured\nSpeed\nGain increased Movement Speed towards enemies at low Health.";
+        let (match_c2, score_c2) = emparejar_aumento_en_catalogo(raw_c2, &catalogo, Some("silver"));
+        assert!(match_c2.is_some(), "Debe emparejar Kill Secured");
+        assert_eq!(match_c2.unwrap().name, "Kill Secured");
+        assert!(score_c2 >= 0.85);
+
+        // Carta 3: Veil of Warding
+        let raw_c3 = "Veil of Warding\nUtility\nGain a Spell Shield every 30 seconds that blocks the next enemy Ability.";
+        let (match_c3, score_c3) = emparejar_aumento_en_catalogo(raw_c3, &catalogo, Some("silver"));
+        assert!(match_c3.is_some(), "Debe emparejar Veil of Warding");
+        assert_eq!(match_c3.unwrap().name, "Veil of Warding");
+        assert!(score_c3 >= 0.85);
     }
 }

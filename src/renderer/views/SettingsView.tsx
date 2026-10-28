@@ -61,6 +61,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [showGeminiKey, setShowGeminiKey] = useState<boolean>(false);
   const [keyHealth, setKeyHealth] = useState<KeyHealthStatus | null>(null);
   const [validating, setValidating] = useState<boolean>(false);
+  const [validatingAi, setValidatingAi] = useState<boolean>(false);
+  const [aiHealth, setAiHealth] = useState<{ valid: boolean; statusCode: number; message: string } | null>(null);
   const [testingLcu, setTestingLcu] = useState<boolean>(false);
   const [lcuReport, setLcuReport] = useState<LcuDetectionReport | null>(null);
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
@@ -209,6 +211,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       console.error('Error al validar clave:', err);
     } finally {
       setValidating(false);
+    }
+  };
+
+  const handleValidateAiKey = async () => {
+    if (!window.api?.validateAiKey || !geminiKey.trim()) return;
+    setValidatingAi(true);
+    setAiHealth(null);
+    try {
+      const res = await window.api.validateAiKey(geminiKey.trim());
+      setAiHealth(res);
+    } catch (err: any) {
+      console.error('Error al validar clave de IA:', err);
+      setAiHealth({
+        valid: false,
+        statusCode: 500,
+        message: err?.message || String(err),
+      });
+    } finally {
+      setValidatingAi(false);
     }
   };
 
@@ -373,22 +394,58 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </a>
             </div>
 
-            <div className="relative">
-              <input
-                type={showGeminiKey ? 'text' : 'password'}
-                value={geminiKey}
-                onChange={(e) => setGeminiKey(e.target.value)}
-                placeholder="AIzaSy..."
-                className="w-full bg-[#030814] border border-[#16335F] focus:border-[#00E5FF] px-4 py-2.5 text-sm text-white focus:outline-none font-mono"
-              />
-              <button
-                type="button"
-                onClick={() => setShowGeminiKey(!showGeminiKey)}
-                className="absolute right-3 top-3 text-[#7E9BB8] hover:text-white"
+            <div className="flex items-center space-x-3">
+              <div className="relative flex-1">
+                <input
+                  type={showGeminiKey ? 'text' : 'password'}
+                  value={geminiKey}
+                  onChange={(e) => {
+                    setGeminiKey(e.target.value);
+                    if (aiHealth) setAiHealth(null);
+                  }}
+                  placeholder="AIzaSy..."
+                  className="w-full bg-[#030814] border border-[#16335F] focus:border-[#00E5FF] px-4 py-2.5 text-sm text-white focus:outline-none font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowGeminiKey(!showGeminiKey)}
+                  className="absolute right-3 top-3 text-[#7E9BB8] hover:text-white"
+                >
+                  {showGeminiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+
+              <P3rButton
+                variant="secondary"
+                size="md"
+                onClick={handleValidateAiKey}
+                disabled={validatingAi || !geminiKey.trim()}
+                icon={validatingAi ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4 text-[#00E5FF]" />}
               >
-                {showGeminiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
+                Validar
+              </P3rButton>
             </div>
+
+            {aiHealth && (
+              <div
+                className={`p-3 text-xs flex items-center space-x-2 border-2 p3r-cut-tr ${
+                  aiHealth.valid
+                    ? 'bg-[#031A12] border-[#00E676] text-[#00E676]'
+                    : 'bg-[#2A050A] border-[#FF1744] text-[#FF1744]'
+                }`}
+              >
+                {aiHealth.valid ? (
+                  <Check className="w-4 h-4 shrink-0 text-[#00E676]" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 shrink-0 text-[#FF1744]" />
+                )}
+                <span className="font-p3r-head">
+                  {aiHealth.valid
+                    ? 'Clave de Google Gemini activa y verificada con éxito.'
+                    : `Error en Google Gemini (${aiHealth.statusCode || 'Inválida'}): ${aiHealth.message}`}
+                </span>
+              </div>
+            )}
           </div>
         )}
       </div>

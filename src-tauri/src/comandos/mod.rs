@@ -463,9 +463,122 @@ pub fn ai_get_draft_recommendations(payload: Option<serde_json::Value>) -> Resul
 }
 
 #[tauri::command]
-pub fn riot_validate_key(payload: Option<String>) -> Result<serde_json::Value, String> {
-    let _ = payload;
-    Ok(serde_json::json!({ "status": "valid", "rateLimit": "100/2m" }))
+pub async fn riot_validate_key(payload: Option<String>) -> Result<serde_json::Value, String> {
+    let api_key = match payload {
+        Some(k) if !k.trim().is_empty() => k.trim().to_string(),
+        _ => {
+            return Ok(serde_json::json!({
+                "valid": false,
+                "statusCode": 400,
+                "isExpired": false,
+                "lastChecked": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64,
+                "message": "Clave vacía"
+            }));
+        }
+    };
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()
+        .map_err(|e| format!("Error creando cliente HTTP: {}", e))?;
+
+    let test_url = "https://la1.api.riotgames.com/lol/status/v4/platform-data";
+    let ahora = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64;
+
+    match client.get(test_url).header("X-Riot-Token", &api_key).send().await {
+        Ok(res) => {
+            let status = res.status().as_u16();
+            if status == 200 {
+                Ok(serde_json::json!({
+                    "valid": true,
+                    "statusCode": 200,
+                    "isExpired": false,
+                    "lastChecked": ahora,
+                    "rateLimit": "100/2m"
+                }))
+            } else if status == 403 {
+                Ok(serde_json::json!({
+                    "valid": false,
+                    "statusCode": 403,
+                    "isExpired": true,
+                    "lastChecked": ahora,
+                    "message": "Clave expirada o inválida en Riot Games"
+                }))
+            } else {
+                Ok(serde_json::json!({
+                    "valid": false,
+                    "statusCode": status,
+                    "isExpired": false,
+                    "lastChecked": ahora,
+                    "message": format!("Error HTTP: {}", status)
+                }))
+            }
+        }
+        Err(e) => {
+            Ok(serde_json::json!({
+                "valid": false,
+                "statusCode": 500,
+                "isExpired": false,
+                "lastChecked": ahora,
+                "message": format!("Error de conexión: {}", e)
+            }))
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn ai_validate_key(payload: Option<String>) -> Result<serde_json::Value, String> {
+    let api_key = match payload {
+        Some(k) if !k.trim().is_empty() => k.trim().to_string(),
+        _ => {
+            return Ok(serde_json::json!({
+                "valid": false,
+                "statusCode": 400,
+                "message": "Clave de Gemini vacía"
+            }));
+        }
+    };
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()
+        .map_err(|e| format!("Error creando cliente HTTP: {}", e))?;
+
+    let test_url = format!("https://generativelanguage.googleapis.com/v1beta/models?key={}", api_key);
+    match client.get(&test_url).send().await {
+        Ok(res) => {
+            let status = res.status().as_u16();
+            if status == 200 {
+                Ok(serde_json::json!({
+                    "valid": true,
+                    "statusCode": 200,
+                    "message": "Clave de Google Gemini activa"
+                }))
+            } else if status == 400 || status == 403 {
+                Ok(serde_json::json!({
+                    "valid": false,
+                    "statusCode": status,
+                    "message": "Clave de Gemini inválida o sin permisos"
+                }))
+            } else {
+                Ok(serde_json::json!({
+                    "valid": false,
+                    "statusCode": status,
+                    "message": format!("Error de Gemini HTTP: {}", status)
+                }))
+            }
+        }
+        Err(e) => {
+            Ok(serde_json::json!({
+                "valid": false,
+                "statusCode": 500,
+                "message": format!("Error de conexión a Google AI: {}", e)
+            }))
+        }
+    }
 }
 
 #[tauri::command]

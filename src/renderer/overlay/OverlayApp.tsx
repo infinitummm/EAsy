@@ -345,6 +345,7 @@ export function OverlayApp() {
         const slotData = cardSlots[i];
         const leftPct = slotData?.posXPct ? `${slotData.posXPct}%` : pos.left;
         const topPct = slotData?.posYPct ? `${slotData.posYPct}%` : pos.top;
+        const displayName = card.nameEs || card.name;
 
         return (
           <div
@@ -355,18 +356,30 @@ export function OverlayApp() {
               top: topPct,
               transform: 'translate(-50%, -50%)',
             }}
-            className="pointer-events-none flex items-center gap-2.5 z-40 select-none"
+            className="pointer-events-none flex flex-col items-center gap-1 z-40 select-none"
           >
-            <TierShield tier={(card.tier || 'B') as TierBadge} />
-            <span
-              className="text-[19px] font-bold text-white leading-none select-none"
+            <div className="flex items-center gap-2">
+              <TierShield tier={(card.tier || 'B') as TierBadge} />
+              <span
+                className="text-[19px] font-bold text-white leading-none select-none"
+                style={{
+                  fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif',
+                  textShadow: '0 2px 4px rgba(0, 0, 0, 0.95)',
+                }}
+              >
+                Tier
+              </span>
+            </div>
+            <div
+              className="text-[11px] font-semibold text-slate-100 tracking-wide truncate max-w-[170px] text-center"
               style={{
                 fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif',
                 textShadow: '0 2px 4px rgba(0, 0, 0, 0.95)',
               }}
+              title={displayName}
             >
-              Tier
-            </span>
+              {displayName}
+            </div>
           </div>
         );
       })}

@@ -55,6 +55,7 @@ export const IPC_CHANNELS = {
   RIOT_VALIDATE_KEY: 'riot:validate-key',
   RIOT_SYNC_ACCOUNT: 'riot:sync-account',
   RIOT_GET_PROFILE: 'riot:get-profile',
+  AI_VALIDATE_KEY: 'ai:validate-key',
   AI_GET_MATCHUP_ADVICE: 'ai:get-matchup-advice',
   AI_GET_DRAFT_RECOMMENDATIONS: 'ai:get-draft-recommendations',
   DDRAGON_GET_PATCH: 'ddragon:get-patch',

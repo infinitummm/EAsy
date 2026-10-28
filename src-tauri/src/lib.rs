@@ -136,7 +136,7 @@ pub fn run() {
                 let mut ultimos_hashes_titulos: [u64; 3] = [0, 0, 0];
 
                 loop {
-                    let espera_ms = if en_partida { 300 } else { 750 };
+                    let espera_ms = if gestor_o.obtener_estado().visible { 150 } else if en_partida { 300 } else { 750 };
                     tokio::time::sleep(Duration::from_millis(espera_ms)).await;
                     ticks += 1;
 
@@ -173,15 +173,16 @@ pub fn run() {
 
                     if snap.activo {
                         en_partida = true;
-                        if let (Some(j), Some(m)) = (&snap.jugador, &snap.modo) {
+                        if let Some(j) = &snap.jugador {
                             let champ_nombre = j.champion_name.as_deref().unwrap_or("Desconocido");
                             let champ_id = crate::lcu::resolver_id_campeon_por_nombre(champ_nombre);
-                            gestor_o.set_campeon_y_modo(champ_id, champ_nombre, m);
+                            let modo_final = snap.modo.as_deref().unwrap_or("aram_mayhem");
+                            gestor_o.set_campeon_y_modo(champ_id, champ_nombre, modo_final);
 
                             if champ_id > 0 && ticks % 15 == 1 {
                                 let s_modos = servicio_modos.clone();
                                 let champ_nom_clon = champ_nombre.to_string();
-                                let m_clon = m.clone();
+                                let m_clon = modo_final.to_string();
                                 tokio::spawn(async move {
                                     let _ = s_modos.obtener_aumentos_campeon(champ_id, &champ_nom_clon, &m_clon, None).await;
                                 });
@@ -328,10 +329,15 @@ pub fn run() {
 
                                 if !estado_actual.visible || estado_actual.cards.len() != 3 {
                                     // Escaneo inicial de las 3 cartas
+                                    let champ_id_consulta = if estado_actual.champion_id > 0 {
+                                        estado_actual.champion_id
+                                    } else {
+                                        222
+                                    };
                                     let catalogo = servicio_modos.obtener_catalogo();
                                     let datos_campeon = servicio_modos
                                         .obtener_aumentos_campeon(
-                                            estado_actual.champion_id,
+                                            champ_id_consulta,
                                             &estado_actual.champion_name,
                                             &estado_actual.mode,
                                             None,
@@ -383,10 +389,15 @@ pub fn run() {
                                     }
 
                                     if necesita_ocr.iter().any(|&b| b) {
+                                        let champ_id_consulta = if estado_actual.champion_id > 0 {
+                                            estado_actual.champion_id
+                                        } else {
+                                            222
+                                        };
                                         let catalogo = servicio_modos.obtener_catalogo();
                                         let datos_campeon = servicio_modos
                                             .obtener_aumentos_campeon(
-                                                estado_actual.champion_id,
+                                                champ_id_consulta,
                                                 &estado_actual.champion_name,
                                                 &estado_actual.mode,
                                                 None,
@@ -482,6 +493,7 @@ pub fn run() {
             opgg_mcp_raw_call,
             ai_get_matchup_advice,
             ai_get_draft_recommendations,
+            ai_validate_key,
             riot_validate_key,
             riot_sync_account,
             riot_get_profile

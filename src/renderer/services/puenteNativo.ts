@@ -156,6 +156,8 @@ export function crearPuenteNativo() {
 
     // Riot API
     validateKey: (apiKey: string) => genericInvoke(IPC_CHANNELS.RIOT_VALIDATE_KEY, apiKey),
+    validateAiKey: (apiKey: string): Promise<{ valid: boolean; statusCode: number; message: string }> =>
+      genericInvoke(IPC_CHANNELS.AI_VALIDATE_KEY, apiKey),
     syncAccount: (params: {
       gameName: string;
       tagLine: string;

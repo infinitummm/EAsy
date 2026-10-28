@@ -48,6 +48,8 @@ export const api = {
   getProfile: (puuid: string) => ipcRenderer.invoke(IPC_CHANNELS.RIOT_GET_PROFILE, puuid),
 
   // Gemini AI & OP.GG Matchup & Draft
+  validateAiKey: (apiKey: string): Promise<{ valid: boolean; statusCode: number; message: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.AI_VALIDATE_KEY, apiKey),
   getMatchupAdvice: (params: { championId: number; opponentId: number; role: Role; patch: string; allies: number[]; enemies: number[]; forceRefresh?: boolean; viewMode?: 'general' | 'matchup'; elo?: string; askAi?: boolean }) =>
     ipcRenderer.invoke(IPC_CHANNELS.AI_GET_MATCHUP_ADVICE, params),
   getDraftRecommendations: (params: { role: Role; patch: string; allies: number[]; enemies: number[]; bans: number[]; pickableChampionIds?: number[]; forceRefresh?: boolean }) =>

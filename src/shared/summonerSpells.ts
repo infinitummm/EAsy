@@ -15,55 +15,55 @@ export const COMMON_SUMMONER_SPELLS: SummonerSpellInfo[] = [
     id: 4,
     key: 'SummonerFlash',
     name: 'Destello (Flash)',
-    icon: 'https://ddragon.leagueoflegends.com/cdn/14.20.1/img/spell/SummonerFlash.png',
+    icon: 'https://ddragon.leagueoflegends.com/cdn/16.20.1/img/spell/SummonerFlash.png',
   },
   {
     id: 12,
     key: 'SummonerTeleport',
     name: 'Teleportación (TP)',
-    icon: 'https://ddragon.leagueoflegends.com/cdn/14.20.1/img/spell/SummonerTeleport.png',
+    icon: 'https://ddragon.leagueoflegends.com/cdn/16.20.1/img/spell/SummonerTeleport.png',
   },
   {
     id: 14,
     key: 'SummonerDot',
     name: 'Ignición (Ignite)',
-    icon: 'https://ddragon.leagueoflegends.com/cdn/14.20.1/img/spell/SummonerDot.png',
+    icon: 'https://ddragon.leagueoflegends.com/cdn/16.20.1/img/spell/SummonerDot.png',
   },
   {
     id: 11,
     key: 'SummonerSmite',
     name: 'Aplastar (Smite)',
-    icon: 'https://ddragon.leagueoflegends.com/cdn/14.20.1/img/spell/SummonerSmite.png',
+    icon: 'https://ddragon.leagueoflegends.com/cdn/16.20.1/img/spell/SummonerSmite.png',
   },
   {
     id: 7,
     key: 'SummonerHeal',
     name: 'Curación (Heal)',
-    icon: 'https://ddragon.leagueoflegends.com/cdn/14.20.1/img/spell/SummonerHeal.png',
+    icon: 'https://ddragon.leagueoflegends.com/cdn/16.20.1/img/spell/SummonerHeal.png',
   },
   {
     id: 21,
     key: 'SummonerBarrier',
     name: 'Barrera (Barrier)',
-    icon: 'https://ddragon.leagueoflegends.com/cdn/14.20.1/img/spell/SummonerBarrier.png',
+    icon: 'https://ddragon.leagueoflegends.com/cdn/16.20.1/img/spell/SummonerBarrier.png',
   },
   {
     id: 3,
     key: 'SummonerExhaust',
     name: 'Extenuación (Exhaust)',
-    icon: 'https://ddragon.leagueoflegends.com/cdn/14.20.1/img/spell/SummonerExhaust.png',
+    icon: 'https://ddragon.leagueoflegends.com/cdn/16.20.1/img/spell/SummonerExhaust.png',
   },
   {
     id: 6,
     key: 'SummonerHaste',
     name: 'Fantasmal (Ghost)',
-    icon: 'https://ddragon.leagueoflegends.com/cdn/14.20.1/img/spell/SummonerHaste.png',
+    icon: 'https://ddragon.leagueoflegends.com/cdn/16.20.1/img/spell/SummonerHaste.png',
   },
   {
     id: 1,
     key: 'SummonerBoost',
     name: 'Purificación (Cleanse)',
-    icon: 'https://ddragon.leagueoflegends.com/cdn/14.20.1/img/spell/SummonerBoost.png',
+    icon: 'https://ddragon.leagueoflegends.com/cdn/16.20.1/img/spell/SummonerBoost.png',
   },
 ];
 
@@ -83,5 +83,5 @@ export function getSummonerSpellName(id: number, fallback = 'Hechizo'): string {
 export function getSummonerSpellIconUrl(id: number): string {
   const s = SPELLS_BY_ID.get(id);
   if (s) return s.icon;
-  return 'https://ddragon.leagueoflegends.com/cdn/14.20.1/img/spell/SummonerFlash.png';
+  return 'https://ddragon.leagueoflegends.com/cdn/16.20.1/img/spell/SummonerFlash.png';
 }

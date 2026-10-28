@@ -385,7 +385,7 @@ pub fn escanear_carta_individual_en_pantalla(
 
     let augment_info = mejor_match.map(|c| {
         let tier_por_rareza = match c.rarity.as_deref().unwrap_or("silver") {
-            "prismatic" => "A".to_string(),
+            "prismatic" => "S".to_string(),
             "gold" => "B".to_string(),
             _ => "C".to_string(),
         };

@@ -14,6 +14,7 @@ import {
   getSummonerSpellIconUrl,
   SummonerSpellInfo
 } from '../../shared/summonerSpells';
+import { getLocalSpellIcon } from '../assets/spells';
 import {
   Shield,
   Trees,
@@ -28,7 +29,8 @@ import {
   Check,
   Flame,
   AlertCircle,
-  Lock
+  Lock,
+  ArrowLeftRight
 } from 'lucide-react';
 
 // ==========================================
@@ -212,6 +214,8 @@ export const SpellSelector = React.memo<SpellSelectorProps>(({
     icon: getSummonerSpellIconUrl(currentId)
   };
 
+  const spellIcon = getLocalSpellIcon(currentId) || currentSpell.icon;
+
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
@@ -236,12 +240,15 @@ export const SpellSelector = React.memo<SpellSelectorProps>(({
       >
         <div className="flex items-center space-x-2 truncate">
           <img
-            src={currentSpell.icon}
+            src={spellIcon}
             alt={currentSpell.name}
             className="w-6 h-6 rounded border border-neutral-700 object-cover shrink-0"
             onError={(e) => {
-              (e.target as HTMLImageElement).src =
-                'https://ddragon.leagueoflegends.com/cdn/14.20.1/img/spell/SummonerFlash.png';
+              const target = e.currentTarget as HTMLImageElement;
+              if (!target.dataset.hasFallback) {
+                target.dataset.hasFallback = 'true';
+                target.src = getLocalSpellIcon(currentId);
+              }
             }}
           />
           <span className="text-white font-medium truncate">{currentSpell.name}</span>
@@ -251,27 +258,37 @@ export const SpellSelector = React.memo<SpellSelectorProps>(({
 
       {dropdownOpen && (
         <div className="absolute z-30 left-0 right-0 mt-1 bg-[#0A1428] border border-[#00D4FF]/50 rounded-lg shadow-2xl max-h-56 overflow-y-auto divide-y divide-neutral-800">
-          {COMMON_SUMMONER_SPELLS.map((spell) => (
-            <button
-              key={spell.id}
-              type="button"
-              onClick={() => {
-                onSelectSpell(slot, spell.id);
-                setDropdownOpen(false);
-              }}
-              className={`w-full flex items-center space-x-2.5 px-3 py-2 text-left hover:bg-[#111A24] transition ${
-                spell.id === currentId ? 'bg-[#00D4FF]/10 text-[#00D4FF]' : 'text-white'
-              }`}
-            >
-              <img
-                src={spell.icon}
-                alt={spell.name}
-                className="w-5 h-5 rounded border border-neutral-700 object-cover"
-              />
-              <span className="text-xs font-medium flex-1">{spell.name}</span>
-              {spell.id === currentId && <Check className="w-3.5 h-3.5 text-[#00D4FF]" />}
-            </button>
-          ))}
+          {COMMON_SUMMONER_SPELLS.map((spell) => {
+            const optIcon = getLocalSpellIcon(spell.id) || spell.icon;
+            return (
+              <button
+                key={spell.id}
+                type="button"
+                onClick={() => {
+                  onSelectSpell(slot, spell.id);
+                  setDropdownOpen(false);
+                }}
+                className={`w-full flex items-center space-x-2.5 px-3 py-2 text-left hover:bg-[#111A24] transition ${
+                  spell.id === currentId ? 'bg-[#00D4FF]/10 text-[#00D4FF]' : 'text-white'
+                }`}
+              >
+                <img
+                  src={optIcon}
+                  alt={spell.name}
+                  className="w-5 h-5 rounded border border-neutral-700 object-cover shrink-0"
+                  onError={(e) => {
+                    const target = e.currentTarget as HTMLImageElement;
+                    if (!target.dataset.hasFallback) {
+                      target.dataset.hasFallback = 'true';
+                      target.src = getLocalSpellIcon(spell.id);
+                    }
+                  }}
+                />
+                <span className="text-xs font-medium flex-1">{spell.name}</span>
+                {spell.id === currentId && <Check className="w-3.5 h-3.5 text-[#00D4FF]" />}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
@@ -528,10 +545,21 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
         banChampions: [],
         spells: [4, 14] as [number, number]
       };
-      const newSpells: [number, number] =
-        slot === 0
+
+      const otherSlot = slot === 0 ? 1 : 0;
+      let newSpells: [number, number];
+
+      // Si el hechizo seleccionado ya está asignado en la otra tecla, intercambiarlos automáticamente
+      if (rolePref.spells[otherSlot] === spellId) {
+        newSpells = slot === 0
+          ? [spellId, rolePref.spells[0]]
+          : [rolePref.spells[1], spellId];
+      } else {
+        newSpells = slot === 0
           ? [spellId, rolePref.spells[1]]
           : [rolePref.spells[0], spellId];
+      }
+
       return {
         ...prev,
         rolePreferences: {
@@ -539,6 +567,28 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
           [selectedRole]: {
             ...rolePref,
             spells: newSpells
+          }
+        }
+      };
+    });
+  }, [selectedRole]);
+
+  const handleSwapSpells = useCallback(() => {
+    setPrefs((prev) => {
+      const baseRolePrefs = prev?.rolePreferences || DEFAULT_APP_SETTINGS.autoChampSelect.rolePreferences;
+      const rolePref = baseRolePrefs[selectedRole] || {
+        preferredChampions: [],
+        fallbackChampions: [],
+        banChampions: [],
+        spells: [4, 14] as [number, number]
+      };
+      return {
+        ...prev,
+        rolePreferences: {
+          ...baseRolePrefs,
+          [selectedRole]: {
+            ...rolePref,
+            spells: [rolePref.spells[1], rolePref.spells[0]] as [number, number]
           }
         }
       };
@@ -869,7 +919,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
             </span>
           </div>
 
-          <div className="flex items-center space-x-3 pt-1">
+          <div className="flex items-end space-x-2 pt-1">
             <SpellSelector
               slot={0}
               label="Hechizo Primario"
@@ -877,6 +927,17 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
               onSelectSpell={handleSelectSpell}
               disabled={disabled}
             />
+
+            <button
+              type="button"
+              onClick={handleSwapSpells}
+              disabled={disabled}
+              className="p-2.5 mb-0.5 rounded-lg bg-[#0A1428] border border-[#1E282D] hover:border-[#00D4FF]/60 text-neutral-400 hover:text-[#00D4FF] hover:bg-[#111A24] transition shrink-0 cursor-pointer disabled:opacity-40"
+              title="Intercambiar Hechizos de lugar (Tecla D ⇄ F)"
+            >
+              <ArrowLeftRight className="w-4 h-4" />
+            </button>
+
             <SpellSelector
               slot={1}
               label="Hechizo Secundario"

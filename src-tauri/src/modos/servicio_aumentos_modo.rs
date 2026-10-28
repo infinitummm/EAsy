@@ -175,7 +175,7 @@ impl ServicioAumentosModo {
             } else {
                 // Fallback de tier por rareza cuando el aumento tiene baja muestra en OP.GG
                 let tier_fallback = match cat.rarity.as_deref().unwrap_or("silver") {
-                    "prismatic" => Some("A".to_string()),
+                    "prismatic" => Some("S".to_string()),
                     "gold" => Some("B".to_string()),
                     _ => Some("C".to_string()),
                 };
@@ -284,19 +284,17 @@ impl ServicioAumentosModo {
                 cat_info.and_then(|c| c.name_es.clone())
             };
 
-            // Mapeo preciso a TierBadge según performance y tier oficial de OP.GG
-            let tier_badge = if tier_raw <= 2 || perf >= 89.0 {
+            // Mapeo balanceado según escala real de rendimiento y tier de OP.GG
+            let tier_badge = if tier_raw <= 2 || perf >= 120.0 {
                 "S"
-            } else if tier_raw == 3 || perf >= 82.0 {
+            } else if tier_raw == 3 || perf >= 90.0 {
                 "A"
             } else if tier_raw == 4 || perf >= 72.0 {
                 "B"
-            } else if tier_raw == 5 && (perf == 0.0 || perf >= 55.0) {
+            } else if perf >= 48.0 {
                 "C"
-            } else if perf >= 45.0 {
-                "D"
             } else {
-                "F"
+                "D"
             };
 
             let rarity = cat_info.and_then(|c| c.rarity.clone()).or_else(|| {

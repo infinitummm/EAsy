@@ -269,8 +269,6 @@ export function crearPuenteNativo() {
     overlayHide: (): Promise<{ success: boolean }> => genericInvoke(IPC_CHANNELS.OVERLAY_HIDE),
     overlayToggle: (): Promise<{ visible: boolean }> => genericInvoke(IPC_CHANNELS.OVERLAY_TOGGLE),
     overlayGetState: (): Promise<OverlayState> => genericInvoke(IPC_CHANNELS.OVERLAY_GET_STATE),
-    overlayTestTrigger: (): Promise<{ success: boolean; durationSeconds: number }> =>
-      genericInvoke('overlay:test-trigger'),
     getChampionAugments: (params: {
       championId: number;
       mode: TipoModo;

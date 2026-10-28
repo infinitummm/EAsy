@@ -334,28 +334,18 @@ export function OverlayApp() {
 
   // Cartas reales leídas por OCR (NUNCA sustituir por top 3 recomendado - Ley 1)
   const displayCards = cards;
+  const hayAlgunaCartaReconocida = displayCards.some((c) => c !== null);
 
-  const handleReanalyze = async () => {
-    const api = getApi();
-    setIsScanning(true);
-    setScanStatus('1/3 Capturando pantalla...');
-    try {
-      await api?.reanalyzeScreenAugments?.();
-    } catch {
-      setIsScanning(false);
-    }
-  };
-
-  // Si está colapsado, NO RENDERIZAR NADA en la pantalla (cero obstrucción)
-  if (collapsed) {
+  // Si está colapsado o aún no hay ninguna carta real reconocida por OCR, NO RENDERIZAR NADA (cero obstrucción)
+  if (collapsed || !hayAlgunaCartaReconocida) {
     return null;
   }
 
-  // Posiciones fijas exactas sobre la zona inferior de cada carta en LoL (resolución estándar 16:9)
+  // Posiciones calibradas exactas sobre la zona oscura inferior interna de cada una de las 3 cartas en LoL (16:9)
   const cardPositions = [
-    { left: '33.3%', index: 1 as const },
-    { left: '50.0%', index: 2 as const },
-    { left: '66.7%', index: 3 as const },
+    { left: '29.5%', top: '52.5%', index: 1 as const },
+    { left: '50.0%', top: '52.5%', index: 2 as const },
+    { left: '70.5%', top: '52.5%', index: 3 as const },
   ];
 
   return (
@@ -363,24 +353,27 @@ export function OverlayApp() {
       className="w-screen h-screen relative pointer-events-none select-none overflow-hidden bg-transparent"
       style={{ background: 'transparent', backgroundColor: 'transparent' }}
     >
-      {/* 3 INSIGNIAS FLOTANTES SUPERPUESTAS EXACTAMENTE SOBRE LA ZONA INFERIOR DE CADA CARTA (ESTILO TIER BLITZ) */}
+      {/* 3 INSIGNIAS FLOTANTES SUPERPUESTAS EXACTAMENTE EN LA ZONA INFERIOR INTERNA DE CADA CARTA (ESTILO TIER BLITZ) */}
       {cardPositions.map((pos, i) => {
         const card = displayCards[i];
+        if (!card) {
+          return null;
+        }
         const slotData = cardSlots[i];
-        const isBest = Boolean(card?.isBest || (bestCardIndex === pos.index && card));
+        const leftPct = slotData?.posXPct ? `${slotData.posXPct}%` : pos.left;
+        const topPct = slotData?.posYPct ? `${slotData.posYPct}%` : pos.top;
+        const isBest = Boolean(card.isBest || bestCardIndex === pos.index);
 
         return (
           <div
             key={pos.index}
             style={{
               position: 'absolute',
-              left: pos.left,
-              top: '64%',
+              left: leftPct,
+              top: topPct,
               transform: 'translate(-50%, -50%)',
             }}
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
-            className="pointer-events-auto flex flex-col items-center z-40 transition-all select-none"
+            className="pointer-events-none flex flex-col items-center z-40 transition-all select-none"
           >
             {/* Cinta Superior: ★ MEJOR OPCIÓN si corresponde */}
             {isBest && (
@@ -398,26 +391,27 @@ export function OverlayApp() {
                   : 'border-slate-700/80 shadow-[0_4px_16px_rgba(0,0,0,0.8)]'
               }`}
             >
-              <TierShield tier={card ? (card.tier as TierBadge) : ('?' as TierBadge)} />
+              <TierShield tier={(card.tier || 'B') as TierBadge} />
               <span className="text-base font-black text-white tracking-wider uppercase drop-shadow-sm font-sans">
                 Tier
               </span>
             </div>
 
             {/* Detalles del Aumento (Nombre y Rendimiento Competitivo de OP.GG) */}
-            {card ? (
-              <div className="mt-1 px-2.5 py-1 rounded bg-[#030712]/85 border border-slate-800/80 backdrop-blur-sm flex flex-col items-center max-w-[170px] text-center shadow-md">
-                <div
-                  className="text-[11px] font-bold text-white truncate max-w-[155px] leading-tight"
-                  title={card.nameEs || card.name}
-                >
-                  {card.nameEs || card.name}
-                </div>
+            <div className="mt-1 px-2.5 py-0.5 rounded bg-[#030712]/88 border border-slate-800/80 backdrop-blur-sm flex flex-col items-center max-w-[175px] text-center shadow-md">
+              <div
+                className="text-[10px] font-bold text-white truncate max-w-[160px] leading-tight"
+                title={card.nameEs || card.name}
+              >
+                {card.nameEs || card.name}
+              </div>
 
-                <div className="flex items-center gap-1.5 mt-0.5 font-mono text-[10px]">
+              {((card.winRate != null && !isNaN(card.winRate)) ||
+                (card.pickRate != null && !isNaN(card.pickRate))) && (
+                <div className="flex items-center gap-1.5 mt-0.5 font-mono text-[9px]">
                   {card.winRate != null && !isNaN(card.winRate) && (
-                    <span className="text-cyan-300 font-extrabold drop-shadow-[0_0_4px_rgba(6,182,212,0.5)]">
-                      {card.winRate.toFixed(1)}% Eficacia
+                    <span className="text-cyan-300 font-extrabold">
+                      {card.winRate.toFixed(1)}% WR
                     </span>
                   )}
                   {card.pickRate != null && !isNaN(card.pickRate) && (
@@ -426,55 +420,11 @@ export function OverlayApp() {
                     </span>
                   )}
                 </div>
-              </div>
-            ) : (
-              <div className="mt-1 px-2.5 py-0.5 rounded bg-black/80 border border-slate-800 text-[10px] font-mono text-slate-300">
-                {isScanning ? scanStatus : 'Analizando...'}
-              </div>
-            )}
+              )}
+            </div>
           </div>
         );
       })}
-
-      {/* BARRA FLOTANTE DE CONTROL DISCRETA AL FONDO CENTRO */}
-      <div
-        style={{
-          position: 'absolute',
-          left: '50%',
-          top: '84%',
-          transform: 'translate(-50%, 0)',
-        }}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        className="pointer-events-auto flex items-center gap-2 bg-[#02050d]/90 border border-cyan-800/60 rounded-full px-3 py-1 shadow-lg text-[10px] font-mono text-gray-300 z-50"
-      >
-        <span className="font-bold text-cyan-400 uppercase">
-          {champion?.name || state.championName || 'EAsy'}
-        </span>
-        <span>•</span>
-        <span className="text-gray-400">Auto-cierre en {countdown}s</span>
-        <span>•</span>
-        <button
-          onClick={handleReanalyze}
-          disabled={isScanning}
-          className="text-cyan-300 hover:text-white font-bold cursor-pointer disabled:opacity-50"
-          title="Re-escanear pantalla si tiraste reroll"
-        >
-          {isScanning ? '⏳ Escaneando...' : '⟳ Re-escanear'}
-        </button>
-        <span>•</span>
-        <button
-          onClick={() => {
-            setCollapsed(true);
-            const api = getApi();
-            api?.overlayHide?.();
-          }}
-          className="text-red-400 hover:text-red-200 font-bold px-1 cursor-pointer"
-          title="Cerrar overlay (Ctrl+Shift+O)"
-        >
-          ✕
-        </button>
-      </div>
     </div>
   );
 }

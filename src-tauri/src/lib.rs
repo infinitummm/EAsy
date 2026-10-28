@@ -13,9 +13,13 @@ use lcu::{
 };
 use modos::ServicioAumentosModo;
 use ocr::detector_panel_aumentos::{
-    calcular_caja_16_a_9, evaluar_visibilidad_panel, ColorRgb, MuestraRoi, TipoMuestra,
+    calcular_caja_16_a_9, calcular_dhash_64, calcular_distancia_hamming,
+    evaluar_visibilidad_panel, ColorRgb, MuestraRoi, Rectangulo, TipoMuestra,
+    CENTROS_X_CARTAS, HUECOS_X_CARTAS,
 };
-use ocr::detector_aumentos_pantalla::escanear_tres_cartas_en_pantalla;
+use ocr::detector_aumentos_pantalla::{
+    escanear_tres_cartas_en_pantalla, BANDAS_Y_TITULO, COLUMNAS_CARTAS,
+};
 use overlay::GestorOverlay;
 use servicios::{AutoAcceptService, ChampSelectService, GestorAjustes};
 use std::sync::Arc;
@@ -128,6 +132,7 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 let mut ticks: u64 = 0;
                 let mut en_partida;
+                let mut ultimos_hashes_titulos: [u64; 3] = [0, 0, 0];
 
                 loop {
                     tokio::time::sleep(Duration::from_millis(750)).await;
@@ -221,46 +226,57 @@ pub fn run() {
                         if let Some(img) = capturado {
                             let caja16a9 = calcular_caja_16_a_9(img.width(), img.height());
 
-                            // Muestrear puntos clave dentro de la caja normalizada 16:9
+                            // Muestrear puntos clave dentro de la caja normalizada 16:9 en coordenadas calibradas
                             let mut muestras = Vec::new();
 
-                            // Fondos oscuros de cartas, bordes superiores y botones de reroll
-                            let cols = [0.325f32, 0.500f32, 0.675f32];
-                            for col in cols {
-                                let px = (caja16a9.x as f32 + col * caja16a9.width as f32) as u32;
-                                // Fondo de descripción de la carta (zona oscura de texto)
-                                let py_fondo_desc = (caja16a9.y as f32 + 0.60 * caja16a9.height as f32) as u32;
-                                // Fondo de cabecera de la carta (zona superior oscura)
-                                let py_fondo_head = (caja16a9.y as f32 + 0.32 * caja16a9.height as f32) as u32;
-                                let py_borde = (caja16a9.y as f32 + 0.28 * caja16a9.height as f32) as u32;
-                                let py_reroll = (caja16a9.y as f32 + 0.74 * caja16a9.height as f32) as u32;
+                            for &col in &CENTROS_X_CARTAS {
+                                let px_centro = (caja16a9.x as f32 + col * caja16a9.width as f32) as u32;
+                                let px_izq = (caja16a9.x as f32 + (col - 0.04) * caja16a9.width as f32) as u32;
+                                let px_der = (caja16a9.x as f32 + (col + 0.04) * caja16a9.width as f32) as u32;
 
-                                if px < img.width() && py_fondo_desc < img.height() {
-                                    let p = img.get_pixel(px, py_fondo_desc);
+                                // Zona oscura interna inferior de la carta (debajo de la descripción, libre de letras)
+                                let py_fondo_1 = (caja16a9.y as f32 + 0.505 * caja16a9.height as f32) as u32;
+                                let py_fondo_2 = (caja16a9.y as f32 + 0.530 * caja16a9.height as f32) as u32;
+                                // Bordes metálicos superior e inferior de la carta
+                                let py_borde_sup = (caja16a9.y as f32 + 0.138 * caja16a9.height as f32) as u32;
+                                let py_borde_inf = (caja16a9.y as f32 + 0.568 * caja16a9.height as f32) as u32;
+                                // Botón de reroll [ C ] debajo de la carta
+                                let py_reroll = (caja16a9.y as f32 + 0.605 * caja16a9.height as f32) as u32;
+
+                                if px_izq < img.width() && py_fondo_1 < img.height() {
+                                    let p = img.get_pixel(px_izq, py_fondo_1);
                                     muestras.push(MuestraRoi {
                                         tipo: TipoMuestra::FondoCarta,
                                         color: ColorRgb::new(p[0], p[1], p[2]),
                                     });
                                 }
 
-                                if px < img.width() && py_fondo_head < img.height() {
-                                    let p = img.get_pixel(px, py_fondo_head);
+                                if px_der < img.width() && py_fondo_2 < img.height() {
+                                    let p = img.get_pixel(px_der, py_fondo_2);
                                     muestras.push(MuestraRoi {
                                         tipo: TipoMuestra::FondoCarta,
                                         color: ColorRgb::new(p[0], p[1], p[2]),
                                     });
                                 }
 
-                                if px < img.width() && py_borde < img.height() {
-                                    let p = img.get_pixel(px, py_borde);
+                                if px_centro < img.width() && py_borde_sup < img.height() {
+                                    let p = img.get_pixel(px_centro, py_borde_sup);
                                     muestras.push(MuestraRoi {
                                         tipo: TipoMuestra::BordeRareza,
                                         color: ColorRgb::new(p[0], p[1], p[2]),
                                     });
                                 }
 
-                                if px < img.width() && py_reroll < img.height() {
-                                    let p = img.get_pixel(px, py_reroll);
+                                if px_centro < img.width() && py_borde_inf < img.height() {
+                                    let p = img.get_pixel(px_centro, py_borde_inf);
+                                    muestras.push(MuestraRoi {
+                                        tipo: TipoMuestra::BordeRareza,
+                                        color: ColorRgb::new(p[0], p[1], p[2]),
+                                    });
+                                }
+
+                                if px_centro < img.width() && py_reroll < img.height() {
+                                    let p = img.get_pixel(px_centro, py_reroll);
                                     muestras.push(MuestraRoi {
                                         tipo: TipoMuestra::BotonReroll,
                                         color: ColorRgb::new(p[0], p[1], p[2]),
@@ -268,13 +284,20 @@ pub fn run() {
                                 }
                             }
 
-                            // Pasillos inter-cartas para evaluar contraste
-                            let hueco_cols = [0.415f32, 0.585f32];
-                            for hcol in hueco_cols {
+                            // Pasillos inter-cartas para evaluar contraste estructural
+                            for &hcol in &HUECOS_X_CARTAS {
                                 let px = (caja16a9.x as f32 + hcol * caja16a9.width as f32) as u32;
-                                let py = (caja16a9.y as f32 + 0.60 * caja16a9.height as f32) as u32;
-                                if px < img.width() && py < img.height() {
-                                    let p = img.get_pixel(px, py);
+                                let py1 = (caja16a9.y as f32 + 0.45 * caja16a9.height as f32) as u32;
+                                let py2 = (caja16a9.y as f32 + 0.52 * caja16a9.height as f32) as u32;
+                                if px < img.width() && py1 < img.height() {
+                                    let p = img.get_pixel(px, py1);
+                                    muestras.push(MuestraRoi {
+                                        tipo: TipoMuestra::HuecoInterCarta,
+                                        color: ColorRgb::new(p[0], p[1], p[2]),
+                                    });
+                                }
+                                if px < img.width() && py2 < img.height() {
+                                    let p = img.get_pixel(px, py2);
                                     muestras.push(MuestraRoi {
                                         tipo: TipoMuestra::HuecoInterCarta,
                                         color: ColorRgb::new(p[0], p[1], p[2]),
@@ -282,16 +305,35 @@ pub fn run() {
                                 }
                             }
 
+                            // COMPUERTA 1: Presencia geométrica y estructural del panel de 3 cartas
                             let visible = evaluar_visibilidad_panel(&muestras);
                             if visible {
+                                // Calcular dHash de las 3 cajas de título para detectar Reroll instantáneo
+                                let mut hashes_actuales = [0u64; 3];
+                                let mut hubo_reroll = false;
+                                for (i, &(x_min_f, x_max_f)) in COLUMNAS_CARTAS.iter().enumerate() {
+                                    let roi = Rectangulo {
+                                        x: (caja16a9.x as f32 + x_min_f * caja16a9.width as f32) as u32,
+                                        y: (caja16a9.y as f32 + BANDAS_Y_TITULO[0].0 * caja16a9.height as f32) as u32,
+                                        width: ((x_max_f - x_min_f) * caja16a9.width as f32).max(9.0) as u32,
+                                        height: ((BANDAS_Y_TITULO[0].1 - BANDAS_Y_TITULO[0].0) * caja16a9.height as f32).max(8.0) as u32,
+                                    };
+                                    hashes_actuales[i] = calcular_dhash_64(&img, roi);
+                                    if ultimos_hashes_titulos[i] != 0
+                                        && calcular_distancia_hamming(hashes_actuales[i], ultimos_hashes_titulos[i]) > 6
+                                    {
+                                        hubo_reroll = true;
+                                    }
+                                }
+
                                 let estado_actual = gestor_o.obtener_estado();
                                 let debe_escanear = !estado_actual.visible
+                                    || hubo_reroll
                                     || estado_actual.cards.is_empty()
                                     || estado_actual.is_analyzing
                                     || estado_actual.cards.iter().any(|c| c.augment.is_none());
 
                                 if debe_escanear {
-                                    // Escanear las 3 cartas visibles con OCR y estadísticas reales de OP.GG
                                     let catalogo = servicio_modos.obtener_catalogo();
                                     let datos_campeon = servicio_modos
                                         .obtener_aumentos_campeon(
@@ -308,17 +350,32 @@ pub fn run() {
                                         &catalogo,
                                         Some(&datos_campeon.augments),
                                     );
-                                    gestor_o.actualizar_escaneo_ocr(resultado);
-                                    gestor_o.show();
+
+                                    // COMPUERTA 2: Confirmación OCR obligatoria (al menos 1 carta real reconocida del catálogo)
+                                    let al_menos_una_reconocida = resultado
+                                        .cards
+                                        .iter()
+                                        .any(|c| c.augment.is_some());
+
+                                    if al_menos_una_reconocida {
+                                        ultimos_hashes_titulos = hashes_actuales;
+                                        gestor_o.actualizar_escaneo_ocr(resultado);
+                                        gestor_o.show();
+                                    } else if estado_actual.visible && !hubo_reroll {
+                                        // Si era un falso positivo sin ningún aumento real en pantalla, ocultar
+                                        gestor_o.hide();
+                                    }
                                 }
                             } else {
-                                // Desaparición inmediata: en el momento que el usuario escoge el aumento en LoL
+                                // Desaparición inmediata en cuanto el usuario selecciona un aumento en LoL
+                                ultimos_hashes_titulos = [0, 0, 0];
                                 if gestor_o.obtener_estado().visible {
                                     gestor_o.hide();
                                 }
                             }
                         }
                     } else if gestor_o.obtener_estado().visible {
+                        ultimos_hashes_titulos = [0, 0, 0];
                         gestor_o.hide();
                     }
                 }
@@ -331,7 +388,6 @@ pub fn run() {
             overlay_hide,
             overlay_toggle,
             overlay_get_state,
-            overlay_test_trigger,
             overlay_reanalyze,
             modes_get_champion_augments,
             modes_check_borderless,

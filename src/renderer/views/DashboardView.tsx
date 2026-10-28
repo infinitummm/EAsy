@@ -63,8 +63,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     appliedSuccess: false,
   });
 
-  const [testingOverlay, setTestingOverlay] = useState<boolean>(false);
-
   useEffect(() => {
     if (window.api?.checkBorderless) {
       window.api
@@ -106,19 +104,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const handleToggleOverlay = async () => {
     if (window.api?.overlayToggle) {
       await window.api.overlayToggle();
-    }
-  };
-
-  const handleTestOverlay = async () => {
-    if (window.api?.overlayTestTrigger) {
-      setTestingOverlay(true);
-      try {
-        await window.api.overlayTestTrigger();
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setTimeout(() => setTestingOverlay(false), 12000);
-      }
     }
   };
 
@@ -320,21 +305,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 shrink-0">
-            <P3rButton
-              variant="cyan"
-              size="md"
-              onClick={handleTestOverlay}
-              disabled={testingOverlay}
-            >
-              {testingOverlay ? 'Probando en pantalla (12s)...' : '🎮 Probar Overlay en Pantalla'}
-            </P3rButton>
+          <div className="flex items-center gap-3 shrink-0">
             <P3rButton
               variant="secondary"
               size="md"
               onClick={handleToggleOverlay}
             >
-              Mostrar / Ocultar
+              Mostrar / Ocultar Overlay
             </P3rButton>
           </div>
         </div>

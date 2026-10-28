@@ -82,8 +82,6 @@ export const api = {
     ipcRenderer.invoke(IPC_CHANNELS.OVERLAY_TOGGLE),
   overlayGetState: (): Promise<OverlayState> =>
     ipcRenderer.invoke(IPC_CHANNELS.OVERLAY_GET_STATE),
-  overlayTestTrigger: (): Promise<{ success: boolean; durationSeconds: number }> =>
-    ipcRenderer.invoke('overlay:test-trigger'),
   getChampionAugments: (params: { championId: number; mode: TipoModo; patch?: string }): Promise<DatosModoCampeon> =>
     ipcRenderer.invoke(IPC_CHANNELS.MODES_GET_CHAMPION_AUGMENTS, params),
   checkBorderless: (installationPath?: string): Promise<{ isBorderless: boolean; windowMode: number; configPath: string }> =>

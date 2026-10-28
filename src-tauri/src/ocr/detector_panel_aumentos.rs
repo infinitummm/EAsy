@@ -87,6 +87,12 @@ pub fn calcular_caja_16_a_9(ancho_total: u32, alto_total: u32) -> Rectangulo {
     }
 }
 
+/// Centros horizontales exactos de las 3 cartas de aumentos sobre la caja normalizada 16:9
+pub const CENTROS_X_CARTAS: [f32; 3] = [0.295, 0.500, 0.705];
+
+/// Pasillos verticales inter-cartas (huecos entre Carta 1-2 y Carta 2-3)
+pub const HUECOS_X_CARTAS: [f32; 2] = [0.397, 0.603];
+
 /// Función pura que evalúa si las muestras corresponden inequívocamente al panel de aumentos
 pub fn evaluar_visibilidad_panel(muestras: &[MuestraRoi]) -> bool {
     if muestras.is_empty() {
@@ -111,20 +117,50 @@ pub fn evaluar_visibilidad_panel(muestras: &[MuestraRoi]) -> bool {
     }
 
     let proporcion_desaturadas = desaturadas as f32 / muestras.len() as f32;
-    // Si más del 85% está desaturado o la saturación máxima de la pantalla es casi nula (< 12), es pantalla de muerte
     if proporcion_desaturadas > 0.85 || max_sat < 12 {
         return false;
     }
 
-    // 2. REGLA DE FONDOS OSCUROS DE LAS CARTAS (luminancia <= 68.0)
+    // 2. REGLA DE FONDOS OSCUROS UNIFORMES DE LAS 3 CARTAS (luminancia <= 68.0)
     let fondos: Vec<&MuestraRoi> = muestras.iter().filter(|m| m.tipo == TipoMuestra::FondoCarta).collect();
-    let fondos_oscuros = fondos.iter().filter(|m| m.color.luminancia() <= 68.0).count();
+    let mut fondos_oscuros = 0;
+    let mut min_lum_oscuro = 255.0f32;
+    let mut max_lum_oscuro = 0.0f32;
 
-    // 3. REGLA DE REROLLS O BORDES DE COLOR
+    for f in &fondos {
+        let lum = f.color.luminancia();
+        if lum <= 68.0 {
+            fondos_oscuros += 1;
+            if lum < min_lum_oscuro {
+                min_lum_oscuro = lum;
+            }
+            if lum > max_lum_oscuro {
+                max_lum_oscuro = lum;
+            }
+        }
+    }
+
+    // Las 3 cartas tienen el mismo fondo oscuro uniforme (diferencia máxima de luminancia <= 28)
+    let uniformidad_oscura = fondos_oscuros >= 2 && (max_lum_oscuro - min_lum_oscuro) <= 28.0;
+
+    // 3. REGLA DE CONTRASTE CON PASILLOS INTER-CARTAS
+    let huecos: Vec<&MuestraRoi> = muestras.iter().filter(|m| m.tipo == TipoMuestra::HuecoInterCarta).collect();
+    let prom_fondo = if fondos_oscuros > 0 {
+        (min_lum_oscuro + max_lum_oscuro) * 0.5
+    } else {
+        40.0
+    };
+    let mut diferencia_hueco_fondo = 0.0f32;
+    if !huecos.is_empty() {
+        let suma_huecos: f32 = huecos.iter().map(|h| h.color.luminancia()).sum();
+        let prom_hueco = suma_huecos / huecos.len() as f32;
+        diferencia_hueco_fondo = (prom_hueco - prom_fondo).abs();
+    }
+
+    // 4. REGLA DE REROLLS O BORDES METÁLICOS DE RAREZA
     let rerolls: Vec<&MuestraRoi> = muestras.iter().filter(|m| m.tipo == TipoMuestra::BotonReroll).collect();
     let mut rerolls_dorados = 0;
     for r in rerolls {
-        // Tono dorado/ámbar del dado: R alto, G medio-alto, R > B + 10
         if r.color.r >= 120 && r.color.g >= 95 && r.color.r > r.color.b.saturating_add(10) {
             rerolls_dorados += 1;
         }
@@ -133,20 +169,115 @@ pub fn evaluar_visibilidad_panel(muestras: &[MuestraRoi]) -> bool {
     let bordes: Vec<&MuestraRoi> = muestras.iter().filter(|m| m.tipo == TipoMuestra::BordeRareza).collect();
     let mut bordes_con_color = 0;
     for b in bordes {
-        if b.color.saturacion_cromatica() >= 16 || b.color.luminancia() > 60.0 {
+        let lum = b.color.luminancia();
+        if b.color.saturacion_cromatica() >= 18 || lum >= 72.0 {
             bordes_con_color += 1;
         }
     }
 
-    // Confirmación positiva robusta:
-    // 1) Al menos 2 fondos oscuros + presencia de rerolls o bordes ornamentales
-    // 2) O al menos 3 fondos oscuros de cartas
-    // 3) O al menos 1 dado de reroll dorado activo + 1 fondo oscuro
-    // 4) O al menos 2 dados de reroll activos
-    (fondos_oscuros >= 2 && (rerolls_dorados >= 1 || bordes_con_color >= 1))
-        || (fondos_oscuros >= 3)
-        || (rerolls_dorados >= 1 && fondos_oscuros >= 1)
-        || (rerolls_dorados >= 2)
+    // Confirmación estructural estricta (nunca se activa por terreno oscuro del mapa sin bordes/contraste):
+    uniformidad_oscura
+        && ((fondos_oscuros >= 2 && (rerolls_dorados >= 1 || bordes_con_color >= 1))
+            || (fondos_oscuros >= 3 && diferencia_hueco_fondo >= 10.0)
+            || (rerolls_dorados >= 2 && fondos_oscuros >= 1))
+}
+
+/// Detecta las coordenadas porcentuales exactas (pos_x_pct, pos_y_pct) de la zona oscura inferior de cada una de las 3 cartas
+pub fn detectar_coordenadas_exactas_cartas(
+    img: &image::RgbaImage,
+    caja16a9: Rectangulo,
+) -> [(f32, f32); 3] {
+    let mut posiciones = [
+        (29.5f32, 52.5f32),
+        (50.0f32, 52.5f32),
+        (70.5f32, 52.5f32),
+    ];
+
+    if img.width() < 320 || img.height() < 200 || caja16a9.width == 0 || caja16a9.height == 0 {
+        return posiciones;
+    }
+
+    let py_scan = (caja16a9.y as f32 + 0.48 * caja16a9.height as f32) as u32;
+    if py_scan >= img.height() {
+        return posiciones;
+    }
+
+    for (idx, &centro_nom) in CENTROS_X_CARTAS.iter().enumerate() {
+        // Escaneo de borde izquierdo (entre centro - 0.105 y centro - 0.065)
+        let x_izq_ini = (caja16a9.x as f32 + (centro_nom - 0.105) * caja16a9.width as f32) as u32;
+        let x_izq_fin = (caja16a9.x as f32 + (centro_nom - 0.065) * caja16a9.width as f32) as u32;
+        let mut mejor_x_izq = None;
+        let mut max_lum_izq = 68.0f32;
+
+        for px in x_izq_ini..=x_izq_fin.min(img.width().saturating_sub(1)) {
+            let p = img.get_pixel(px, py_scan);
+            let lum = ColorRgb::new(p[0], p[1], p[2]).luminancia();
+            if lum > max_lum_izq {
+                max_lum_izq = lum;
+                mejor_x_izq = Some(px);
+            }
+        }
+
+        // Escaneo de borde derecho (entre centro + 0.065 y centro + 0.105)
+        let x_der_ini = (caja16a9.x as f32 + (centro_nom + 0.065) * caja16a9.width as f32) as u32;
+        let x_der_fin = (caja16a9.x as f32 + (centro_nom + 0.105) * caja16a9.width as f32) as u32;
+        let mut mejor_x_der = None;
+        let mut max_lum_der = 68.0f32;
+
+        for px in x_der_ini..=x_der_fin.min(img.width().saturating_sub(1)) {
+            let p = img.get_pixel(px, py_scan);
+            let lum = ColorRgb::new(p[0], p[1], p[2]).luminancia();
+            if lum > max_lum_der {
+                max_lum_der = lum;
+                mejor_x_der = Some(px);
+            }
+        }
+
+        let centro_x_caja = if let (Some(xi), Some(xd)) = (mejor_x_izq, mejor_x_der) {
+            let cx_px = (xi + xd) as f32 * 0.5;
+            let cx_rel = (cx_px - caja16a9.x as f32) / caja16a9.width as f32;
+            // Limitar desvío máximo a ±1.8% respecto al centro nominal calibrado
+            cx_rel.clamp(centro_nom - 0.018, centro_nom + 0.018)
+        } else {
+            centro_nom
+        };
+
+        // Escaneo de borde inferior metálico (entre y = 0.54 y y = 0.59)
+        let px_centro = (caja16a9.x as f32 + centro_x_caja * caja16a9.width as f32)
+            .min(img.width().saturating_sub(1) as f32) as u32;
+        let y_inf_ini = (caja16a9.y as f32 + 0.54 * caja16a9.height as f32) as u32;
+        let y_inf_fin = (caja16a9.y as f32 + 0.59 * caja16a9.height as f32) as u32;
+        let mut mejor_y_borde = None;
+        let mut max_lum_inf = 68.0f32;
+
+        for py in y_inf_ini..=y_inf_fin.min(img.height().saturating_sub(1)) {
+            let p = img.get_pixel(px_centro, py);
+            let lum = ColorRgb::new(p[0], p[1], p[2]).luminancia();
+            if lum > max_lum_inf {
+                max_lum_inf = lum;
+                mejor_y_borde = Some(py);
+            }
+        }
+
+        let pos_y_caja = if let Some(yb) = mejor_y_borde {
+            let y_borde_rel = (yb as f32 - caja16a9.y as f32) / caja16a9.height as f32;
+            // Posicionar la insignia en la zona oscura interna justo encima del marco inferior (borde - 4.0%)
+            (y_borde_rel - 0.040).clamp(0.505, 0.540)
+        } else {
+            0.525
+        };
+
+        // Convertir coordenadas relativas de caja16a9 a porcentaje de la pantalla completa
+        let abs_x = caja16a9.x as f32 + centro_x_caja * caja16a9.width as f32;
+        let abs_y = caja16a9.y as f32 + pos_y_caja * caja16a9.height as f32;
+
+        posiciones[idx] = (
+            (abs_x / img.width() as f32) * 100.0,
+            (abs_y / img.height() as f32) * 100.0,
+        );
+    }
+
+    posiciones
 }
 
 /// Calcula el dHash de 64 bits para una región de interés (ROI)
@@ -265,5 +396,31 @@ mod tests {
     fn test_distancia_hamming_dhash() {
         assert_eq!(calcular_distancia_hamming(0b1100, 0b1100), 0);
         assert_eq!(calcular_distancia_hamming(0b1100, 0b1111), 2);
+    }
+
+    #[test]
+    fn test_rechazo_terreno_oscuro_sin_cartas() {
+        // Sombra oscura del mapa de LoL sin bordes metálicos ni contraste de pasillo inter-cartas
+        let muestras_terreno = vec![
+            MuestraRoi { tipo: TipoMuestra::FondoCarta, color: ColorRgb::new(28, 42, 26) },
+            MuestraRoi { tipo: TipoMuestra::FondoCarta, color: ColorRgb::new(30, 44, 28) },
+            MuestraRoi { tipo: TipoMuestra::FondoCarta, color: ColorRgb::new(29, 43, 27) },
+            MuestraRoi { tipo: TipoMuestra::HuecoInterCarta, color: ColorRgb::new(29, 43, 27) },
+            MuestraRoi { tipo: TipoMuestra::HuecoInterCarta, color: ColorRgb::new(30, 44, 28) },
+            MuestraRoi { tipo: TipoMuestra::BordeRareza, color: ColorRgb::new(28, 40, 26) },
+            MuestraRoi { tipo: TipoMuestra::BotonReroll, color: ColorRgb::new(25, 38, 24) },
+        ];
+        assert_eq!(evaluar_visibilidad_panel(&muestras_terreno), false);
+    }
+
+    #[test]
+    fn test_detectar_coordenadas_exactas_cartas_nominales() {
+        let img = image::RgbaImage::from_pixel(1920, 1080, Rgba([25, 30, 38, 255]));
+        let caja = calcular_caja_16_a_9(1920, 1080);
+        let coords = detectar_coordenadas_exactas_cartas(&img, caja);
+        assert!((coords[0].0 - 29.5).abs() < 0.1);
+        assert!((coords[1].0 - 50.0).abs() < 0.1);
+        assert!((coords[2].0 - 70.5).abs() < 0.1);
+        assert!((coords[0].1 - 52.5).abs() < 0.1);
     }
 }

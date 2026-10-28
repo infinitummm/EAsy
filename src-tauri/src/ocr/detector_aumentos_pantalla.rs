@@ -41,9 +41,10 @@ pub const COLUMNAS_CARTAS: [(f32, f32); 3] = [
 ];
 
 /// Sub-bandas verticales Y de título sobre la caja 16:9
+/// Calibrado con capturas reales: el título ("Ominous Pact", "Glass Cannon", "Final Form") reside en y = 0.410 .. 0.460
 pub const BANDAS_Y_TITULO: [(f32, f32); 2] = [
-    (0.315, 0.405), // Banda Primaria (Solo Título de la carta)
-    (0.310, 0.455), // Banda Extendida (Título + Categoría + Primera línea)
+    (0.395, 0.468), // Banda Primaria exacta (Solo Título de la carta)
+    (0.315, 0.472), // Banda Extendida (Título + margen superior/inferior)
 ];
 
 /// Preprocesa el recorte aplicando escalado x3 suave (Triangle) e inversión de luminancia con estiramiento de contraste
@@ -129,8 +130,12 @@ pub fn emparejar_aumento_en_catalogo(
     let lineas: Vec<String> = texto_crudo
         .lines()
         .map(|l| limpiar_texto_ocr(l).to_lowercase())
-        .filter(|l| l.len() >= 3)
+        .filter(|l| l.len() >= 4 && l.chars().filter(|c| c.is_alphabetic()).count() >= 4)
         .collect();
+
+    if lineas.is_empty() {
+        return (None, 0.0);
+    }
 
     let texto_completo = limpiar_texto_ocr(texto_crudo).to_lowercase();
 
@@ -138,8 +143,13 @@ pub fn emparejar_aumento_en_catalogo(
     let mut mejor_score = 0.0f64;
 
     for item in catalogo {
-        let name_en = item.name.to_lowercase();
-        let name_es = item.name_es.as_deref().unwrap_or("").to_lowercase();
+        let name_en = item.name.trim().to_lowercase();
+        let name_es = item.name_es.as_deref().unwrap_or("").trim().to_lowercase();
+
+        // Ignorar entradas vacías o placeholders internos de Riot
+        if name_en.len() < 3 || name_es.contains("blankname") || name_es.contains("_generic_") {
+            continue;
+        }
 
         let mut item_max_sim = 0.0f64;
 
@@ -152,13 +162,24 @@ pub fn emparejar_aumento_en_catalogo(
                 0.0
             };
 
-            // Contención exacta de subcadena (e.g. si la línea incluye "Spin Me Right Round")
-            let contiene_en = if linea.contains(&name_en) || name_en.contains(linea.as_str()) {
+            // Contención de subcadena estricta: solo si el nombre real aparece completo (>= 5 chars)
+            // o si la línea leída tiene >= 8 caracteres y cubre al menos el 70% del nombre del aumento
+            let contiene_en = if (name_en.len() >= 5 && linea.contains(&name_en))
+                || (linea.len() >= 8
+                    && linea.len() * 10 >= name_en.len() * 7
+                    && name_en.contains(linea.as_str()))
+            {
                 0.88
             } else {
                 0.0
             };
-            let contiene_es = if !name_es.is_empty() && (linea.contains(&name_es) || name_es.contains(linea.as_str())) {
+
+            let contiene_es = if !name_es.is_empty()
+                && ((name_es.len() >= 5 && linea.contains(&name_es))
+                    || (linea.len() >= 8
+                        && linea.len() * 10 >= name_es.len() * 7
+                        && name_es.contains(linea.as_str())))
+            {
                 0.88
             } else {
                 0.0
@@ -170,7 +191,7 @@ pub fn emparejar_aumento_en_catalogo(
             }
         }
 
-        // 2. Si las 2 primeras líneas se combinaron
+        // 2. Si las 2 primeras líneas se combinaron (título de 2 renglones)
         if lineas.len() >= 2 {
             let combinadas = format!("{} {}", lineas[0], lineas[1]);
             let sim_en = normalized_damerau_levenshtein(&combinadas, &name_en);
@@ -179,20 +200,24 @@ pub fn emparejar_aumento_en_catalogo(
             } else {
                 0.0
             };
-            if sim_en > item_max_sim { item_max_sim = sim_en; }
-            if sim_es > item_max_sim { item_max_sim = sim_es; }
+            if sim_en > item_max_sim {
+                item_max_sim = sim_en;
+            }
+            if sim_es > item_max_sim {
+                item_max_sim = sim_es;
+            }
         }
 
-        // 3. Contención en el texto completo (por si los saltos de línea se perdieron)
-        if texto_completo.contains(&name_en) {
+        // 3. Contención exacta del nombre completo (>= 6 caracteres) en el texto
+        if name_en.len() >= 6 && texto_completo.contains(&name_en) {
             item_max_sim = item_max_sim.max(0.85);
         }
-        if !name_es.is_empty() && texto_completo.contains(&name_es) {
+        if name_es.len() >= 6 && texto_completo.contains(&name_es) {
             item_max_sim = item_max_sim.max(0.85);
         }
 
         let refuerzo_rareza = if let (Some(r_vis), Some(r_cat)) = (rareza_visual, item.rarity.as_deref()) {
-            if r_vis.eq_ignore_ascii_case(r_cat) { 0.06 } else { 0.0 }
+            if r_vis.eq_ignore_ascii_case(r_cat) { 0.05 } else { 0.0 }
         } else {
             0.0
         };
@@ -204,8 +229,8 @@ pub fn emparejar_aumento_en_catalogo(
         }
     }
 
-    // Umbral de aceptación calibrado para OCR de pantalla en juego
-    let umbral_minimo = 0.55;
+    // Umbral estricto para evitar que ruido del mapa coincida con aumentos reales
+    let umbral_minimo = 0.72;
     if mejor_score >= umbral_minimo {
         (mejor_aumento, mejor_score)
     } else {
@@ -275,134 +300,143 @@ pub fn reconocer_texto_windows_ocr(_img: &RgbaImage) -> Result<String, String> {
     Ok("".to_string())
 }
 
-/// Realiza el escaneo completo de las 3 cartas visibles en pantalla
-pub fn escanear_tres_cartas_en_pantalla(
+/// Escanea una sola carta (índice 0, 1 o 2) en pantalla para actualización ultrarrápida tras un Reroll
+pub fn escanear_carta_individual_en_pantalla(
     img: &RgbaImage,
     caja16a9: crate::ocr::detector_panel_aumentos::Rectangulo,
+    idx: usize,
+    pos_x_pct: f32,
+    pos_y_pct: f32,
     catalogo: &[AumentoCatalogo],
     aumentos_campeon: Option<&[InfoAumento]>,
-) -> ResultadoEscaneoAugments {
-    let mut cartas: Vec<ResultadoCartaOcr> = Vec::with_capacity(3);
-    let coords_exactas = crate::ocr::detector_panel_aumentos::detectar_coordenadas_exactas_cartas(img, caja16a9);
+) -> ResultadoCartaOcr {
+    let card_index = (idx + 1) as u8;
+    let (x_min_f, x_max_f) = COLUMNAS_CARTAS[idx];
 
-    for (idx, &(x_min_f, x_max_f)) in COLUMNAS_CARTAS.iter().enumerate() {
-        let card_index = (idx + 1) as u8;
-        let (pos_x_pct, pos_y_pct) = coords_exactas[idx];
+    let crop_x = (caja16a9.x as f32 + x_min_f * caja16a9.width as f32).round() as u32;
+    let crop_w = ((x_max_f - x_min_f) * caja16a9.width as f32).round() as u32;
 
-        // Bounding box horizontal sobre la imagen completa
-        let crop_x = (caja16a9.x as f32 + x_min_f * caja16a9.width as f32).round() as u32;
-        let crop_w = ((x_max_f - x_min_f) * caja16a9.width as f32).round() as u32;
+    // Banda Primaria exacta del título (0.395 a 0.468)
+    let y_min_p = BANDAS_Y_TITULO[0].0;
+    let y_max_p = BANDAS_Y_TITULO[0].1;
+    let crop_y_p = (caja16a9.y as f32 + y_min_p * caja16a9.height as f32).round() as u32;
+    let crop_h_p = ((y_max_p - y_min_p) * caja16a9.height as f32).round() as u32;
 
-        // Banda Primaria de título (0.315 a 0.405)
-        let y_min_p = BANDAS_Y_TITULO[0].0;
-        let y_max_p = BANDAS_Y_TITULO[0].1;
-        let crop_y_p = (caja16a9.y as f32 + y_min_p * caja16a9.height as f32).round() as u32;
-        let crop_h_p = ((y_max_p - y_min_p) * caja16a9.height as f32).round() as u32;
+    let safe_x = crop_x.min(img.width().saturating_sub(1));
+    let safe_w = crop_w.min(img.width().saturating_sub(safe_x));
+    let safe_y_p = crop_y_p.min(img.height().saturating_sub(1));
+    let safe_h_p = crop_h_p.min(img.height().saturating_sub(safe_y_p));
 
-        let safe_x = crop_x.min(img.width().saturating_sub(1));
-        let safe_w = crop_w.min(img.width().saturating_sub(safe_x));
-        let safe_y_p = crop_y_p.min(img.height().saturating_sub(1));
-        let safe_h_p = crop_h_p.min(img.height().saturating_sub(safe_y_p));
-
-        if safe_w < 10 || safe_h_p < 10 {
-            cartas.push(ResultadoCartaOcr {
-                card_index,
-                augment: None,
-                raw_text: String::new(),
-                confidence: 0.0,
-                crop_preview_data_url: None,
-                error: Some("Área de recorte inválida".to_string()),
-                pos_x_pct,
-                pos_y_pct,
-            });
-            continue;
-        }
-
-        // Pasada 1: Recorte primario de título con escalado suave x3
-        let recorte_primario = imageops::crop_imm(img, safe_x, safe_y_p, safe_w, safe_h_p).to_image();
-        let prep_suave = preprocesar_recorte_suave_3x(&recorte_primario);
-        let mut mejor_raw_text = String::new();
-        let mut mejor_match: Option<AumentoCatalogo> = None;
-        let mut mejor_conf = 0.0f64;
-        let mut ultimo_err: Option<String> = None;
-
-        match reconocer_texto_windows_ocr(&prep_suave) {
-            Ok(txt) => {
-                let (m, c) = emparejar_aumento_en_catalogo(&txt, catalogo, None);
-                mejor_raw_text = txt;
-                mejor_match = m;
-                mejor_conf = c;
-            }
-            Err(e) => {
-                ultimo_err = Some(e);
-            }
-        }
-
-        // Pasada 2 (Fallback): Si la confianza es < 0.70, probar banda extendida con binarización adaptativa x3
-        if mejor_conf < 0.70 {
-            let y_min_e = BANDAS_Y_TITULO[1].0;
-            let y_max_e = BANDAS_Y_TITULO[1].1;
-            let crop_y_e = (caja16a9.y as f32 + y_min_e * caja16a9.height as f32).round() as u32;
-            let crop_h_e = ((y_max_e - y_min_e) * caja16a9.height as f32).round() as u32;
-            let safe_y_e = crop_y_e.min(img.height().saturating_sub(1));
-            let safe_h_e = crop_h_e.min(img.height().saturating_sub(safe_y_e));
-
-            if safe_h_e >= 10 {
-                let recorte_ext = imageops::crop_imm(img, safe_x, safe_y_e, safe_w, safe_h_e).to_image();
-                let prep_bin = preprocesar_recorte_invertido(&recorte_ext, 3);
-                if let Ok(txt2) = reconocer_texto_windows_ocr(&prep_bin) {
-                    let (m2, c2) = emparejar_aumento_en_catalogo(&txt2, catalogo, None);
-                    if c2 > mejor_conf {
-                        mejor_raw_text = txt2;
-                        mejor_match = m2;
-                        mejor_conf = c2;
-                    }
-                }
-            }
-        }
-
-        let augment_info = mejor_match.map(|c| {
-            let (tier_calc, pick_rate_calc, win_rate_calc) = if let Some(stats) = aumentos_campeon {
-                if let Some(encontrado) = stats
-                    .iter()
-                    .find(|a| a.id == c.id || a.name.eq_ignore_ascii_case(&c.name))
-                {
-                    (encontrado.tier.clone(), encontrado.pick_rate, encontrado.win_rate)
-                } else {
-                    (Some("B".to_string()), None, None)
-                }
-            } else {
-                (Some("S".to_string()), None, None)
-            };
-
-            InfoAumento {
-                id: c.id,
-                key: c.key,
-                name: c.name,
-                name_es: c.name_es,
-                rarity: c.rarity,
-                icon_url: c.icon_url,
-                desc: c.desc,
-                desc_es: c.desc_es,
-                tier: tier_calc,
-                pick_rate: pick_rate_calc,
-                win_rate: win_rate_calc,
-            }
-        });
-
-        cartas.push(ResultadoCartaOcr {
+    if safe_w < 10 || safe_h_p < 10 {
+        return ResultadoCartaOcr {
             card_index,
-            augment: augment_info,
-            raw_text: mejor_raw_text,
-            confidence: mejor_conf,
+            augment: None,
+            raw_text: String::new(),
+            confidence: 0.0,
             crop_preview_data_url: None,
-            error: if mejor_conf > 0.0 { None } else { ultimo_err },
+            error: Some("Área de recorte inválida".to_string()),
             pos_x_pct,
             pos_y_pct,
-        });
+        };
     }
 
-    // Calcular el mejor aumento según el rendimiento competitivo de OP.GG
+    // Pasada 1: Recorte primario de título con escalado suave x3
+    let recorte_primario = imageops::crop_imm(img, safe_x, safe_y_p, safe_w, safe_h_p).to_image();
+    let prep_suave = preprocesar_recorte_suave_3x(&recorte_primario);
+    let mut mejor_raw_text = String::new();
+    let mut mejor_match: Option<AumentoCatalogo> = None;
+    let mut mejor_conf = 0.0f64;
+    let mut ultimo_err: Option<String> = None;
+
+    match reconocer_texto_windows_ocr(&prep_suave) {
+        Ok(txt) => {
+            let (m, c) = emparejar_aumento_en_catalogo(&txt, catalogo, None);
+            mejor_raw_text = txt;
+            mejor_match = m;
+            mejor_conf = c;
+        }
+        Err(e) => {
+            ultimo_err = Some(e);
+        }
+    }
+
+    // Pasada 2 (Fallback): Si la confianza es < 0.78, probar banda extendida con binarización adaptativa x3
+    if mejor_conf < 0.78 {
+        let y_min_e = BANDAS_Y_TITULO[1].0;
+        let y_max_e = BANDAS_Y_TITULO[1].1;
+        let crop_y_e = (caja16a9.y as f32 + y_min_e * caja16a9.height as f32).round() as u32;
+        let crop_h_e = ((y_max_e - y_min_e) * caja16a9.height as f32).round() as u32;
+        let safe_y_e = crop_y_e.min(img.height().saturating_sub(1));
+        let safe_h_e = crop_h_e.min(img.height().saturating_sub(safe_y_e));
+
+        if safe_h_e >= 10 {
+            let recorte_ext = imageops::crop_imm(img, safe_x, safe_y_e, safe_w, safe_h_e).to_image();
+            let prep_bin = preprocesar_recorte_invertido(&recorte_ext, 3);
+            if let Ok(txt2) = reconocer_texto_windows_ocr(&prep_bin) {
+                let (m2, c2) = emparejar_aumento_en_catalogo(&txt2, catalogo, None);
+                if c2 > mejor_conf {
+                    mejor_raw_text = txt2;
+                    mejor_match = m2;
+                    mejor_conf = c2;
+                }
+            }
+        }
+    }
+
+    let augment_info = mejor_match.map(|c| {
+        let tier_por_rareza = match c.rarity.as_deref().unwrap_or("silver") {
+            "prismatic" => "A".to_string(),
+            "gold" => "B".to_string(),
+            _ => "C".to_string(),
+        };
+
+        let (tier_calc, pick_rate_calc, win_rate_calc) = if let Some(stats) = aumentos_campeon {
+            if let Some(encontrado) = stats.iter().find(|a| {
+                a.id == c.id
+                    || a.name.eq_ignore_ascii_case(&c.name)
+                    || (a.name_es.is_some() && a.name_es == c.name_es)
+            }) {
+                (
+                    encontrado.tier.clone().or(Some(tier_por_rareza)),
+                    encontrado.pick_rate,
+                    encontrado.win_rate,
+                )
+            } else {
+                (Some(tier_por_rareza), None, None)
+            }
+        } else {
+            (Some(tier_por_rareza), None, None)
+        };
+
+        InfoAumento {
+            id: c.id,
+            key: c.key,
+            name: c.name,
+            name_es: c.name_es,
+            rarity: c.rarity,
+            icon_url: c.icon_url,
+            desc: c.desc,
+            desc_es: c.desc_es,
+            tier: tier_calc,
+            pick_rate: pick_rate_calc,
+            win_rate: win_rate_calc,
+        }
+    });
+
+    ResultadoCartaOcr {
+        card_index,
+        augment: augment_info,
+        raw_text: mejor_raw_text,
+        confidence: mejor_conf,
+        crop_preview_data_url: None,
+        error: if mejor_conf > 0.0 { None } else { ultimo_err },
+        pos_x_pct,
+        pos_y_pct,
+    }
+}
+
+/// Calcula el índice (1, 2 o 3) del mejor aumento entre las 3 cartas según tier y winRate de OP.GG
+pub fn recalcular_mejor_carta(cartas: &[ResultadoCartaOcr; 3]) -> Option<u8> {
     let mut best_card_index = None;
     let mut max_score = -1.0f64;
 
@@ -423,7 +457,7 @@ pub fn escanear_tres_cartas_en_pantalla(
         }
     }
 
-    for c in &cartas {
+    for c in cartas {
         if let Some(aug) = &c.augment {
             let score = calcular_peso_tier(aug.tier.as_deref(), aug.win_rate);
             if score > max_score {
@@ -433,13 +467,55 @@ pub fn escanear_tres_cartas_en_pantalla(
         }
     }
 
+    best_card_index
+}
+
+/// Realiza el escaneo completo de las 3 cartas visibles en pantalla
+pub fn escanear_tres_cartas_en_pantalla(
+    img: &RgbaImage,
+    caja16a9: crate::ocr::detector_panel_aumentos::Rectangulo,
+    catalogo: &[AumentoCatalogo],
+    aumentos_campeon: Option<&[InfoAumento]>,
+) -> ResultadoEscaneoAugments {
+    let coords_exactas = crate::ocr::detector_panel_aumentos::detectar_coordenadas_exactas_cartas(img, caja16a9);
+    let c0 = escanear_carta_individual_en_pantalla(
+        img,
+        caja16a9,
+        0,
+        coords_exactas[0].0,
+        coords_exactas[0].1,
+        catalogo,
+        aumentos_campeon,
+    );
+    let c1 = escanear_carta_individual_en_pantalla(
+        img,
+        caja16a9,
+        1,
+        coords_exactas[1].0,
+        coords_exactas[1].1,
+        catalogo,
+        aumentos_campeon,
+    );
+    let c2 = escanear_carta_individual_en_pantalla(
+        img,
+        caja16a9,
+        2,
+        coords_exactas[2].0,
+        coords_exactas[2].1,
+        catalogo,
+        aumentos_campeon,
+    );
+
+    let cards = [c0, c1, c2];
+    let best_card_index = recalcular_mejor_carta(&cards);
+
     let detected_at = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64;
 
     ResultadoEscaneoAugments {
-        cards: [cartas[0].clone(), cartas[1].clone(), cartas[2].clone()],
+        cards,
         best_card_index,
         detected_at,
         is_analyzing: false,
@@ -531,5 +607,22 @@ mod tests {
         assert!(match_c3.is_some(), "Debe emparejar Veil of Warding");
         assert_eq!(match_c3.unwrap().name, "Veil of Warding");
         assert!(score_c3 >= 0.85);
+    }
+
+    #[test]
+    fn test_rechazo_ruido_ocr_corto_sin_falso_positivo_yunque() {
+        let catalogo: Vec<AumentoCatalogo> = serde_json::from_str(CATALOGO_AUMENTOS_RAW).unwrap();
+
+        // Fragmentos cortos de ruido que antes activaban `name_es.contains(linea)` contra "Obtienes 1 yunque de estadísticas"
+        for ruido in ["obt", "1 y", "est", "de ", "uno", "110 743", "enemy", "slain"] {
+            let (m, score) = emparejar_aumento_en_catalogo(ruido, &catalogo, None);
+            assert!(
+                m.is_none(),
+                "El fragmento de ruido '{}' no debe emparejar ningún aumento (emparejó {:?} con score {})",
+                ruido,
+                m.map(|x| x.name),
+                score
+            );
+        }
     }
 }

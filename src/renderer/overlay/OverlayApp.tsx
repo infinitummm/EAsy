@@ -12,80 +12,62 @@ import { getChampionById } from '@shared/champions';
 const getApi = () => (typeof window !== 'undefined' ? (window.api || window.electronAPI) : undefined);
 
 /**
- * Escudo de Tier idéntico al estilo Blitz / P3R en juego.
+ * Escudo de Tier minimalista y limpio idéntico a la referencia (estilo Blitz).
  */
 function TierShield({ tier }: { tier: TierBadge }) {
-  const config = useMemo(() => {
+  const fill = useMemo(() => {
     switch (tier) {
       case 'S+':
-        return {
-          bg: 'bg-gradient-to-b from-yellow-300 via-amber-400 to-amber-600',
-          border: 'border-yellow-200',
-          text: 'text-gray-950 font-black',
-          glow: 'shadow-[0_0_12px_rgba(251,191,36,0.7)]',
-        };
       case 'S':
-        return {
-          bg: 'bg-gradient-to-b from-amber-400 via-amber-500 to-amber-700',
-          border: 'border-amber-300',
-          text: 'text-gray-950 font-black',
-          glow: 'shadow-[0_0_10px_rgba(245,158,11,0.6)]',
-        };
+        return '#eab308'; // Dorado limpio
       case 'A':
-        return {
-          bg: 'bg-gradient-to-b from-cyan-400 via-teal-500 to-teal-700',
-          border: 'border-cyan-300',
-          text: 'text-gray-950 font-black',
-          glow: 'shadow-[0_0_10px_rgba(6,182,212,0.6)]',
-        };
+        return '#38bdf8'; // Azul celeste limpio
       case 'B':
-        return {
-          bg: 'bg-gradient-to-b from-emerald-400 via-emerald-500 to-emerald-700',
-          border: 'border-emerald-300',
-          text: 'text-white font-extrabold',
-          glow: 'shadow-[0_0_8px_rgba(16,185,129,0.5)]',
-        };
+        return '#22c55e'; // Verde limpio
       case 'C':
-        return {
-          bg: 'bg-gradient-to-b from-orange-500 to-amber-700',
-          border: 'border-orange-400',
-          text: 'text-white font-bold',
-          glow: 'shadow-[0_0_6px_rgba(249,115,22,0.4)]',
-        };
+        return '#f97316'; // Naranja limpio
       case 'D':
-        return {
-          bg: 'bg-gradient-to-b from-slate-600 to-slate-800',
-          border: 'border-slate-500',
-          text: 'text-slate-200 font-bold',
-          glow: '',
-        };
+        return '#94a3b8'; // Gris pizarra
       case 'F':
-        return {
-          bg: 'bg-gradient-to-b from-red-700 via-rose-800 to-red-950',
-          border: 'border-red-500',
-          text: 'text-white font-bold',
-          glow: 'shadow-[0_0_8px_rgba(239,68,68,0.5)]',
-        };
-      case '?':
+        return '#ef4444'; // Rojo limpio
       default:
-        return {
-          bg: 'bg-gradient-to-b from-slate-700 to-slate-900',
-          border: 'border-slate-600',
-          text: 'text-slate-300 font-bold',
-          glow: '',
-        };
+        return '#94a3b8';
     }
   }, [tier]);
 
   return (
-    <div
-      className={`relative w-7 h-8 flex items-center justify-center border-2 rounded-sm ${config.bg} ${config.border} ${config.glow}`}
-      style={{
-        clipPath: 'polygon(0% 0%, 100% 0%, 100% 70%, 50% 100%, 0% 70%)',
-      }}
-      title={`Tier ${tier}`}
-    >
-      <span className={`text-xs tracking-tighter ${config.text} -mt-0.5`}>{tier}</span>
+    <div className="relative w-[26px] h-[30px] flex items-center justify-center shrink-0">
+      <svg
+        viewBox="0 0 28 32"
+        className="w-full h-full drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        {/* Escudo plano con punta inferior */}
+        <path
+          d="M3 2H25C26.1 2 27 2.9 27 4V20.5C27 21.3 26.5 22.1 25.8 22.4L14.8 29.6C14.3 29.9 13.7 29.9 13.2 29.6L2.2 22.4C1.5 22.1 1 21.3 1 20.5V4C1 2.9 1.9 2 3 2Z"
+          fill={fill}
+        />
+        {/* Chevron inferior oscuro estilo insignia */}
+        <path
+          d="M6.5 20.5L14 25.2L21.5 20.5"
+          stroke="#111827"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+      <span
+        className="absolute text-[13px] font-extrabold text-gray-950 leading-none select-none"
+        style={{
+          top: '38%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif',
+        }}
+      >
+        {tier}
+      </span>
     </div>
   );
 }
@@ -334,18 +316,19 @@ export function OverlayApp() {
 
   // Cartas reales leídas por OCR (NUNCA sustituir por top 3 recomendado - Ley 1)
   const displayCards = cards;
-  const hayAlgunaCartaReconocida = displayCards.some((c) => c !== null);
+  const cantidadCartasReconocidas = displayCards.filter((c) => c !== null).length;
 
-  // Si está colapsado o aún no hay ninguna carta real reconocida por OCR, NO RENDERIZAR NADA (cero obstrucción)
-  if (collapsed || !hayAlgunaCartaReconocida) {
+  // Si está colapsado o hay menos de 2 cartas reales reconocidas por OCR, NO RENDERIZAR NADA
+  // (en LoL siempre salen 3 cartas juntas; esto evita al 100% que aparezca 1 sola carta suelta sin contexto)
+  if (collapsed || cantidadCartasReconocidas < 2) {
     return null;
   }
 
-  // Posiciones calibradas exactas sobre la zona oscura inferior interna de cada una de las 3 cartas en LoL (16:9)
+  // Posiciones calibradas exactas en el hueco oscuro inferior de cada carta (debajo del texto de descripción, encima del borde inferior)
   const cardPositions = [
-    { left: '29.5%', top: '52.5%', index: 1 as const },
-    { left: '50.0%', top: '52.5%', index: 2 as const },
-    { left: '70.5%', top: '52.5%', index: 3 as const },
+    { left: '29.5%', top: '58.8%', index: 1 as const },
+    { left: '50.0%', top: '58.8%', index: 2 as const },
+    { left: '70.5%', top: '58.8%', index: 3 as const },
   ];
 
   return (
@@ -353,7 +336,7 @@ export function OverlayApp() {
       className="w-screen h-screen relative pointer-events-none select-none overflow-hidden bg-transparent"
       style={{ background: 'transparent', backgroundColor: 'transparent' }}
     >
-      {/* 3 INSIGNIAS FLOTANTES SUPERPUESTAS EXACTAMENTE EN LA ZONA INFERIOR INTERNA DE CADA CARTA (ESTILO TIER BLITZ) */}
+      {/* 3 INSIGNIAS LIMPIAS Y MINIMALISTAS EN EL ESPACIO INFERIOR DE CADA CARTA (IDÉNTICO A LA REFERENCIA) */}
       {cardPositions.map((pos, i) => {
         const card = displayCards[i];
         if (!card) {
@@ -362,7 +345,6 @@ export function OverlayApp() {
         const slotData = cardSlots[i];
         const leftPct = slotData?.posXPct ? `${slotData.posXPct}%` : pos.left;
         const topPct = slotData?.posYPct ? `${slotData.posYPct}%` : pos.top;
-        const isBest = Boolean(card.isBest || bestCardIndex === pos.index);
 
         return (
           <div
@@ -373,55 +355,18 @@ export function OverlayApp() {
               top: topPct,
               transform: 'translate(-50%, -50%)',
             }}
-            className="pointer-events-none flex flex-col items-center z-40 transition-all select-none"
+            className="pointer-events-none flex items-center gap-2.5 z-40 select-none"
           >
-            {/* Cinta Superior: ★ MEJOR OPCIÓN si corresponde */}
-            {isBest && (
-              <div className="bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 text-gray-950 font-black text-[9px] uppercase px-2.5 py-0.5 rounded shadow-lg tracking-wider mb-1 flex items-center gap-1 animate-pulse">
-                <span>★</span>
-                <span>MEJOR OPCIÓN</span>
-              </div>
-            )}
-
-            {/* Insignia Tier idéntica a la captura de referencia: [Shield] Tier */}
-            <div
-              className={`relative flex items-center gap-2 px-3 py-1 rounded-md bg-[#02050e]/92 backdrop-blur-md border transition-all ${
-                isBest
-                  ? 'border-amber-400 shadow-[0_0_16px_rgba(245,158,11,0.6)]'
-                  : 'border-slate-700/80 shadow-[0_4px_16px_rgba(0,0,0,0.8)]'
-              }`}
+            <TierShield tier={(card.tier || 'B') as TierBadge} />
+            <span
+              className="text-[19px] font-bold text-white leading-none select-none"
+              style={{
+                fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif',
+                textShadow: '0 2px 4px rgba(0, 0, 0, 0.95)',
+              }}
             >
-              <TierShield tier={(card.tier || 'B') as TierBadge} />
-              <span className="text-base font-black text-white tracking-wider uppercase drop-shadow-sm font-sans">
-                Tier
-              </span>
-            </div>
-
-            {/* Detalles del Aumento (Nombre y Rendimiento Competitivo de OP.GG) */}
-            <div className="mt-1 px-2.5 py-0.5 rounded bg-[#030712]/88 border border-slate-800/80 backdrop-blur-sm flex flex-col items-center max-w-[175px] text-center shadow-md">
-              <div
-                className="text-[10px] font-bold text-white truncate max-w-[160px] leading-tight"
-                title={card.nameEs || card.name}
-              >
-                {card.nameEs || card.name}
-              </div>
-
-              {((card.winRate != null && !isNaN(card.winRate)) ||
-                (card.pickRate != null && !isNaN(card.pickRate))) && (
-                <div className="flex items-center gap-1.5 mt-0.5 font-mono text-[9px]">
-                  {card.winRate != null && !isNaN(card.winRate) && (
-                    <span className="text-cyan-300 font-extrabold">
-                      {card.winRate.toFixed(1)}% WR
-                    </span>
-                  )}
-                  {card.pickRate != null && !isNaN(card.pickRate) && (
-                    <span className="text-slate-400">
-                      • {card.pickRate.toFixed(0)}% Pick
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
+              Tier
+            </span>
           </div>
         );
       })}

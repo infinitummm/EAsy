@@ -14,11 +14,12 @@ use lcu::{
 use modos::ServicioAumentosModo;
 use ocr::detector_panel_aumentos::{
     calcular_caja_16_a_9, calcular_dhash_64, calcular_distancia_hamming,
-    evaluar_visibilidad_panel, ColorRgb, MuestraRoi, Rectangulo, TipoMuestra,
-    CENTROS_X_CARTAS, HUECOS_X_CARTAS,
+    detectar_coordenadas_exactas_cartas, evaluar_visibilidad_panel, ColorRgb, MuestraRoi,
+    Rectangulo, TipoMuestra, CENTROS_X_CARTAS, HUECOS_X_CARTAS,
 };
 use ocr::detector_aumentos_pantalla::{
-    escanear_tres_cartas_en_pantalla, BANDAS_Y_TITULO, COLUMNAS_CARTAS,
+    escanear_carta_individual_en_pantalla, escanear_tres_cartas_en_pantalla,
+    recalcular_mejor_carta, ResultadoEscaneoAugments, BANDAS_Y_TITULO, COLUMNAS_CARTAS,
 };
 use overlay::GestorOverlay;
 use servicios::{AutoAcceptService, ChampSelectService, GestorAjustes};
@@ -131,28 +132,31 @@ pub fn run() {
 
             tauri::async_runtime::spawn(async move {
                 let mut ticks: u64 = 0;
-                let mut en_partida;
+                let mut en_partida = false;
                 let mut ultimos_hashes_titulos: [u64; 3] = [0, 0, 0];
 
                 loop {
-                    tokio::time::sleep(Duration::from_millis(750)).await;
+                    let espera_ms = if en_partida { 300 } else { 750 };
+                    tokio::time::sleep(Duration::from_millis(espera_ms)).await;
                     ticks += 1;
 
                     // 1. Detección y validación periódica de LCU
                     if !lcu_c.esta_conectado().await {
-                        let reporte = ejecutar_deteccion_lcu(None);
-                        if reporte.success {
-                            if let Some(creds) = reporte.credentials {
-                                lcu_c.actualizar_credenciales(Some(creds)).await;
-                                let _ = lcu_c.validar_conexion().await;
+                        if ticks.is_multiple_of(3) {
+                            let reporte = ejecutar_deteccion_lcu(None);
+                            if reporte.success {
+                                if let Some(creds) = reporte.credentials {
+                                    lcu_c.actualizar_credenciales(Some(creds)).await;
+                                    let _ = lcu_c.validar_conexion().await;
+                                }
+                            }
+                            if reporte.is_permission_error {
+                                lcu_c.set_error_permisos(true).await;
+                                let _ = handle_c.emit("lcu:permission-error", true);
                             }
                         }
-                        if reporte.is_permission_error {
-                            lcu_c.set_error_permisos(true).await;
-                            let _ = handle_c.emit("lcu:permission-error", true);
-                        }
-                    } else if ticks.is_multiple_of(3) {
-                        // Conexión activa: validar periódicamente cada ~2.25s
+                    } else if ticks.is_multiple_of(6) {
+                        // Conexión activa: validar periódicamente cada ~2s
                         let _ = lcu_c.validar_conexion().await;
                         if lcu_c.obtener_modo_actual().await.is_none() {
                             if let Some(m) = lcu::detectar_modo_en_lcu(&lcu_c).await {
@@ -174,7 +178,7 @@ pub fn run() {
                             let champ_id = crate::lcu::resolver_id_campeon_por_nombre(champ_nombre);
                             gestor_o.set_campeon_y_modo(champ_id, champ_nombre, m);
 
-                            if champ_id > 0 && ticks % 10 == 0 {
+                            if champ_id > 0 && ticks % 15 == 1 {
                                 let s_modos = servicio_modos.clone();
                                 let champ_nom_clon = champ_nombre.to_string();
                                 let m_clon = m.clone();
@@ -234,14 +238,14 @@ pub fn run() {
                                 let px_izq = (caja16a9.x as f32 + (col - 0.04) * caja16a9.width as f32) as u32;
                                 let px_der = (caja16a9.x as f32 + (col + 0.04) * caja16a9.width as f32) as u32;
 
-                                // Zona oscura interna inferior de la carta (debajo de la descripción, libre de letras)
-                                let py_fondo_1 = (caja16a9.y as f32 + 0.505 * caja16a9.height as f32) as u32;
-                                let py_fondo_2 = (caja16a9.y as f32 + 0.530 * caja16a9.height as f32) as u32;
-                                // Bordes metálicos superior e inferior de la carta
-                                let py_borde_sup = (caja16a9.y as f32 + 0.138 * caja16a9.height as f32) as u32;
-                                let py_borde_inf = (caja16a9.y as f32 + 0.568 * caja16a9.height as f32) as u32;
-                                // Botón de reroll [ C ] debajo de la carta
-                                let py_reroll = (caja16a9.y as f32 + 0.605 * caja16a9.height as f32) as u32;
+                                // Zona oscura interna inferior de la carta (debajo de la descripción, libre de letras: y = 56.5% y 59.5%)
+                                let py_fondo_1 = (caja16a9.y as f32 + 0.565 * caja16a9.height as f32) as u32;
+                                let py_fondo_2 = (caja16a9.y as f32 + 0.595 * caja16a9.height as f32) as u32;
+                                // Bordes metálicos/prismáticos superior (25.0%) e inferior (63.5%) de la carta
+                                let py_borde_sup = (caja16a9.y as f32 + 0.250 * caja16a9.height as f32) as u32;
+                                let py_borde_inf = (caja16a9.y as f32 + 0.635 * caja16a9.height as f32) as u32;
+                                // Botón de reroll [ C ] debajo de la carta (67.5%)
+                                let py_reroll = (caja16a9.y as f32 + 0.675 * caja16a9.height as f32) as u32;
 
                                 if px_izq < img.width() && py_fondo_1 < img.height() {
                                     let p = img.get_pixel(px_izq, py_fondo_1);
@@ -287,8 +291,8 @@ pub fn run() {
                             // Pasillos inter-cartas para evaluar contraste estructural
                             for &hcol in &HUECOS_X_CARTAS {
                                 let px = (caja16a9.x as f32 + hcol * caja16a9.width as f32) as u32;
-                                let py1 = (caja16a9.y as f32 + 0.45 * caja16a9.height as f32) as u32;
-                                let py2 = (caja16a9.y as f32 + 0.52 * caja16a9.height as f32) as u32;
+                                let py1 = (caja16a9.y as f32 + 0.50 * caja16a9.height as f32) as u32;
+                                let py2 = (caja16a9.y as f32 + 0.58 * caja16a9.height as f32) as u32;
                                 if px < img.width() && py1 < img.height() {
                                     let p = img.get_pixel(px, py1);
                                     muestras.push(MuestraRoi {
@@ -308,32 +312,22 @@ pub fn run() {
                             // COMPUERTA 1: Presencia geométrica y estructural del panel de 3 cartas
                             let visible = evaluar_visibilidad_panel(&muestras);
                             if visible {
-                                // Calcular dHash de las 3 cajas de título para detectar Reroll instantáneo
+                                // Calcular dHash individual de cada carta (Icono + Título: y = 0.315 .. 0.468)
                                 let mut hashes_actuales = [0u64; 3];
-                                let mut hubo_reroll = false;
                                 for (i, &(x_min_f, x_max_f)) in COLUMNAS_CARTAS.iter().enumerate() {
                                     let roi = Rectangulo {
                                         x: (caja16a9.x as f32 + x_min_f * caja16a9.width as f32) as u32,
-                                        y: (caja16a9.y as f32 + BANDAS_Y_TITULO[0].0 * caja16a9.height as f32) as u32,
+                                        y: (caja16a9.y as f32 + BANDAS_Y_TITULO[1].0 * caja16a9.height as f32) as u32,
                                         width: ((x_max_f - x_min_f) * caja16a9.width as f32).max(9.0) as u32,
-                                        height: ((BANDAS_Y_TITULO[0].1 - BANDAS_Y_TITULO[0].0) * caja16a9.height as f32).max(8.0) as u32,
+                                        height: ((BANDAS_Y_TITULO[0].1 - BANDAS_Y_TITULO[1].0) * caja16a9.height as f32).max(8.0) as u32,
                                     };
                                     hashes_actuales[i] = calcular_dhash_64(&img, roi);
-                                    if ultimos_hashes_titulos[i] != 0
-                                        && calcular_distancia_hamming(hashes_actuales[i], ultimos_hashes_titulos[i]) > 6
-                                    {
-                                        hubo_reroll = true;
-                                    }
                                 }
 
                                 let estado_actual = gestor_o.obtener_estado();
-                                let debe_escanear = !estado_actual.visible
-                                    || hubo_reroll
-                                    || estado_actual.cards.is_empty()
-                                    || estado_actual.is_analyzing
-                                    || estado_actual.cards.iter().any(|c| c.augment.is_none());
 
-                                if debe_escanear {
+                                if !estado_actual.visible || estado_actual.cards.len() != 3 {
+                                    // Escaneo inicial de las 3 cartas
                                     let catalogo = servicio_modos.obtener_catalogo();
                                     let datos_campeon = servicio_modos
                                         .obtener_aumentos_campeon(
@@ -351,19 +345,89 @@ pub fn run() {
                                         Some(&datos_campeon.augments),
                                     );
 
-                                    // COMPUERTA 2: Confirmación OCR obligatoria (al menos 1 carta real reconocida del catálogo)
-                                    let al_menos_una_reconocida = resultado
+                                    // COMPUERTA 2 ESTRICTA: En LoL SIEMPRE aparecen 3 cartas juntas.
+                                    // Exigir al menos 2 cartas reales reconocidas del catálogo para abrir el overlay
+                                    // (elimina al 100% cualquier falso positivo de 1 sola carta suelta en el mapa).
+                                    let cartas_reconocidas = resultado
                                         .cards
                                         .iter()
-                                        .any(|c| c.augment.is_some());
+                                        .filter(|c| c.augment.is_some())
+                                        .count();
 
-                                    if al_menos_una_reconocida {
-                                        ultimos_hashes_titulos = hashes_actuales;
+                                    if cartas_reconocidas >= 2 {
+                                        for i in 0..3 {
+                                            if resultado.cards[i].augment.is_some() {
+                                                ultimos_hashes_titulos[i] = hashes_actuales[i];
+                                            }
+                                        }
                                         gestor_o.actualizar_escaneo_ocr(resultado);
                                         gestor_o.show();
-                                    } else if estado_actual.visible && !hubo_reroll {
-                                        // Si era un falso positivo sin ningún aumento real en pantalla, ocultar
-                                        gestor_o.hide();
+                                    }
+                                } else {
+                                    // El panel ya está visible: verificar instantáneamente si el jugador hizo Reroll en alguna carta
+                                    let mut cartas_actualizadas = [
+                                        estado_actual.cards[0].clone(),
+                                        estado_actual.cards[1].clone(),
+                                        estado_actual.cards[2].clone(),
+                                    ];
+                                    let mut necesita_ocr = [false; 3];
+                                    for i in 0..3 {
+                                        let dist = if ultimos_hashes_titulos[i] == 0 {
+                                            64
+                                        } else {
+                                            calcular_distancia_hamming(hashes_actuales[i], ultimos_hashes_titulos[i])
+                                        };
+                                        if dist > 3 || cartas_actualizadas[i].augment.is_none() {
+                                            necesita_ocr[i] = true;
+                                        }
+                                    }
+
+                                    if necesita_ocr.iter().any(|&b| b) {
+                                        let catalogo = servicio_modos.obtener_catalogo();
+                                        let datos_campeon = servicio_modos
+                                            .obtener_aumentos_campeon(
+                                                estado_actual.champion_id,
+                                                &estado_actual.champion_name,
+                                                &estado_actual.mode,
+                                                None,
+                                            )
+                                            .await;
+                                        let coords_exactas = detectar_coordenadas_exactas_cartas(&img, caja16a9);
+                                        let mut hubo_cambio_real = false;
+
+                                        for i in 0..3 {
+                                            if necesita_ocr[i] {
+                                                let nueva_carta = escanear_carta_individual_en_pantalla(
+                                                    &img,
+                                                    caja16a9,
+                                                    i,
+                                                    coords_exactas[i].0,
+                                                    coords_exactas[i].1,
+                                                    &catalogo,
+                                                    Some(&datos_campeon.augments),
+                                                );
+                                                // Solo actualizar cuando la animación de giro/reroll terminó y el OCR leyó el nuevo título
+                                                if nueva_carta.augment.is_some() {
+                                                    ultimos_hashes_titulos[i] = hashes_actuales[i];
+                                                    cartas_actualizadas[i] = nueva_carta;
+                                                    hubo_cambio_real = true;
+                                                }
+                                            }
+                                        }
+
+                                        if hubo_cambio_real {
+                                            let best_card_index = recalcular_mejor_carta(&cartas_actualizadas);
+                                            let detected_at = std::time::SystemTime::now()
+                                                .duration_since(std::time::UNIX_EPOCH)
+                                                .unwrap_or_default()
+                                                .as_millis() as u64;
+                                            gestor_o.actualizar_escaneo_ocr(ResultadoEscaneoAugments {
+                                                cards: cartas_actualizadas,
+                                                best_card_index,
+                                                detected_at,
+                                                is_analyzing: false,
+                                            });
+                                        }
                                     }
                                 }
                             } else {

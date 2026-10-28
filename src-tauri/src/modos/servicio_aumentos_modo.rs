@@ -129,25 +129,55 @@ impl ServicioAumentosModo {
         }
 
         let mut mapa_existentes: HashMap<i64, InfoAumento> = HashMap::new();
+        let mut mapa_por_nombre: HashMap<String, InfoAumento> = HashMap::new();
         for a in augments_encontrados {
-            mapa_existentes.insert(a.id, a);
+            mapa_existentes.insert(a.id, a.clone());
+            if !a.name.trim().is_empty() {
+                mapa_por_nombre.insert(a.name.to_lowercase(), a.clone());
+            }
+            if let Some(ref es) = a.name_es {
+                if !es.trim().is_empty() {
+                    mapa_por_nombre.insert(es.to_lowercase(), a.clone());
+                }
+            }
         }
 
         // 3. Fusionar con catálogo completo garantizando metadatos limpios
         let mut lista_final = Vec::new();
         for cat in self.catalogo.iter() {
-            if let Some(existente) = mapa_existentes.get(&cat.id) {
-                lista_final.push(existente.clone());
+            if cat.name.trim().len() < 3 {
+                continue;
+            }
+            let encontrado = mapa_existentes
+                .get(&cat.id)
+                .or_else(|| mapa_por_nombre.get(&cat.name.to_lowercase()))
+                .or_else(|| {
+                    cat.name_es
+                        .as_ref()
+                        .and_then(|es| mapa_por_nombre.get(&es.to_lowercase()))
+                });
+
+            if let Some(existente) = encontrado {
+                let mut fusionado = existente.clone();
+                fusionado.id = cat.id;
+                fusionado.key = cat.key.clone();
+                fusionado.name = cat.name.clone();
+                if cat.name_es.is_some() {
+                    fusionado.name_es = cat.name_es.clone();
+                }
+                if cat.rarity.is_some() {
+                    fusionado.rarity = cat.rarity.clone();
+                }
+                if cat.icon_url.is_some() {
+                    fusionado.icon_url = cat.icon_url.clone();
+                }
+                lista_final.push(fusionado);
             } else {
-                // Si es Arena o fallback, derivar tier por sinergia y rareza
-                let tier_fallback = if modo == "arena" {
-                    match cat.rarity.as_deref().unwrap_or("silver") {
-                        "prismatic" => Some("S".to_string()),
-                        "gold" => Some("A".to_string()),
-                        _ => Some("B".to_string()),
-                    }
-                } else {
-                    None
+                // Fallback de tier por rareza cuando el aumento tiene baja muestra en OP.GG
+                let tier_fallback = match cat.rarity.as_deref().unwrap_or("silver") {
+                    "prismatic" => Some("A".to_string()),
+                    "gold" => Some("B".to_string()),
+                    _ => Some("C".to_string()),
                 };
 
                 lista_final.push(InfoAumento {
@@ -234,32 +264,41 @@ impl ServicioAumentosModo {
             .unwrap_or("");
 
         let mut lista = Vec::new();
-        let re = regex::Regex::new(r#"Augment\((\d+),\s*"([^"]+)",\s*(\d+),\s*([\d.]+),\s*([\d.]+)\)"#)
+        let re = regex::Regex::new(r#"Augment\((\d+),\s*(?:"([^"]*)"|null),\s*(\d+),\s*([\d.]+),\s*([\d.]+)\)"#)
             .map_err(|e| e.to_string())?;
 
         for cap in re.captures_iter(text) {
             let id: i64 = cap[1].parse().unwrap_or(0);
-            let name = cap[2].to_string();
+            let name_capturado = cap.get(2).map(|m| m.as_str().to_string()).unwrap_or_default();
             let tier_raw: u32 = cap[3].parse().unwrap_or(4);
             let perf: f64 = cap[4].parse().unwrap_or(0.0);
             let pop: f64 = cap[5].parse().unwrap_or(0.0);
 
-            // Mapeo preciso a TierBadge según performance y tier oficial
-            let tier_badge = if perf >= 80.0 || tier_raw <= 2 {
+            let cat_info = self.catalogo.iter().find(|c| c.id == id);
+            let name_en = cat_info
+                .map(|c| c.name.clone())
+                .unwrap_or_else(|| name_capturado.clone());
+            let name_es = if !name_capturado.is_empty() {
+                Some(name_capturado)
+            } else {
+                cat_info.and_then(|c| c.name_es.clone())
+            };
+
+            // Mapeo preciso a TierBadge según performance y tier oficial de OP.GG
+            let tier_badge = if tier_raw <= 2 || perf >= 89.0 {
                 "S"
-            } else if perf >= 75.0 || tier_raw == 3 {
+            } else if tier_raw == 3 || perf >= 82.0 {
                 "A"
-            } else if perf >= 70.0 || tier_raw == 4 {
+            } else if tier_raw == 4 || perf >= 72.0 {
                 "B"
-            } else if perf >= 60.0 || tier_raw == 5 {
+            } else if tier_raw == 5 && (perf == 0.0 || perf >= 55.0) {
                 "C"
-            } else if perf >= 50.0 {
+            } else if perf >= 45.0 {
                 "D"
             } else {
                 "F"
             };
 
-            let cat_info = self.catalogo.iter().find(|c| c.id == id);
             let rarity = cat_info.and_then(|c| c.rarity.clone()).or_else(|| {
                 if tier_raw <= 2 {
                     Some("prismatic".to_string())
@@ -276,15 +315,15 @@ impl ServicioAumentosModo {
             lista.push(InfoAumento {
                 id,
                 key,
-                name: name.clone(),
-                name_es: Some(name),
+                name: name_en,
+                name_es,
                 rarity,
                 icon_url,
                 desc: None,
                 desc_es,
                 tier: Some(tier_badge.to_string()),
                 pick_rate: Some(pop * 100.0),
-                win_rate: Some(perf),
+                win_rate: if perf > 0.0 { Some(perf) } else { None },
             });
         }
 

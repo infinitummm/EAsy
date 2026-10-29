@@ -1,17 +1,16 @@
 param (
-    [string]$Version = "1.0.1"
+    [string]$Version = "1.1.0"
 )
 
 $ErrorActionPreference = "Stop"
 
 Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "  Lanzamiento de EAsy v$Version" -ForegroundColor Cyan
+Write-Host "  Lanzamiento de EAsy v$Version (Tauri v2)" -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 
 # 1. Comprobar Variable de Entorno
 if (-not $env:GH_TOKEN) {
     Write-Warning "AVISO: No se detectó la variable `$env:GH_TOKEN en la sesión actual."
-    Write-Warning "Si vas a publicar automáticamente a GitHub, asegúrate de asignarla: `$env:GH_TOKEN='ghp_...'`"
 }
 
 # 2. Verificación Estricta de Tipos
@@ -22,36 +21,42 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # 3. Compilación de Frontend y Backend
-Write-Host "`n[2/4] Compilando aplicación con Vite..." -ForegroundColor Yellow
+Write-Host "`n[2/4] Compilando frontend Vite..." -ForegroundColor Yellow
 npm run build
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Fallo en la compilación Vite."
 }
 
-# 4. Empaquetado NSIS (Instalador por Usuario)
-Write-Host "`n[3/4] Empaquetando instalador NSIS..." -ForegroundColor Yellow
-npx electron-builder --win nsis
+# 4. Compilación Tauri v2 Release
+Write-Host "`n[3/4] Compilando instalador nativo Tauri v2 (Rust)..." -ForegroundColor Yellow
+npx tauri build
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "Fallo en la generación del instalador NSIS."
+    Write-Error "Fallo en la compilación de Tauri release."
 }
 
-Write-Host "`n✓ Instalador generado en release/EAsy Setup $Version.exe" -ForegroundColor Green
+$sourceExe = "src-tauri/target/release/bundle/nsis/EAsy_${Version}_x64-setup.exe"
+$destDir = "release"
+if (-not (Test-Path $destDir)) {
+    New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+}
+if (Test-Path $sourceExe) {
+    Copy-Item $sourceExe -Destination "$destDir/EAsy_${Version}_x64-setup.exe" -Force
+    Write-Host "`n✓ Instalador generado en release/EAsy_${Version}_x64-setup.exe" -ForegroundColor Green
+}
 
 # 5. Publicación en GitHub Releases si GH_TOKEN está presente
 if ($env:GH_TOKEN) {
     Write-Host "`n[4/4] Creando release en GitHub..." -ForegroundColor Yellow
-    $exePath = "release/EAsy Setup $Version.exe"
-    $ymlPath = "release/latest.yml"
+    $installerPath = "$destDir/EAsy_${Version}_x64-setup.exe"
     
-    if (Test-Path $exePath) {
-        gh release create "v$Version" "$exePath" "$ymlPath" `
-            --title "EAsy v$Version" `
-            --notes "Versión $Version de Itero Local con integración completa OP.GG MCP y LCU sin Riot API requerida." `
-            --draft
-        Write-Host "✓ Borrador de release v$Version creado con éxito en GitHub." -ForegroundColor Green
+    if (Test-Path $installerPath) {
+        gh release create "v$Version" "$installerPath" `
+            --title "EAsy v$Version - Modo Arena, Selector de Hechizos y Validación de APIs" `
+            --notes "Versión $Version de EAsy con soporte completo para Modo Arena (overlay de aumentos OP.GG en vivo), selector de hechizos optimizado y validación de claves Riot y Gemini."
+        Write-Host "✓ Release v$Version publicado con éxito en GitHub." -ForegroundColor Green
     }
 } else {
-    Write-Host "`n[4/4] Release en GitHub omitido (no se definió GH_TOKEN). Puedes subir release/ manualmente." -ForegroundColor Gray
+    Write-Host "`n[4/4] Release en GitHub omitido (no se definió GH_TOKEN). Se puede subir release/ manualmente o via git tag." -ForegroundColor Gray
 }
 
 Write-Host "`n¡Proceso de Release completado!" -ForegroundColor Cyan

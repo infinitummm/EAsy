@@ -22,10 +22,10 @@
 
 ##  Nueva Arquitectura Nativa: Tauri v2 + Rust
 
-En su versión **v1.0.1**, **EAsy** ha sido completamente migrado de Electron a **Tauri v2 con backend en Rust**:
+En su versión **v1.1.0**, **EAsy** evoluciona con soporte completo para el **Modo Arena**, selector de hechizos optimizado y backend ultra rápido en **Tauri v2 con Rust**:
 * **Consumo de memoria ultra bajo:** Reducción de ~350 MB a solo **~50 MB de RAM** en ejecución.
-* **Instalador ligero:** Reducción del peso de descarga de ~135 MB a tan solo **4.7 MB** (`EAsy_1.0.1_x64-setup.exe`).
-* **OCR Nativo de Windows (`Windows.Media.Ocr`):** Reconocimiento óptico de caracteres acelerado por hardware sin librerías externas pesadas.
+* **Instalador ligero:** Reducción del peso de descarga de ~135 MB a tan solo **5.8 MB** (`EAsy_1.1.0_x64-setup.exe`).
+* **Overlay Nativo de Aumentos para Arena y ARAM:** Detección en vivo de las 3 cartas de aumentos con OCR acelerado por hardware de Windows (`Windows.Media.Ocr`), emparejamiento con datos de OP.GG y visualización instantánea (150 ms) de Tiers y nombres sin tapar la interfaz del juego.
 * **100% Seguro con Vanguard:** Cero inyección de DLLs, cero lectura de memoria protegida, sin simulación de clics ni trampas. Únicamente lectura local de Live Client Data API (`https://127.0.0.1:2999`), LCU lockfile y APIs públicas de Riot / OP.GG.
 
 ---
@@ -60,14 +60,13 @@ La interfaz está inspirada en la estética **Dark Hour** de *Persona 3 Reload* 
 
 ## Características Principales
 
-###  1. Overlay Ligero de Aumentos en Tiempo Real (ARAM Caos & Arena)
-En los modos **ARAM Caos (Mayhem)** y **Arena**, cuando el juego te presenta los 3 aumentos (Plata, Oro, Prismático), EAsy despliega un visor flotante ultra discreto en la cabecera superior:
-- **Tiers Reales OP.GG**: Clasificación precisa (S+, S, A, B, C, D) y Pick Rate calculados para tu campeón y parche actual. **Cero datos inventados.**
-- **Recomendación Inteligente**: Destaca de forma clara cuál es la mejor opción estadística.
-- **Filtro Anti-Pantalla de Muerte**: Algoritmo cromático que previene falsos positivos al morir (desaturación gris de pantalla).
-- **No tapa los botones del juego**: Ubicado en el 14% superior de la pantalla, dejando libres los dados de Reroll.
-- **Detección Automática de Reroll**: Hash perceptual de 64-bits (`dHash`) que re-escanea al instante cuando tiras dados.
-- **Ventana Click-Through**: `setIgnoreMouseEvents(true)`, nunca roba clics ni foco al juego. Atajo global: `Ctrl+Shift+O`.
+###  1. Overlay Inteligente de Aumentos en Tiempo Real (Modo Arena & ARAM Caos)
+En los modos **Arena** y **ARAM Caos (Mayhem)**, cuando el juego te presenta las 3 cartas de aumentos (Plata, Oro, Prismático), EAsy proyecta automáticamente un visor sobre la ventana del juego:
+- **Tiers Reales OP.GG**: Clasificación precisa (S, A, B, C, D) calculada directamente según el índice de rendimiento oficial de OP.GG para tu campeón y parche actual. **Cero datos inventados.**
+- **Nombre Real Reconocido**: Muestra el nombre exacto del aumento emparejado bajo cada carta con tipografía limpia de sistema.
+- **Posición Exacta No Intrusiva**: Ubicado estratégicamente en la zona libre inferior de las cartas (58.8% Y), sin tapar el título superior, las descripciones ni los botones de Reroll (dados).
+- **Respuesta Instantánea a Rerolls (150 ms)**: Detección óptica continua acelerada por hardware de Windows que actualiza el tier y nombre en el momento exacto en que cambias una carta con tus dados.
+- **Ventana Click-Through y Cero Impacto**: Transparente, sin bordes y con paso de clics (`transparent`, `click-through`), sin robar foco ni reducir FPS. Se activa solo cuando las cartas están visibles y se oculta automáticamente. Atajo global: `Ctrl+Shift+O`.
 
 ###  2. Auto-Accept con retardo configurable
 ¿Fuiste a servirte agua o al baño mientras buscabas partida y sonó la cola? EAsy acepta la partida por ti. Puedes configurar un retardo de 1 a 4 segundos para que la aceptación sea natural.
@@ -102,7 +101,7 @@ Por seguridad, el auto-pick viene apagado por defecto. Pero si tienes que aparta
 
 ## Cómo instalarlo en 1 minuto
 
-1. Entra a la sección de [Releases](https://github.com/infinitummm/EAsy/releases) y descarga el instalador: **`EAsy_1.0.1_x64-setup.exe`** (~4.7 MB).
+1. Entra a la sección de [Releases](https://github.com/infinitummm/EAsy/releases) y descarga el instalador: **`EAsy_1.1.0_x64-setup.exe`** (~5.8 MB).
 2. Haz doble clic para instalar.
    - El instalador **elimina automáticamente cualquier versión anterior de Electron** para no duplicar espacio ni dejar procesos colgados.
    - Crea un acceso directo limpio con el logo oficial en tu Escritorio.
@@ -137,7 +136,7 @@ npm test
 npx tauri build
 ```
 
-El instalador final generado quedará disponible en `src-tauri/target/release/bundle/nsis/EAsy_1.0.1_x64-setup.exe` y en `release/EAsy_1.0.1_x64-setup.exe`.
+El instalador final generado quedará disponible en `src-tauri/target/release/bundle/nsis/EAsy_1.1.0_x64-setup.exe` y en `release/EAsy_1.1.0_x64-setup.exe`.
 
 ---
 

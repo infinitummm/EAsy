@@ -91,10 +91,10 @@ Te arma la build completa directamente en la tienda del juego:
 - **Opciones situacionales** adaptadas al daño del rival.
 - **Consumibles y pociones**.
 
-### 📊 7. Metagame y estadísticas reales de OP.GG
+###  7. Metagame y estadísticas reales de OP.GG
 Las recomendaciones provienen de millones de partidas analizadas en el parche actual (**26.20**). Además, puedes elegir con qué nivel de juego quieres comparar tus datos (Esmeralda+, Diamante+, Máster+ o todos los rangos).
 
-### 🤖 8. Auto-Pick y Auto-Ban de respaldo
+###  8. Auto-Pick y Auto-Ban de respaldo
 Por seguridad, el auto-pick viene apagado por defecto. Pero si tienes que apartarte del teclado durante la fase de selección, puedes armar una lista de prioridades de campeones y de bans para cada posición. EAsy elegirá o bloqueará el primer campeón disponible de tu lista.
 
 ---

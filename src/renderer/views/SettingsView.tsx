@@ -250,6 +250,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setTimeout(() => setSavedSuccess(false), 2500);
   };
 
+  const handleSaveAutoChampSelect = React.useCallback((autoChampSelect: any) => {
+    onSaveSettings({ autoChampSelect });
+  }, [onSaveSettings]);
+
   return (
     <div className="max-w-5xl mx-auto space-y-6 select-none pb-8">
       {/* Cabecera */}
@@ -453,7 +457,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* Automatización de Selección y Preferencias de Rol */}
       <RolePreferencesEditor
         settings={settings?.autoChampSelect || DEFAULT_APP_SETTINGS.autoChampSelect}
-        onSave={(autoChampSelect) => onSaveSettings({ autoChampSelect })}
+        onSave={handleSaveAutoChampSelect}
         championsCatalog={catalogChampions}
       />
 

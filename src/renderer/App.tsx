@@ -221,13 +221,12 @@ export default function App() {
 
   const handleSaveSettings = async (newSettings: Partial<AppSettings>) => {
     const fusionado = mergeSettings({ ...settings, ...newSettings });
+    if (JSON.stringify(settings) === JSON.stringify(fusionado)) {
+      return;
+    }
     setSettings(fusionado);
     if (window.api) {
       await window.api.saveSettings(fusionado).catch(console.error);
-      const updated = await window.api.getSettings().catch(() => null);
-      if (updated) {
-        setSettings(mergeSettings(updated));
-      }
     }
   };
 

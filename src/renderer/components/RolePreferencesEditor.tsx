@@ -367,35 +367,41 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
     return internalChampions;
   }, [championsCatalog, internalChampions]);
 
-  // Sincronizar solo cuando cambie settings por guardado externo
-  const lastSettingsRef = useRef(settings);
-  useEffect(() => {
-    if (settings !== lastSettingsRef.current) {
-      lastSettingsRef.current = settings;
-      setPrefs(safeSettings);
-    }
-  }, [settings, safeSettings]);
-
-  // Auto-guardado reactivo (debounce 250ms): garantiza que los cambios persistan inmediatamente al cambiar de rol o pestaña
-  const isFirstMountRef = useRef(true);
+  // Sincronizar solo cuando cambie settings por guardado externo y NO haya ediciones pendientes del usuario
+  const userEditedRef = useRef(false);
   const prefsRef = useRef(prefs);
   prefsRef.current = prefs;
 
   useEffect(() => {
-    if (isFirstMountRef.current) {
-      isFirstMountRef.current = false;
+    if (userEditedRef.current) return;
+    const currentStr = JSON.stringify(prefsRef.current);
+    const incomingStr = JSON.stringify(safeSettings);
+    if (currentStr !== incomingStr) {
+      setPrefs(safeSettings);
+    }
+  }, [safeSettings]);
+
+  // Auto-guardado reactivo (debounce 350ms): SOLO cuando el usuario realiza una acción interactiva
+  useEffect(() => {
+    if (!userEditedRef.current) {
       return;
     }
     const timer = setTimeout(() => {
-      onSave(prefs);
-    }, 250);
+      if (userEditedRef.current) {
+        userEditedRef.current = false;
+        onSave(prefsRef.current);
+      }
+    }, 350);
     return () => clearTimeout(timer);
   }, [prefs, onSave]);
 
-  // Flush al desmontar el componente para evitar cualquier pérdida de datos
+  // Flush al desmontar el componente SOLO si quedaron cambios sin persistir
   useEffect(() => {
     return () => {
-      onSave(prefsRef.current);
+      if (userEditedRef.current) {
+        userEditedRef.current = false;
+        onSave(prefsRef.current);
+      }
     };
   }, [onSave]);
 
@@ -429,6 +435,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
   }, [selectedRole]);
 
   const handleToggleAutoAction = useCallback((key: 'autoHover' | 'autoPick' | 'autoBan' | 'autoSpells') => {
+    userEditedRef.current = true;
     setPrefs((prev) => ({
       ...prev,
       [key]: !prev[key]
@@ -436,6 +443,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
   }, []);
 
   const handlePickDelayChange = useCallback((seconds: number) => {
+    userEditedRef.current = true;
     const clamped = Math.max(0, Math.min(5, seconds));
     setPrefs((prev) => ({
       ...prev,
@@ -444,6 +452,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
   }, []);
 
   const handleSave = () => {
+    userEditedRef.current = false;
     onSave(prefs);
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 2500);
@@ -453,6 +462,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
     listType: 'preferredChampions' | 'fallbackChampions' | 'banChampions',
     champId: number
   ) => {
+    userEditedRef.current = true;
     setPrefs((prev) => {
       const baseRolePrefs = prev?.rolePreferences || DEFAULT_APP_SETTINGS.autoChampSelect.rolePreferences;
       const rolePref = baseRolePrefs[selectedRole] || {
@@ -480,6 +490,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
     listType: 'preferredChampions' | 'fallbackChampions' | 'banChampions',
     champId: number
   ) => {
+    userEditedRef.current = true;
     setPrefs((prev) => {
       const baseRolePrefs = prev?.rolePreferences || DEFAULT_APP_SETTINGS.autoChampSelect.rolePreferences;
       const rolePref = baseRolePrefs[selectedRole] || {
@@ -507,6 +518,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
     index: number,
     direction: 'up' | 'down'
   ) => {
+    userEditedRef.current = true;
     setPrefs((prev) => {
       const baseRolePrefs = prev?.rolePreferences || DEFAULT_APP_SETTINGS.autoChampSelect.rolePreferences;
       const rolePref = baseRolePrefs[selectedRole] || {
@@ -537,6 +549,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
   }, [selectedRole]);
 
   const handleSelectSpell = useCallback((slot: 0 | 1, spellId: number) => {
+    userEditedRef.current = true;
     setPrefs((prev) => {
       const baseRolePrefs = prev?.rolePreferences || DEFAULT_APP_SETTINGS.autoChampSelect.rolePreferences;
       const rolePref = baseRolePrefs[selectedRole] || {
@@ -574,6 +587,7 @@ export const RolePreferencesEditor: React.FC<RolePreferencesEditorProps> = React
   }, [selectedRole]);
 
   const handleSwapSpells = useCallback(() => {
+    userEditedRef.current = true;
     setPrefs((prev) => {
       const baseRolePrefs = prev?.rolePreferences || DEFAULT_APP_SETTINGS.autoChampSelect.rolePreferences;
       const rolePref = baseRolePrefs[selectedRole] || {

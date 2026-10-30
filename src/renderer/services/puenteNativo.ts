@@ -147,11 +147,12 @@ export function crearPuenteNativo() {
       genericInvoke(IPC_CHANNELS.LCU_APPLY_RUNES, page),
     applyBuild: (params: {
       championId: number;
+      championKey?: string;
       opponentId?: number;
       role?: Role;
       title?: string;
       build: any;
-    }): Promise<{ success: boolean; filePath?: string; error?: string }> =>
+    }): Promise<{ success: boolean; filePath?: string; lcuApplied?: boolean; error?: string }> =>
       genericInvoke(IPC_CHANNELS.LCU_APPLY_BUILD, params),
 
     // Riot API

@@ -3,7 +3,7 @@ import { GeminiMatchupRecommendation, Role, RunePage, PatchDiffSummary, Groundin
 import { BuildVisualizer, AbilityMaxOrderGrid } from '../components/BuildVisualizer';
 import { InteractiveRuneTree } from '../components/InteractiveRuneTree';
 import { ChampionSelectInput } from '../components/ChampionSelectInput';
-import { getChampionName, getChampionIconUrl } from '../../shared/champions';
+import { getChampionName, getChampionIconUrl, getChampionById } from '../../shared/champions';
 import { getAccurateFallbackRecommendation } from '../../shared/buildDatabase';
 import { formatFullPatchLabel, formatDisplayPatch, toDdragonVersion } from '../../shared/patchUtils';
 import { getRuneIconUrl, getRuneName, getRuneTreeById } from '../../shared/runesData';
@@ -404,6 +404,7 @@ export const MatchupView: React.FC<MatchupViewProps> = ({
         window.api
           .applyBuild({
             championId: rec.championId,
+            championKey: getChampionById(rec.championId)?.key || getChampionName(rec.championId),
             opponentId: rec.opponentChampionId,
             role: rec.assignedRole,
             title,

@@ -11,6 +11,7 @@ interface MetaSuggestionsPanelProps {
   isLiveChampSelect?: boolean;
   isMyBanTurn?: boolean;
   isMyPickTurn?: boolean;
+  revealedEnemies?: Array<{ championId: number; championName?: string; role: Role }>;
   onHoverChampion?: (championId: number) => void;
   onInspectChampionBuild?: (championId: number, role: Role) => void;
   patchVersion?: string;
@@ -36,6 +37,7 @@ export const MetaSuggestionsPanel: React.FC<MetaSuggestionsPanelProps> = ({
   isLiveChampSelect = false,
   isMyBanTurn = false,
   isMyPickTurn = false,
+  revealedEnemies = [],
   onHoverChampion,
   onInspectChampionBuild,
   patchVersion = '16.20.1',
@@ -451,6 +453,28 @@ export const MetaSuggestionsPanel: React.FC<MetaSuggestionsPanelProps> = ({
                   : 'Los campeones de Tier 1 con mayor porcentaje de victoria en tu posición.'}
               </p>
             </div>
+
+            {revealedEnemies.length > 0 && suggestionMode === 'pick' && (
+              <div className="mb-4 bg-[#030814] border border-[#00E5FF] p-3 p3r-cut-tr flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="flex items-center space-x-2">
+                  <Swords className="w-4 h-4 text-[#00E5FF]" />
+                  <span className="text-white font-bold font-p3r-head uppercase">
+                    Rivales detectados en partida:
+                  </span>
+                  <div className="flex flex-wrap items-center gap-1.5 ml-1">
+                    {revealedEnemies.map((e) => (
+                      <span key={e.championId} className="inline-flex items-center space-x-1 bg-[#050E20] border border-[#16335F] px-2 py-0.5 text-[11px] text-[#00E5FF]">
+                        <img src={getChampionIconUrl(e.championId, patchVersion)} alt={e.championName || ''} className="w-3.5 h-3.5 rounded-full" />
+                        <span>{e.championName || getChampionName(e.championId)} ({e.role})</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <span className="text-[10px] text-[#7E9BB8] font-mono">
+                  Sugerencias optimizadas para confrontación
+                </span>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               {topSixSuggestions.map((champ, idx) => {

@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { ChampSelectSession, ChampSelectPlayer, Role, AppSettings } from '../../shared/types';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { ChampSelectSession, ChampSelectPlayer, Role, AppSettings, RunePage } from '../../shared/types';
 import { DEFAULT_APP_SETTINGS } from '../../shared/constants';
 import { IPC_CHANNELS } from '../../shared/events';
 import { RolePreferencesEditor } from '../components/RolePreferencesEditor';
 import { MetaSuggestionsPanel } from '../components/MetaSuggestionsPanel';
 import { MatchupView } from './MatchupView';
-import { getChampionName, getChampionIconUrl } from '../../shared/champions';
+import { getChampionName, getChampionIconUrl, getChampionById } from '../../shared/champions';
+import { getAccurateFallbackRecommendation } from '../../shared/buildDatabase';
 import {
   extractLocalChampionId,
   extractPlayerChampionId,
@@ -25,7 +26,9 @@ import {
   CheckCircle2,
   Target,
   Ban,
-  Check
+  Check,
+  Flame,
+  ArrowRight
 } from 'lucide-react';
 import { P3rButton } from '../components/p3r/P3rButton';
 import { P3rBadge } from '../components/p3r/P3rBadge';
@@ -139,11 +142,126 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
   const isMyBanTurn = myActionInProgress?.type === 'ban';
   const currentGlobalAction = allActions.find((a) => a.isInProgress && !a.completed);
 
+  // Detección de campeones revelados en el equipo enemigo
+  const revealedEnemies = useMemo(() => {
+    if (!session?.theirTeam) return [];
+    return session.theirTeam
+      .map((p) => {
+        const champId = extractPlayerChampionId(p, session);
+        if (champId <= 0) return null;
+        const pRole = detectPlayerRole(p, session, champId);
+        return {
+          cellId: p.cellId,
+          championId: champId,
+          championName: getChampionName(champId),
+          role: pRole,
+        };
+      })
+      .filter(Boolean) as Array<{ cellId: number; championId: number; championName: string; role: Role }>;
+  }, [session?.theirTeam]);
+
+  // Identificar el rival directo prioritario para calcular counters
+  const directLaneRival = useMemo(() => {
+    if (manualOpponentId && manualOpponentId > 0) {
+      const found = revealedEnemies.find((e) => e.championId === manualOpponentId);
+      if (found) return found;
+      return {
+        cellId: -1,
+        championId: manualOpponentId,
+        championName: getChampionName(manualOpponentId),
+        role: localRole,
+      };
+    }
+    const sameRole = revealedEnemies.find((e) => e.role === localRole);
+    if (sameRole) return sameRole;
+    return revealedEnemies[0] || null;
+  }, [revealedEnemies, manualOpponentId, localRole]);
+
   // Estado para los counters en vivo obtenidos de OP.GG MCP (Sin consumo de tokens IA)
   const [opggLiveCounters, setOpggLiveCounters] = useState<
     Record<number, Array<{ championId: number; championName: string; winRate: number; play: number }>>
   >({});
   const fetchedOpponentsRef = useRef<Set<number>>(new Set());
+
+  // Estado y funciones de importación directa a League of Legends
+  const [importStatus, setImportStatus] = useState<'idle' | 'importing' | 'success' | 'error'>('idle');
+  const [importMsg, setImportMsg] = useState<string | null>(null);
+
+  const handleApplyCurrentBuildAndRunes = async (targetChampionId?: number) => {
+    const champToApply = targetChampionId || myChampionId;
+    if (!champToApply || champToApply <= 0) return;
+    setImportStatus('importing');
+    setImportMsg('Importando runas y build a League of Legends...');
+    try {
+      const targetOpponentId = (activeOpponentId && activeOpponentId > 0) ? activeOpponentId : 0;
+      const rec = getAccurateFallbackRecommendation({
+        championId: champToApply,
+        opponentId: targetOpponentId,
+        role: localRole,
+        patch: '26.20',
+      });
+
+      const runesRec = rec.runesRecommendation || {
+        primaryStyleId: 8000,
+        subStyleId: 8100,
+        selectedPerkIds: [8005, 9101, 9103, 8014, 8139, 8135, 5008, 5008, 5011],
+      };
+
+      const runePage: RunePage = {
+        name: `EAsy ${getChampionName(champToApply)}`,
+        primaryStyleId: runesRec.primaryStyleId,
+        subStyleId: runesRec.subStyleId,
+        selectedPerkIds: runesRec.selectedPerkIds,
+        current: true,
+      };
+
+      const buildData = rec.buildRecommendation || {
+        startingItems: [1055, 2003],
+        coreItems: [3031, 3046, 3036],
+        situationalItems: [
+          { itemId: 3026, condition: 'Resistencia' },
+          { itemId: 3139, condition: 'Limpieza' },
+        ],
+        boots: 3006,
+      };
+
+      const [runeRes, buildRes] = await Promise.all([
+        window.api?.applyRunes ? window.api.applyRunes(runePage) : Promise.resolve({ success: false, error: 'No disponible' }),
+        window.api?.applyBuild
+          ? window.api.applyBuild({
+              championId: champToApply,
+              championKey: getChampionById(champToApply)?.key || getChampionName(champToApply),
+              opponentId: targetOpponentId,
+              role: localRole,
+              title: `EAsy // ${getChampionName(champToApply)} (${localRole})`,
+              build: buildData,
+            })
+          : Promise.resolve({ success: false, error: 'No disponible' }),
+      ]);
+
+      if (runeRes?.success || buildRes?.success) {
+        setImportStatus('success');
+        setImportMsg('Runas oficiales y conjunto de objetos importados a League of Legends');
+      } else {
+        setImportStatus('error');
+        const errDesc = (runeRes as any)?.error || (buildRes as any)?.error || 'No se pudo comunicar con el cliente';
+        setImportMsg(errDesc);
+      }
+    } catch (err: any) {
+      setImportStatus('error');
+      setImportMsg(err.message || 'Error al importar build y runas');
+    } finally {
+      setTimeout(() => setImportStatus('idle'), 6000);
+    }
+  };
+
+  const autoImportedChampRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (myChampionId > 0 && autoImportedChampRef.current !== myChampionId) {
+      autoImportedChampRef.current = myChampionId;
+      handleApplyCurrentBuildAndRunes(myChampionId);
+    }
+  }, [myChampionId, activeOpponentId]);
 
   // Verificar si los 10 campeones están bloqueados
   const all10Locked = Boolean(
@@ -367,6 +485,7 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
           isLiveChampSelect={Boolean(session)}
           isMyBanTurn={isMyBanTurn}
           isMyPickTurn={isMyPickTurn}
+          revealedEnemies={revealedEnemies}
           onHoverChampion={handleHover}
           onInspectChampionBuild={(champId, targetRole) => {
             setInspectedBuildTarget({ championId: champId, role: targetRole });
@@ -425,6 +544,59 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                   </div>
                 </div>
               </div>
+
+              {/* Banner de Sincronización e Importación a LoL */}
+              {myChampionId > 0 && (
+                <div className="bg-[#030814] border-2 border-[#00E5FF] p-4 p3r-bevel flex flex-col sm:flex-row items-center justify-between gap-3 p3r-shadow-blue animate-p3r-slide">
+                  <div className="flex items-center space-x-3.5">
+                    <img
+                      src={getChampionIconUrl(myChampionId)}
+                      alt={getChampionName(myChampionId)}
+                      className="w-12 h-12 border-2 border-[#00E5FF] object-cover shrink-0"
+                    />
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-[10px] font-black text-[#00E5FF] uppercase tracking-wider font-p3r-head">
+                          CAMPEÓN FIJADO:
+                        </span>
+                        <span className="text-sm font-black text-white uppercase font-p3r">
+                          {getChampionName(myChampionId)}
+                        </span>
+                        <span className="text-[10px] bg-[#0066FF] text-white px-1.5 py-0.2 font-mono">
+                          {localRole}
+                        </span>
+                      </div>
+                      <p className="text-xs text-[#7E9BB8] mt-0.5">
+                        {importMsg || 'Sincronización directa con League of Legends (Runas activadas + Tienda de objetos configurada).'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2 shrink-0">
+                    <P3rButton
+                      variant={importStatus === 'success' ? 'cyan' : importStatus === 'error' ? 'danger' : 'primary'}
+                      size="md"
+                      onClick={() => handleApplyCurrentBuildAndRunes(myChampionId)}
+                      disabled={importStatus === 'importing'}
+                      icon={
+                        importStatus === 'importing' ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : importStatus === 'success' ? (
+                          <Check className="w-4 h-4" />
+                        ) : (
+                          <Zap className="w-4 h-4" />
+                        )
+                      }
+                    >
+                      {importStatus === 'importing'
+                        ? 'Importando...'
+                        : importStatus === 'success'
+                        ? '¡RUNAS Y OBJETOS IMPORTADOS!'
+                        : 'IMPORTAR RUNAS & OBJETOS A LOL'}
+                    </P3rButton>
+                  </div>
+                </div>
+              )}
 
               {/* Indicador de Turno Activo & Bans */}
               <div className="space-y-3">
@@ -612,167 +784,250 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                   </div>
                 )}
 
-                {/* Grid con las 3 Tarjetas de Picks Recomendados */}
-                {draftRecs?.picks && draftRecs.picks.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {draftRecs.picks.map((pick: any, idx: number) => {
-                      const isHovering = hoveringId === pick.championId;
-                      return (
-                        <div
-                          key={pick.championId || idx}
-                          className="bg-[#030814] border-2 border-[#16335F] hover:border-[#00E5FF] p-4 flex flex-col justify-between space-y-3 transition-all relative overflow-hidden group p3r-shadow-hard p3r-cut-tr"
-                        >
-                          {/* Badge de prioridad */}
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-black tracking-widest uppercase bg-[#0066FF] text-white px-2 py-0.5 transform -skew-x-8 font-p3r-head p3r-shadow-blue border-l-2 border-white">
-                              <span className="transform skew-x-8 inline-block">#{idx + 1} RECOMENDACIÓN</span>
-                            </span>
+                {/* 1. Selector de Rivales Enemigos Revelados */}
+                {revealedEnemies.length > 0 && (
+                  <div className="bg-[#030814] p-3 border border-[#16335F] p3r-cut-tr space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center space-x-2">
+                        <Target className="w-4 h-4 text-[#FF1744]" />
+                        <span className="text-xs font-black uppercase text-white font-p3r-head tracking-wider">
+                          Rivales Enemigos Revelados:
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-[#7E9BB8] font-mono">
+                        Selecciona un rival para enfocar los counters directos de tu rol ({localRole})
+                      </span>
+                    </div>
 
-                            {pick.isNewChampion && (
-                              <P3rBadge label="NUEVO" variant="yellow" />
-                            )}
-                          </div>
-
-                          {/* Avatar y Datos del Campeón */}
-                          <div className="flex items-center space-x-3">
-                            <img
-                              src={getChampionIconUrl(pick.championId)}
-                              alt={pick.championName}
-                              className="w-13 h-13 object-cover border-2 border-[#0066FF] p3r-shadow-blue"
-                            />
-                            <div>
-                              <h4 className="text-sm font-black text-white group-hover:text-[#00E5FF] transition font-p3r-head uppercase tracking-wider">
-                                {pick.championName || getChampionName(pick.championId)}
-                              </h4>
-                              <div className="flex items-center space-x-2 mt-0.5 font-mono">
-                                <span className="text-[10px] text-[#00E5FF] bg-[#050E20] border border-[#16335F] px-1.5 py-0.2 font-bold">
-                                  {pick.role || localRole}
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      {revealedEnemies.map((enemy) => {
+                        const isSelected = directLaneRival?.championId === enemy.championId;
+                        const isSameLane = enemy.role === localRole;
+                        return (
+                          <button
+                            key={enemy.championId}
+                            type="button"
+                            onClick={() => setManualOpponentId(enemy.championId)}
+                            className={`px-3 py-1.5 flex items-center space-x-2 transform -skew-x-8 transition-all border cursor-pointer ${
+                              isSelected
+                                ? 'bg-[#FF1744] text-white border-white p3r-shadow-hard'
+                                : 'bg-[#050E20] text-[#CBD5E1] border-[#16335F] hover:border-[#FF1744]/70 hover:text-white'
+                            }`}
+                          >
+                            <div className="transform skew-x-8 flex items-center space-x-2">
+                              <img
+                                src={getChampionIconUrl(enemy.championId)}
+                                alt={enemy.championName}
+                                className="w-5 h-5 object-cover border border-white/40"
+                              />
+                              <span className="text-xs font-bold font-p3r-head uppercase">
+                                {enemy.championName}
+                              </span>
+                              <span
+                                className={`text-[9px] px-1 py-0.2 font-mono font-bold ${
+                                  isSelected ? 'bg-[#030814] text-[#FFE277]' : 'bg-[#16335F] text-[#00E5FF]'
+                                }`}
+                              >
+                                {enemy.role}
+                              </span>
+                              {isSameLane && (
+                                <span className="text-[9px] font-black uppercase tracking-wider text-[#FFE277] ml-1">
+                                  [Tu Línea]
                                 </span>
-                                {pick.localWinrate !== undefined && (
-                                  <span className="text-[10px] text-[#00E676] font-bold">
-                                    {pick.localWinrate}% WR ({pick.localMatches} part.)
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. PRIORIDAD: Si hay rival directo con counters de OP.GG */}
+                {directLaneRival && opggLiveCounters[directLaneRival.championId]?.length ? (
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#16335F] pb-2">
+                      <div className="flex items-center space-x-2">
+                        <Flame className="w-4 h-4 text-[#00E5FF]" />
+                        <span className="text-xs font-black uppercase text-white font-p3r-head tracking-wider">
+                          Counters recomendados para {localRole} contra {directLaneRival.championName} ({directLaneRival.role}):
+                        </span>
+                        <P3rBadge label={`Parche 26.20 - ${settings.opggTier || 'Esmeralda+'}`} variant="cyan" />
+                      </div>
+                      <span className="text-[11px] text-[#00E676] font-mono font-bold">
+                        Datos en vivo de OP.GG
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {opggLiveCounters[directLaneRival.championId].slice(0, 3).map((cnt, idx) => {
+                        const isHovering = hoveringId === cnt.championId;
+                        const isPickable = pickableIds.length === 0 || pickableIds.includes(cnt.championId);
+                        const winRatePct = cnt.winRate <= 1 ? (cnt.winRate * 100).toFixed(1) : cnt.winRate.toFixed(1);
+
+                        return (
+                          <div
+                            key={cnt.championId || idx}
+                            className="bg-[#030814] border-2 border-[#16335F] hover:border-[#00E5FF] p-4 flex flex-col justify-between space-y-3 transition-all relative overflow-hidden group p3r-shadow-hard p3r-cut-tr"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-black tracking-widest uppercase bg-[#0066FF] text-white px-2 py-0.5 transform -skew-x-8 font-p3r-head p3r-shadow-blue border-l-2 border-white">
+                                <span className="transform skew-x-8 inline-block">#{idx + 1} COUNTER DIRECTO</span>
+                              </span>
+                              <span className="text-[11px] font-mono font-black text-[#00E676] bg-[#031A12] border border-[#00E676]/40 px-2 py-0.5">
+                                {winRatePct}% WR
+                              </span>
+                            </div>
+
+                            <div className="flex items-center space-x-3">
+                              <img
+                                src={getChampionIconUrl(cnt.championId)}
+                                alt={cnt.championName}
+                                className="w-13 h-13 object-cover border-2 border-[#0066FF] p3r-shadow-blue"
+                              />
+                              <div>
+                                <h4 className="text-sm font-black text-white group-hover:text-[#00E5FF] transition font-p3r-head uppercase tracking-wider">
+                                  {cnt.championName}
+                                </h4>
+                                <div className="flex items-center space-x-2 mt-0.5 font-mono text-[10px]">
+                                  <span className="text-[#00E5FF] bg-[#050E20] border border-[#16335F] px-1.5 py-0.2 font-bold">
+                                    {localRole}
                                   </span>
-                                )}
+                                  <span className="text-[#7E9BB8]">
+                                    {(cnt.play || 1500).toLocaleString()} partidas
+                                  </span>
+                                </div>
                               </div>
                             </div>
-                          </div>
 
-                          {/* Razones de selección */}
-                          <div className="space-y-1.5 text-xs text-[#CBD5E1] bg-[#050E20] p-3 border border-[#16335F] flex-1 p3r-cut-tr">
-                            <div>
-                              <span className="text-[10px] uppercase font-bold text-[#7E9BB8] block font-p3r-head">Encaje Táctico:</span>
-                              <p className="text-[11px] text-[#E2E8F0] mt-0.5 leading-snug">
-                                {pick.fitReason || 'Sólida presencia táctica en el parche.'}
+                            <div className="text-xs text-[#CBD5E1] bg-[#050E20] p-3 border border-[#16335F] flex-1 p3r-cut-tr">
+                              <span className="text-[10px] uppercase font-bold text-[#00E5FF] block font-p3r-head mb-1">
+                                Ventaja táctica vs {directLaneRival.championName}:
+                              </span>
+                              <p className="text-[11px] text-[#E2E8F0] leading-snug">
+                                Rendimiento superior y ventaja en enfrentamientos directos de línea en el meta actual.
                               </p>
                             </div>
 
-                            {pick.threatMitigation && (
-                              <div className="pt-1.5 border-t border-[#16335F]">
-                                <span className="text-[10px] uppercase font-bold text-[#FF1744] block font-p3r-head">Mitigación:</span>
-                                <p className="text-[11px] text-[#CBD5E1] mt-0.5 leading-snug">
-                                  {pick.threatMitigation}
-                                </p>
-                              </div>
-                            )}
+                            <div className="space-y-2 pt-1">
+                              <P3rButton
+                                variant={isMyPickTurn ? 'cyan' : 'primary'}
+                                size="md"
+                                className="w-full justify-center"
+                                onClick={() => handleHover(cnt.championId)}
+                                disabled={isHovering || !isPickable}
+                                icon={isHovering ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Target className="w-3.5 h-3.5" />}
+                              >
+                                {isHovering
+                                  ? 'Enviando...'
+                                  : isMyPickTurn
+                                  ? 'SELECCIONAR EN LOL (HOVER)'
+                                  : 'PREPARAR PICK (HOVER)'}
+                              </P3rButton>
 
-                            {pick.synergyReason && (
-                              <div className="pt-1.5 border-t border-[#16335F]">
-                                <span className="text-[10px] uppercase font-bold text-[#00E5FF] block font-p3r-head">Sinergia Aliada:</span>
-                                <p className="text-[11px] text-[#CBD5E1] mt-0.5 leading-snug">
-                                  {pick.synergyReason}
-                                </p>
-                              </div>
-                            )}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setInspectedBuildTarget({ championId: cnt.championId, role: localRole });
+                                  setActiveTab('builds');
+                                }}
+                                className="w-full text-center text-[11px] font-bold text-[#7E9BB8] hover:text-[#00E5FF] py-1 transition flex items-center justify-center space-x-1 cursor-pointer font-p3r-head"
+                              >
+                                <span>Ver Runas &amp; Build</span>
+                                <ArrowRight className="w-3 h-3" />
+                              </button>
+                            </div>
                           </div>
-
-                          {/* Botón de Acción Hover en LoL */}
-                          <P3rButton
-                            variant={isMyPickTurn ? 'cyan' : 'primary'}
-                            size="md"
-                            className="w-full justify-center"
-                            onClick={() => handleHover(pick.championId)}
-                            disabled={isHovering}
-                            icon={isHovering ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Target className="w-3.5 h-3.5" />}
-                          >
-                            {isHovering
-                              ? 'Enviando...'
-                              : isMyPickTurn
-                              ? 'SELECCIONAR EN LOL (HOVER)'
-                              : 'PREPARAR PICK (HOVER)'}
-                          </P3rButton>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
-                ) : draftLoading ? (
-                  <div className="p-8 text-center text-xs text-[#94A3B8] flex flex-col items-center justify-center space-y-2">
-                    <RefreshCw className="w-6 h-6 animate-spin text-[#0070EB]" />
-                    <span>Analizando sinergias aliadas y amenazas enemigas con Gemini...</span>
+                ) : directLaneRival ? (
+                  <div className="p-8 text-center text-xs text-[#7E9BB8] bg-[#030814] border border-[#16335F] p3r-cut-tr flex flex-col items-center justify-center space-y-2">
+                    <RefreshCw className="w-5 h-5 animate-spin text-[#00E5FF]" />
+                    <span>Consultando counters en vivo de OP.GG para {localRole} contra {directLaneRival.championName} ({directLaneRival.role})...</span>
                   </div>
-                ) : Object.keys(opggLiveCounters).length > 0 ? (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between text-xs border-b border-[#16335F] pb-2">
-                        <span className="text-[#00E5FF] font-bold font-mono tracking-wider">
-                          ★ COUNTERS EN VIVO DE OP.GG (Parche 26.20 - {settings.opggTier || 'Esmeralda +'}):
-                        </span>
-                        <span className="text-[11px] text-[#7E9BB8] font-mono">Tokens IA preservados: 0 llamadas</span>
+                ) : draftRecs?.picks && draftRecs.picks.length > 0 ? (
+                  <div className="space-y-3">
+                    <div className="bg-[#030814] p-3 border border-[#16335F] p3r-cut-tr flex items-center justify-between text-xs">
+                      <div className="flex items-center space-x-2 text-[#7E9BB8]">
+                        <span className="w-2 h-2 bg-[#00E5FF] transform rotate-45" />
+                        <span>Esperando que el rival elija campeón para calcular counters directos. Mostrando mejores selecciones del meta para {localRole}:</span>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {Object.entries(opggLiveCounters).map(([oppIdStr, counters]) => {
-                          const oppId = Number(oppIdStr);
-                          return (
-                            <div key={oppId} className="bg-[#030814] p-3 border border-[#16335F] space-y-2 p3r-cut-tr">
-                              <div className="flex items-center space-x-2 border-b border-[#16335F] pb-1.5">
-                                <img
-                                  src={getChampionIconUrl(oppId)}
-                                  alt={getChampionName(oppId)}
-                                  className="w-6 h-6 border border-[#FF1744]"
-                                />
-                                <div className="text-xs font-bold text-white uppercase font-p3r-head">
-                                  vs {getChampionName(oppId)}
+                      <span className="text-[11px] font-mono text-[#00E5FF]">Parche 26.20</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {draftRecs.picks.map((pick: any, idx: number) => {
+                        const isHovering = hoveringId === pick.championId;
+                        return (
+                          <div
+                            key={pick.championId || idx}
+                            className="bg-[#030814] border-2 border-[#16335F] hover:border-[#00E5FF] p-4 flex flex-col justify-between space-y-3 transition-all relative overflow-hidden group p3r-shadow-hard p3r-cut-tr"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-black tracking-widest uppercase bg-[#0066FF] text-white px-2 py-0.5 transform -skew-x-8 font-p3r-head p3r-shadow-blue border-l-2 border-white">
+                                <span className="transform skew-x-8 inline-block">#{idx + 1} RECOMENDACIÓN</span>
+                              </span>
+                              {pick.isNewChampion && <P3rBadge label="NUEVO" variant="yellow" />}
+                            </div>
+
+                            <div className="flex items-center space-x-3">
+                              <img
+                                src={getChampionIconUrl(pick.championId)}
+                                alt={pick.championName}
+                                className="w-13 h-13 object-cover border-2 border-[#0066FF] p3r-shadow-blue"
+                              />
+                              <div>
+                                <h4 className="text-sm font-black text-white group-hover:text-[#00E5FF] transition font-p3r-head uppercase tracking-wider">
+                                  {pick.championName || getChampionName(pick.championId)}
+                                </h4>
+                                <div className="flex items-center space-x-2 mt-0.5 font-mono">
+                                  <span className="text-[10px] text-[#00E5FF] bg-[#050E20] border border-[#16335F] px-1.5 py-0.2 font-bold">
+                                    {pick.role || localRole}
+                                  </span>
+                                  {pick.localWinrate !== undefined && (
+                                    <span className="text-[10px] text-[#00E676] font-bold">
+                                      {pick.localWinrate}% WR ({pick.localMatches} part.)
+                                    </span>
+                                  )}
                                 </div>
                               </div>
-                              <div className="space-y-1.5">
-                                {counters.slice(0, 3).map((cnt) => {
-                                  const isPickable = pickableIds.length === 0 || pickableIds.includes(cnt.championId);
-                                  return (
-                                    <div key={cnt.championId} className="flex items-center justify-between text-[11px] bg-[#050E20] p-1.5 border border-[#16335F]">
-                                      <div className="flex items-center space-x-1.5 truncate">
-                                        <img
-                                          src={getChampionIconUrl(cnt.championId)}
-                                          alt={cnt.championName}
-                                          className="w-5 h-5 border border-[#0066FF]"
-                                        />
-                                        <span className="text-white font-medium truncate">{cnt.championName}</span>
-                                      </div>
-                                      <div className="flex items-center space-x-2 shrink-0">
-                                        <span className="text-[#00E676] font-bold font-mono">
-                                          {(cnt.winRate * 100).toFixed(1)}% WR
-                                        </span>
-                                        {isPickable && isMyPickTurn && (
-                                          <button
-                                            type="button"
-                                            onClick={() => handleHover(cnt.championId)}
-                                            className="px-2 py-0.5 bg-[#00E5FF] hover:bg-white text-[#030814] font-black text-[10px] transform -skew-x-8 uppercase font-p3r-head cursor-pointer"
-                                          >
-                                            <span className="transform skew-x-8 inline-block">Pick</span>
-                                          </button>
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
+                            </div>
+
+                            <div className="space-y-1.5 text-xs text-[#CBD5E1] bg-[#050E20] p-3 border border-[#16335F] flex-1 p3r-cut-tr">
+                              <div>
+                                <span className="text-[10px] uppercase font-bold text-[#7E9BB8] block font-p3r-head">Encaje Táctico:</span>
+                                <p className="text-[11px] text-[#E2E8F0] mt-0.5 leading-snug">
+                                  {pick.fitReason || 'Sólida presencia táctica en el parche.'}
+                                </p>
                               </div>
                             </div>
-                          );
-                        })}
-                      </div>
+
+                            <P3rButton
+                              variant={isMyPickTurn ? 'cyan' : 'primary'}
+                              size="md"
+                              className="w-full justify-center"
+                              onClick={() => handleHover(pick.championId)}
+                              disabled={isHovering}
+                              icon={isHovering ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Target className="w-3.5 h-3.5" />}
+                            >
+                              {isHovering
+                                ? 'Enviando...'
+                                : isMyPickTurn
+                                ? 'SELECCIONAR EN LOL (HOVER)'
+                                : 'PREPARAR PICK (HOVER)'}
+                            </P3rButton>
+                          </div>
+                        );
+                      })}
                     </div>
-                  ) : (
-                    <div className="p-6 text-center text-xs text-[#7E9BB8] bg-[#030814] border border-[#16335F] p3r-cut-tr">
-                      <span>Esperando que el equipo rival elija campeones para calcular counters en vivo desde OP.GG.</span>
-                    </div>
-                  )}
+                  </div>
+                ) : (
+                  <div className="p-6 text-center text-xs text-[#7E9BB8] bg-[#030814] border border-[#16335F] p3r-cut-tr">
+                    <span>Esperando que el equipo rival elija campeones para calcular counters en vivo desde OP.GG.</span>
+                  </div>
+                )}
 
                 {/* Resumen Táctico de Equipos (Gemini) */}
                 {draftRecs?.allyCompAnalysis && (

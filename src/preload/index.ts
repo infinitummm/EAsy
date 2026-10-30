@@ -38,7 +38,7 @@ export const api = {
     ipcRenderer.invoke(IPC_CHANNELS.LCU_HOVER_CHAMPION, championId),
   applyRunes: (page: RunePage): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.LCU_APPLY_RUNES, page),
-  applyBuild: (params: { championId: number; opponentId?: number; role?: Role; title?: string; build: any }): Promise<{ success: boolean; filePath?: string; error?: string }> =>
+  applyBuild: (params: { championId: number; championKey?: string; opponentId?: number; role?: Role; title?: string; build: any }): Promise<{ success: boolean; filePath?: string; lcuApplied?: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.LCU_APPLY_BUILD, params),
 
   // Riot API

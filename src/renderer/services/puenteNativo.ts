@@ -183,13 +183,14 @@ export function crearPuenteNativo() {
         const isGeneral = params.viewMode === 'general' || !params.opponentId || params.opponentId <= 0;
         let opggData;
         if (isGeneral) {
-          opggData = await opggClientInstancia.getChampionAnalysis({
+          const baseAnalysis = await opggClientInstancia.getChampionAnalysis({
             championId: params.championId,
             role: params.role,
             elo: params.elo || 'emerald_plus',
             patch: params.patch || '26.20',
             forceRefresh: params.forceRefresh,
           });
+          opggData = await opggClientInstancia.enrichGeneralWithMultiBuilds(baseAnalysis);
         } else {
           opggData = await opggClientInstancia.getLaneMatchupGuide({
             championId: params.championId,
@@ -237,6 +238,9 @@ export function crearPuenteNativo() {
       genericInvoke(IPC_CHANNELS.DDRAGON_REFRESH_DATA),
     getPatchDiff: (patch?: string) => genericInvoke(IPC_CHANNELS.PATCH_DIFF_GET, patch),
     getGroundingQuota: () => genericInvoke(IPC_CHANNELS.AI_GET_GROUNDING_QUOTA),
+    getLaneMetaChampions: async (forceRefresh = false) => {
+      return await opggClientInstancia.getLaneMetaChampions(forceRefresh);
+    },
     getOpGgMatchup: async (params: {
       championId: number;
       opponentId?: number;

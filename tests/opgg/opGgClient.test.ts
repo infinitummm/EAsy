@@ -256,5 +256,39 @@ describe('OpGgClient - Integración MCP oficial de OP.GG', () => {
       expect(mockFetch).toHaveBeenCalledTimes(2);
       expect(result.coreItems[0].ids).toEqual([3508, 3071, 3161]);
     });
+
+    it('genera variantes de build vinculadas con runas (buildVariants) y orden de 18 niveles', async () => {
+      const client = new OpGgClient({ dbService: mockDb, fetchImpl: mockFetch as any });
+      const result = await client.getLaneMatchupGuide({
+        championId: 901,
+        opponentId: 51,
+        role: 'BOTTOM',
+      });
+
+      expect(result.buildVariants).toBeDefined();
+      expect(result.buildVariants!.length).toBeGreaterThanOrEqual(3);
+      expect(result.buildVariants![0].runePage.primaryRuneIds.length).toBe(4);
+      expect(result.buildVariants![0].completedItems.length).toBeGreaterThanOrEqual(4);
+      expect(result.buildVariants![0].skillOrder.length).toBe(18);
+      // Verificar que diferentes variantes tienen distintas páginas de runas
+      expect(result.buildVariants![1].runePage.primaryRuneIds[0]).not.toBe(
+        result.buildVariants![0].runePage.primaryRuneIds[0]
+      );
+    });
+
+    it('obtiene sugerencias meta de bloqueos y picks por línea (getLaneMetaChampions)', async () => {
+      const client = new OpGgClient({ dbService: mockDb, fetchImpl: mockFetch as any });
+      const meta = await client.getLaneMetaChampions(false);
+
+      expect(meta.TOP.length).toBeGreaterThanOrEqual(6);
+      expect(meta.JUNGLE.length).toBeGreaterThanOrEqual(6);
+      expect(meta.MIDDLE.length).toBeGreaterThanOrEqual(6);
+      expect(meta.BOTTOM.length).toBeGreaterThanOrEqual(6);
+      expect(meta.UTILITY.length).toBeGreaterThanOrEqual(6);
+      expect(meta.MIDDLE[0]).toHaveProperty('championId');
+      expect(meta.MIDDLE[0]).toHaveProperty('winRate');
+      expect(meta.MIDDLE[0]).toHaveProperty('banRate');
+      expect(meta.MIDDLE[0]).toHaveProperty('tier');
+    });
   });
 });

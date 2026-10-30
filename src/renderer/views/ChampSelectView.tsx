@@ -3,6 +3,7 @@ import { ChampSelectSession, ChampSelectPlayer, Role, AppSettings } from '../../
 import { DEFAULT_APP_SETTINGS } from '../../shared/constants';
 import { IPC_CHANNELS } from '../../shared/events';
 import { RolePreferencesEditor } from '../components/RolePreferencesEditor';
+import { MetaSuggestionsPanel } from '../components/MetaSuggestionsPanel';
 import { MatchupView } from './MatchupView';
 import { getChampionName, getChampionIconUrl } from '../../shared/champions';
 import {
@@ -39,7 +40,11 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
   onSaveSettings
 }) => {
   const [session, setSession] = useState<ChampSelectSession | null>(null);
-  const [activeTab, setActiveTab] = useState<'live' | 'preferences'>('live');
+  const [activeTab, setActiveTab] = useState<'live' | 'suggestions' | 'builds' | 'preferences'>('live');
+  const [inspectedBuildTarget, setInspectedBuildTarget] = useState<{ championId: number; role: Role }>({
+    championId: 103, // Ahri por defecto para explorar builds de inmediato
+    role: 'MIDDLE',
+  });
   const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
   const [manualOpponentId, setManualOpponentId] = useState<number | null>(null);
 
@@ -288,8 +293,8 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Selector de sub-vistas Estilo Persona 3 Reload */}
-      <div className="flex items-center space-x-3 border-b-2 border-[#16335F] pb-3">
+      {/* Selector de sub-vistas Estilo Persona 3 Reload / Blitz */}
+      <div className="flex flex-wrap items-center gap-3 border-b-2 border-[#16335F] pb-3">
         <button
           onClick={() => setActiveTab('live')}
           className={`px-5 py-2 text-xs font-black tracking-wider transition-all duration-150 flex items-center space-x-2 transform -skew-x-8 cursor-pointer ${
@@ -301,6 +306,34 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
           <div className="transform skew-x-8 flex items-center space-x-2">
             <span className={`w-2 h-2 transform rotate-45 ${activeTab === 'live' ? 'bg-[#030814]' : 'bg-[#0066FF]'}`}></span>
             <span>SELECCIÓN EN VIVO</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('suggestions')}
+          className={`px-5 py-2 text-xs font-black tracking-wider transition-all duration-150 flex items-center space-x-2 transform -skew-x-8 cursor-pointer ${
+            activeTab === 'suggestions'
+              ? 'bg-[#00E5FF] text-[#030814] p3r-shadow-blue border-l-4 border-[#0066FF] font-p3r-head'
+              : 'bg-[#050E20] text-[#7E9BB8] hover:text-white hover:bg-[#0C1B38] border border-[#16335F]'
+          }`}
+        >
+          <div className="transform skew-x-8 flex items-center space-x-2">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>SUGERENCIAS META (BANS &amp; PICKS)</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('builds')}
+          className={`px-5 py-2 text-xs font-black tracking-wider transition-all duration-150 flex items-center space-x-2 transform -skew-x-8 cursor-pointer ${
+            activeTab === 'builds'
+              ? 'bg-[#00E5FF] text-[#030814] p3r-shadow-blue border-l-4 border-[#0066FF] font-p3r-head'
+              : 'bg-[#050E20] text-[#7E9BB8] hover:text-white hover:bg-[#0C1B38] border border-[#16335F]'
+          }`}
+        >
+          <div className="transform skew-x-8 flex items-center space-x-2">
+            <Zap className="w-3.5 h-3.5" />
+            <span>BUILDS &amp; ÁRBOL DE RUNAS</span>
           </div>
         </button>
 
@@ -325,6 +358,28 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
         <RolePreferencesEditor
           settings={settings?.autoChampSelect || DEFAULT_APP_SETTINGS.autoChampSelect}
           onSave={(autoChampSelect) => onSaveSettings({ autoChampSelect })}
+        />
+      ) : activeTab === 'suggestions' ? (
+        <MetaSuggestionsPanel
+          initialRole={localRole !== 'FILL' ? localRole : 'MIDDLE'}
+          settings={settings}
+          onSaveSettings={onSaveSettings}
+          isLiveChampSelect={Boolean(session)}
+          isMyBanTurn={isMyBanTurn}
+          isMyPickTurn={isMyPickTurn}
+          onHoverChampion={handleHover}
+          onInspectChampionBuild={(champId, targetRole) => {
+            setInspectedBuildTarget({ championId: champId, role: targetRole });
+            setActiveTab('builds');
+          }}
+        />
+      ) : activeTab === 'builds' ? (
+        <MatchupView
+          initialChampionId={myChampionId > 0 ? myChampionId : inspectedBuildTarget.championId}
+          initialOpponentId={activeOpponentId > 0 ? activeOpponentId : 24}
+          initialRole={myChampionId > 0 && localRole !== 'FILL' ? localRole : inspectedBuildTarget.role}
+          autoRun={true}
+          onOpponentChange={(opponentId) => setManualOpponentId(opponentId)}
         />
       ) : (
         <>
@@ -991,11 +1046,35 @@ export const ChampSelectView: React.FC<ChampSelectViewProps> = ({
                 Al entrar en selección de campeón en League of Legends, la app detectará tu campeón y posición para recomendarte runas y objetos.
               </p>
 
-              <div className="inline-flex items-center space-x-2 text-xs bg-[#030814] px-4 py-2 border border-[#16335F] transform -skew-x-8">
-                <span className="transform skew-x-8 flex items-center space-x-2">
-                  <span className="w-2 h-2 bg-[#00E676] transform rotate-45"></span>
-                  <span className="font-bold text-[#00E676] font-mono">Esperando partida</span>
-                </span>
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <div className="inline-flex items-center space-x-2 text-xs bg-[#030814] px-4 py-2 border border-[#16335F] transform -skew-x-8">
+                  <span className="transform skew-x-8 flex items-center space-x-2">
+                    <span className="w-2 h-2 bg-[#00E676] transform rotate-45"></span>
+                    <span className="font-bold text-[#00E676] font-mono">Esperando partida</span>
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('suggestions')}
+                  className="px-4 py-2 bg-[#FF1744] hover:bg-[#FF3D57] text-white text-xs font-black uppercase tracking-wider transform -skew-x-8 border-l-2 border-white cursor-pointer transition"
+                >
+                  <span className="transform skew-x-8 inline-flex items-center space-x-1.5">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Ver Sugerencias Meta de Bans &amp; Picks</span>
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('builds')}
+                  className="px-4 py-2 bg-[#0066FF] hover:bg-[#00E5FF] text-white hover:text-[#030814] text-xs font-black uppercase tracking-wider transform -skew-x-8 border-l-2 border-white cursor-pointer transition"
+                >
+                  <span className="transform skew-x-8 inline-flex items-center space-x-1.5">
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>Explorar Árbol de Runas &amp; Builds</span>
+                  </span>
+                </button>
               </div>
 
               <div className="mt-8 text-left">

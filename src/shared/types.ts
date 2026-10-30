@@ -356,6 +356,8 @@ export interface PersonalChampionStats {
 }
 
 export interface OpGgRunePage {
+  id?: number;
+  label?: string;
   primaryPageId: number;
   primaryPageName: string;
   primaryRuneIds: number[];
@@ -369,6 +371,43 @@ export interface OpGgRunePage {
   play: number;
   win: number;
   pickRate: number;
+}
+
+export interface OpGgBuildVariant {
+  id: string;
+  label: string;
+  archetypeTag: string;
+  runePage: OpGgRunePage;
+  starterItems: number[];
+  boots: number;
+  coreItems: number[];
+  buildOrder: Array<{ itemId: number; winRate: number; play: number }>;
+  completedItems: number[];
+  situationalItems: Array<{ itemId: number; name?: string; condition: string; winRate?: number; play?: number }>;
+  summonerSpells: Array<{ ids: [number, number]; names: string[]; play: number; win: number; pickRate: number }>;
+  skillPriority: string[];
+  skillOrder: string[];
+  play: number;
+  win: number;
+  winRate: number;
+  pickRate: number;
+}
+
+export interface MetaLaneChampion {
+  championId: number;
+  championName: string;
+  role: Role;
+  tier: number; // 1 = S+ / Tier 1, 2 = A / Tier 2, 3 = B / Tier 3, 4 = C, 5 = D
+  rank: number;
+  rankPrev?: number;
+  winRate: number; // 0 a 1 (ej. 0.524 = 52.4%)
+  pickRate: number; // 0 a 1
+  banRate: number; // 0 a 1
+  roleRate?: number;
+  kda: number;
+  play: number;
+  win: number;
+  banScore: number; // Índice compuesto para sugerencias de bloqueo
 }
 
 export interface OpGgMatchupData {
@@ -385,6 +424,7 @@ export interface OpGgMatchupData {
   fourthItems?: Array<{ ids: number[]; names: string[]; play: number; win: number; pickRate: number }>;
   fifthItems?: Array<{ ids: number[]; names: string[]; play: number; win: number; pickRate: number }>;
   sixthItems?: Array<{ ids: number[]; names: string[]; play: number; win: number; pickRate: number }>;
+  lastItems?: Array<{ ids: number[]; names: string[]; play: number; win: number; pickRate: number }>;
   summonerSpells: Array<{ ids: [number, number]; names: string[]; play: number; win: number; pickRate: number }>;
   skillOrder: string[];
   skillPriority: string[];
@@ -396,6 +436,7 @@ export interface OpGgMatchupData {
   counters?: Array<{ championId: number; championName: string; winRate: number; play: number }>;
   dataSourceType?: 'general_analysis' | 'lane_matchup';
   eloLabel?: string;
+  buildVariants?: OpGgBuildVariant[];
 }
 
 export type BuildRecommendation = GeminiMatchupRecommendation['buildRecommendation'] & {

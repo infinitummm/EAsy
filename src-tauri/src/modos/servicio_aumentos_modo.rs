@@ -128,6 +128,9 @@ impl ServicioAumentosModo {
             }
         }
 
+        // 2b. Sincronizar catálogo en vivo desde CommunityDragon (es_ES) con caché de 24h
+        let cdragon_mapa = self.obtener_mapa_cdragon_es().await;
+
         let mut mapa_existentes: HashMap<i64, InfoAumento> = HashMap::new();
         let mut mapa_por_nombre: HashMap<String, InfoAumento> = HashMap::new();
         for a in augments_encontrados {
@@ -171,6 +174,14 @@ impl ServicioAumentosModo {
                 if cat.icon_url.is_some() {
                     fusionado.icon_url = cat.icon_url.clone();
                 }
+                if let Some(cd) = cdragon_mapa.get(&cat.id) {
+                    if fusionado.name_es.is_none() && cd.name_es.is_some() {
+                        fusionado.name_es = cd.name_es.clone();
+                    }
+                    if fusionado.desc_es.is_none() && cd.desc_es.is_some() {
+                        fusionado.desc_es = cd.desc_es.clone();
+                    }
+                }
                 lista_final.push(fusionado);
             } else {
                 // Fallback de tier por rareza cuando el aumento tiene baja muestra en OP.GG
@@ -180,15 +191,41 @@ impl ServicioAumentosModo {
                     _ => Some("C".to_string()),
                 };
 
+                let cd_extra = cdragon_mapa.get(&cat.id);
                 lista_final.push(InfoAumento {
                     id: cat.id,
                     key: cat.key.clone(),
                     name: cat.name.clone(),
-                    name_es: cat.name_es.clone(),
+                    name_es: cat.name_es.clone().or_else(|| cd_extra.and_then(|c| c.name_es.clone())),
                     rarity: cat.rarity.clone(),
                     icon_url: cat.icon_url.clone(),
                     desc: cat.desc.clone(),
-                    desc_es: cat.desc_es.clone(),
+                    desc_es: cat.desc_es.clone().or_else(|| cd_extra.and_then(|c| c.desc_es.clone())),
+                    tier: tier_fallback,
+                    pick_rate: None,
+                    win_rate: None,
+                });
+            }
+        }
+
+        // Añadir cualquier aumento nuevo de CommunityDragon que no estuviera en el JSON estático
+        let ids_conocidos: std::collections::HashSet<i64> = lista_final.iter().map(|a| a.id).collect();
+        for (cd_id, cd_aug) in &cdragon_mapa {
+            if !ids_conocidos.contains(cd_id) && cd_aug.name.trim().len() >= 3 {
+                let tier_fallback = match cd_aug.rarity.as_deref().unwrap_or("silver") {
+                    "prismatic" => Some("S".to_string()),
+                    "gold" => Some("B".to_string()),
+                    _ => Some("C".to_string()),
+                };
+                lista_final.push(InfoAumento {
+                    id: *cd_id,
+                    key: cd_aug.key.clone(),
+                    name: cd_aug.name.clone(),
+                    name_es: cd_aug.name_es.clone(),
+                    rarity: cd_aug.rarity.clone(),
+                    icon_url: cd_aug.icon_url.clone(),
+                    desc: cd_aug.desc.clone(),
+                    desc_es: cd_aug.desc_es.clone(),
                     tier: tier_fallback,
                     pick_rate: None,
                     win_rate: None,
@@ -326,5 +363,90 @@ impl ServicioAumentosModo {
         }
 
         Ok(lista)
+    }
+
+    /// Descarga y cachea por 24 horas el catálogo oficial de aumentos en español de CommunityDragon.
+    pub async fn obtener_mapa_cdragon_es(&self) -> HashMap<i64, AumentoCatalogo> {
+        let cache_key = "cdragon:arena:es_es:v1";
+        if let Ok(Some(cached_json)) = self.bd.obtener_cache_modo(cache_key, 86400) {
+            if let Ok(mapa) = serde_json::from_str::<HashMap<i64, AumentoCatalogo>>(&cached_json) {
+                if !mapa.is_empty() {
+                    return mapa;
+                }
+            }
+        }
+
+        let url = "https://raw.communitydragon.org/latest/cdragon/arena/es_es.json";
+        let resp = match self
+            .cliente_http
+            .get(url)
+            .timeout(std::time::Duration::from_secs(4))
+            .send()
+            .await
+        {
+            Ok(r) if r.status().is_success() => r,
+            _ => return HashMap::new(),
+        };
+
+        let val: serde_json::Value = match resp.json().await {
+            Ok(v) => v,
+            Err(_) => return HashMap::new(),
+        };
+
+        let mut mapa = HashMap::new();
+        if let Some(arr) = val.get("augments").and_then(|a| a.as_array()) {
+            for item in arr {
+                let id = item.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
+                if id <= 0 {
+                    continue;
+                }
+                let api_name = item
+                    .get("apiName")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let name_es = item
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                let desc_es = item
+                    .get("desc")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                let rarity_num = item.get("rarity").and_then(|v| v.as_i64()).unwrap_or(0);
+                let rarity = match rarity_num {
+                    2 | 4 => Some("prismatic".to_string()),
+                    1 => Some("gold".to_string()),
+                    _ => Some("silver".to_string()),
+                };
+                let icon_small = item
+                    .get("iconSmall")
+                    .and_then(|v| v.as_str())
+                    .map(|p| format!("https://raw.communitydragon.org/latest/game/{}", p.to_lowercase()));
+
+                let name = name_es.clone().unwrap_or_else(|| api_name.clone());
+                mapa.insert(
+                    id,
+                    AumentoCatalogo {
+                        id,
+                        key: api_name,
+                        name,
+                        name_es,
+                        desc: None,
+                        desc_es,
+                        rarity,
+                        icon_url: icon_small,
+                    },
+                );
+            }
+        }
+
+        if !mapa.is_empty() {
+            if let Ok(json_guardar) = serde_json::to_string(&mapa) {
+                let _ = self.bd.guardar_cache_modo(cache_key, &json_guardar);
+            }
+        }
+
+        mapa
     }
 }
